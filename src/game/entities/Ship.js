@@ -20,8 +20,12 @@ export class Ship {
         this.maxHp = 0;
         this.isDead = false;
 
-        // Always start with a Core at 0,0
+        // Default Loadout (Core at 0,0) - Orientation Fixed
         this.addPart(0, 0, 'core');
+        this.addPart(0, -1, 'rocketle', 1); // Front (Up) - Rot 1
+        this.addPart(0, 1, 'custom_1767997495375', 0); // Back (Down) - Rot 0
+        this.addPart(-1, 0, 'gun_basic', 0); // Left - Rot 0
+        this.addPart(1, 0, 'gun_basic', 0);  // Right - Rot 0
     }
 
     takeDamage(amount) {

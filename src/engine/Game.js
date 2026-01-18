@@ -26,6 +26,7 @@ import { Shipwreck } from '../game/entities/Shipwreck.js';
 import { SaveManager } from '../game/systems/SaveManager.js';
 import { ShipBuilder } from '../game/systems/ShipBuilder.js';
 import { AudioManager } from './AudioManager.js';
+import { MainMenu } from '../game/ui/MainMenu.js';
 
 export class Game {
     constructor(canvas) {
@@ -35,6 +36,7 @@ export class Game {
         this.audio = new AudioManager();
         this.camera = new Camera(this.renderer.width, this.renderer.height);
         this.audio = new AudioManager();
+        this.mainMenu = new MainMenu(this);
         this.loadingPromise = this.loadSounds();
         this.projectiles = [];
         this.enemies = [];
@@ -56,7 +58,7 @@ export class Game {
         this.xpToNext = 100;
         this.xpToNext = 100;
         this.enemySpawnTimer = 0;
-        this.version = "v0.2.0";
+        this.version = "v0.2.1";
 
         this.starfield = new Starfield(400, 4000, 4000); // Many stars, large area
         this.grid = new Grid(200); // 200px cells
@@ -208,74 +210,9 @@ export class Game {
         if (this.hasPendingSave) {
             this.showContinuePrompt();
         } else {
-            // New Game - Show Start Screen
-            this.showStartScreen();
+            // New Game - Show Main Menu
+            this.mainMenu.show();
         }
-    }
-
-    showStartScreen() {
-        const overlay = document.createElement('div');
-        overlay.id = 'start-screen';
-        overlay.style.cssText = `
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0, 0, 0, 0.9);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 2000;
-            font-family: 'VT323', monospace;
-            color: white;
-            transition: opacity 0.5s;
-        `;
-
-        overlay.innerHTML = `
-            <h1 style="color: #00ffff; font-size: 64px; margin-bottom: 0px; text-shadow: 0 0 20px #00ffff;">frame bound</h1>
-            <p style="color: #666; font-size: 20px; margin-bottom: 50px;">v0.2.0 - curséd vaults</p>
-            
-            <div id="loading-text" style="color: #ffd700; font-size: 24px;">initializing systems...</div>
-            
-            <button id="btn-start" style="
-                display: none;
-                padding: 15px 50px; 
-                font-size: 32px; 
-                background: #00aaee; 
-                color: white; 
-                border: 2px solid #fff; 
-                cursor: pointer; 
-                font-family: 'VT323', monospace;
-                box-shadow: 0 0 15px #00aaee;
-            ">launch mission</button>
-        `;
-
-        document.body.appendChild(overlay);
-
-        // Wait for assets, then show button
-        this.loadingPromise.then(() => {
-            const btn = document.getElementById('btn-start');
-            const loading = document.getElementById('loading-text');
-            if (btn && loading) {
-                loading.style.display = 'none';
-                // Show "LAUNCH MISSION"
-                btn.style.display = 'block';
-
-                btn.onclick = () => {
-                    // Unlock Audio Context (must be in user event)
-                    if (this.audio.context.state === 'suspended') {
-                        this.audio.context.resume();
-                    }
-
-                    // Start Game
-                    this.loop.start();
-                    this.audio.playMusic('bgm', 0.4);
-
-                    // Fade out
-                    overlay.style.opacity = '0';
-                    setTimeout(() => overlay.remove(), 500);
-                };
-            }
-        });
     }
 
     showContinuePrompt() {
@@ -595,12 +532,19 @@ export class Game {
         }
 
         // WASD Movement (Normalized Acceleration)
+        // WASD Movement (Normalized Acceleration)
         let inputX = 0;
         let inputY = 0;
-        if (this.input.isKeyDown('KeyW')) inputY -= 1;
-        if (this.input.isKeyDown('KeyS')) inputY += 1;
-        if (this.input.isKeyDown('KeyA')) inputX -= 1;
-        if (this.input.isKeyDown('KeyD')) inputX += 1;
+
+        if (this.input.joysticks && this.input.joysticks.left.active) {
+            inputX = this.input.joysticks.left.vector.x;
+            inputY = this.input.joysticks.left.vector.y;
+        } else {
+            if (this.input.isKeyDown('KeyW')) inputY -= 1;
+            if (this.input.isKeyDown('KeyS')) inputY += 1;
+            if (this.input.isKeyDown('KeyA')) inputX -= 1;
+            if (this.input.isKeyDown('KeyD')) inputX += 1;
+        }
 
         if (inputX !== 0 || inputY !== 0) {
             const mag = Math.sqrt(inputX * inputX + inputY * inputY);
@@ -727,10 +671,19 @@ export class Game {
 
         let targetRotation = null;
 
+        // Mobile Right Stick Aiming
+        if (this.input.joysticks && this.input.joysticks.right.active) {
+            const v = this.input.joysticks.right.vector;
+            // + PI/2 because ship sprite faces 'Up' at 0 deg, but 0 deg in trig is Right
+            targetRotation = Math.atan2(v.y, v.x) + Math.PI / 2;
+        }
+
         // Check for 'Cursor Tracker' part
         const hasTracker = Array.from(this.playerShip.parts.values()).some(p => p.partId === 'custom_1768410456823');
 
-        if (hasTracker) {
+        if (targetRotation !== null) {
+            // Already set by joystick
+        } else if (hasTracker) {
             targetRotation = Math.atan2(worldMouseY - this.y, worldMouseX - this.x) + Math.PI / 2;
         } else if (currentSpeedWrapper > 50) { // Threshold to prevent jitter
             // 0 is Up for the ship sprite, but atan2 0 is Right.
@@ -835,7 +788,11 @@ export class Game {
         this.coreSpinAngle += Math.PI * 2 * dt;
 
         // Shooting
-        const isMouseDown = this.input.isMouseDown();
+        // Shooting
+        let isMouseDown = this.input.isMouseDown();
+        if (this.input.joysticks && this.input.joysticks.right.active) {
+            isMouseDown = true; // Auto-fire when aiming with stick
+        }
         const CELL_STRIDE = TILE_SIZE;
         const accelerantBonus = (1 + (this.playerShip.stats.accelerantCount || 0) * 0.05);
 
@@ -2276,6 +2233,26 @@ export class Game {
             this.renderer.ctx.fillText(`${this.version} [curséd vaults] | ${seedText}`, 20, this.renderer.height - 20);
 
             // (Old overlay UI removed - shop is now in-world)
+
+            // Draw Virtual Joysticks
+            if (this.input.joysticks) {
+                const ctx = this.renderer.ctx;
+                for (const side of ['left', 'right']) {
+                    const stick = this.input.joysticks[side];
+                    if (stick.active) {
+                        ctx.beginPath();
+                        ctx.arc(stick.origin.x, stick.origin.y, 50, 0, Math.PI * 2);
+                        ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+                        ctx.lineWidth = 4;
+                        ctx.stroke();
+
+                        ctx.beginPath();
+                        ctx.arc(stick.current.x, stick.current.y, 25, 0, Math.PI * 2);
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+                        ctx.fill();
+                    }
+                }
+            }
 
             // Minigun Peak/Ramp Indicator at Cursor
             let topMinigun = null;
