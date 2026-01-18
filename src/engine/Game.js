@@ -388,12 +388,12 @@ export class Game {
     async loadSounds() {
         // We'll define standard names. User should rename their .wav files to match these or tell us the names!
         const soundList = [
-            { name: 'shoot_laser', url: './sounds/laser.wav' },
-            { name: 'shoot_rocket', url: './sounds/rocket.wav' },
-            { name: 'shoot_mini', url: './sounds/mini.wav' },
-            { name: 'explosion', url: './sounds/explosion.wav' },
+            // { name: 'shoot_laser', url: './sounds/laser.wav' },
+            // { name: 'shoot_rocket', url: './sounds/rocket.wav' },
+            // { name: 'shoot_mini', url: './sounds/mini.wav' },
+            // { name: 'explosion', url: './sounds/explosion.wav' },
             { name: 'hit', url: './sounds/hit.wav' },
-            { name: 'overheat', url: './sounds/overheat.wav' },
+            // { name: 'overheat', url: './sounds/overheat.wav' },
             { name: 'rail_charge', url: './sounds/rail_charge.wav' },
             { name: 'rail', url: './sounds/rail.wav' },
             { name: 'rail_shot', url: './sounds/rail_shot.wav' },
@@ -401,7 +401,7 @@ export class Game {
             { name: 'enemy_death2', url: './sounds/enemy_death2.wav' },
             { name: 'frame_death', url: './sounds/frame_death.wav' },
             { name: 'shoot_dart', url: './sounds/dart.wav' },
-            { name: 'bgm', url: '/sounds/bgm.mp3' }
+            { name: 'bgm', url: './sounds/bgm.mp3' }
         ];
 
         for (const s of soundList) {
