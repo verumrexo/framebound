@@ -203,6 +203,7 @@ export class Room {
     }
 
     spawnWave(game) {
+        this.waveWaiting = false;
         this.waveCount++;
         game.showNotification(`WAVE ${this.waveCount}/${this.maxWaves}`, '#ff8800');
 
@@ -229,16 +230,14 @@ export class Room {
     }
 
     checkAmbushStatus(game) {
-        if (!this.ambushStarted) return;
+        if (!this.ambushStarted || this.waveWaiting) return;
 
         // Check if current wave is cleared
-        // Since we push to this.enemies, we can check if they are all dead
-        // But game.enemies is where they live. 
-        // We need to filter this.enemies for liveness.
         this.enemies = this.enemies.filter(e => !e.isDead);
 
         if (this.enemies.length === 0) {
             if (this.waveCount < this.maxWaves) {
+                this.waveWaiting = true;
                 setTimeout(() => this.spawnWave(game), 1000); // Delay next wave
             } else {
                 // Ambush Cleared!
@@ -252,10 +251,6 @@ export class Room {
                     this.vaultChests.forEach(c => {
                         c.ambushActive = false;
                         c.locked = false;
-                        // The one that was paid for should now be openable?
-                        // Or both? User said "if you survive you get like 3 parts from the chest".
-                        // This implies the chest opens automatically or becomes interactable.
-                        // Let's make them interactable (to claim loot).
                     });
                 }
             }
@@ -377,10 +372,14 @@ export class Room {
                     }
                 }
 
-                // Check if all room enemies are dead
-                const aliveCount = this.enemies.filter(e => !e.isDead).length;
-                if (aliveCount === 0) {
-                    this.unlock(game);
+                if (this.type === RoomType.VAULT) {
+                    this.checkAmbushStatus(game);
+                } else {
+                    // Check if all room enemies are dead
+                    const aliveCount = this.enemies.filter(e => !e.isDead).length;
+                    if (aliveCount === 0) {
+                        this.unlock(game);
+                    }
                 }
             }
         }

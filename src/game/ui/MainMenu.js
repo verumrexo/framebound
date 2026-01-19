@@ -50,7 +50,7 @@ export class MainMenu {
         if (!this.overlay) return;
         this.overlay.innerHTML = `
             <h1 style="color: #00ffff; font-size: 80px; margin-bottom: 0px; text-shadow: 0 0 20px #00ffff; letter-spacing: -2px;">framebound</h1>
-            <p style="color: #666; font-size: 24px; margin-bottom: 60px;">v0.2.2 - curséd vaults</p>
+            <p style="color: #666; font-size: 24px; margin-bottom: 60px;">v0.2.2.1 - curséd vaults (hotfix)</p>
 
             <div id="loading-text" style="color: #ffd700; font-size: 24px; display: none;">initializing systems...</div>
 
@@ -95,6 +95,17 @@ export class MainMenu {
         if (!this.overlay) return;
 
         const changes = [
+            {
+                ver: "v0.2.2.1",
+                date: "2026-01-19",
+                items: [
+                    "- fixed vault reward logic (payment & fight required)",
+                    "- fixed vault ambush infinite wave crash",
+                    "- fixed chest sprite definition crash",
+                    "- updated chest visuals",
+                    "- added debug 'I' button for nukes"
+                ]
+            },
             {
                 ver: "v0.2.2",
                 date: "2026-01-19",

@@ -167,6 +167,15 @@ export class Game {
                 this.lootCrates.push(new LootCrate(worldX, worldY, size));
             }
 
+            // NUKE: Kill all enemies in the room (for testing)
+            if (e.code === 'KeyI') {
+                console.log('[Dev] NUKE TRIGGERED');
+                this.enemies.forEach(e => { if (e.takeDamage) e.takeDamage(99999); });
+                this.bosses.forEach(b => { if (b.takeDamage) b.takeDamage(99999); });
+                this.notifications.push({ text: "NUKE DETONATED!", life: 1.5, color: '#ff0000' });
+                this.audio.play('enemy_death1', { volume: 1.0 });
+            }
+
             // Name Entry Input
             if (this.nameEntryActive) {
                 e.preventDefault();
@@ -1523,8 +1532,7 @@ export class Game {
                                 this.audio.play('shield_hit', { volume: 0.8 }); // Assuming sound exists or standard hit
                                 if (!this.audio.sounds.shield_hit) this.audio.play('hit', { pitch: 1.5 }); // Fallback
 
-                                // Visual Effect
-                                this.explosions.push({ x: worldCellX, y: worldCellY, radius: 25, life: 0.3, maxLife: 0.3, color: '#00ffff' });
+                                this.spawnExplosion(worldCellX, worldCellY, 25, 0.3, '#00ffff');
 
                                 if (!p.isBeam) p.isDead = true;
                                 hitResult = false; // Blocked!
@@ -1581,8 +1589,8 @@ export class Game {
             }
 
             if (p.shouldExplode) {
-                const aoe = 60;
-                this.explosions.push({ x: p.x, y: p.y, radius: aoe, life: 0.4, maxLife: 0.4 });
+                const aoe = p.aoeRadius || 40;
+                this.spawnExplosion(p.x, p.y, aoe, 0.4);
                 this.audio.play('explosion', { volume: 0.6, randomizePitch: 0.4 });
 
                 // AOE Damage
@@ -1643,15 +1651,9 @@ export class Game {
 
             if (p.isDead) {
                 if (p.shouldExplode) {
-                    // Manual add since helper doesn't exist
-                    this.explosions.push({
-                        x: p.x,
-                        y: p.y,
-                        radius: p.type === 'ggbm' ? 60 : 40,
-                        life: p.type === 'ggbm' ? 0.6 : 0.4,
-                        maxLife: p.type === 'ggbm' ? 0.6 : 0.4,
-                        color: '#ffaa00'
-                    });
+                    const radius = p.type === 'ggbm' ? 60 : 40;
+                    const life = p.type === 'ggbm' ? 0.6 : 0.4;
+                    this.spawnExplosion(p.x, p.y, radius, life, '#ffaa00');
                     this.audio.play('explosion', { volume: 0.3, pitch: 1.2 });
                 }
                 this.projectiles.splice(i, 1);
@@ -1695,7 +1697,7 @@ export class Game {
                 const boss = this.bosses[i];
                 if (boss.isDead) {
                     // Massive Explosion
-                    this.explosions.push({ x: boss.x, y: boss.y, life: 1.0, maxLife: 1.0, size: 200 });
+                    this.spawnExplosion(boss.x, boss.y, 200, 1.0);
                     // Spawn Portal
                     this.portals.push(new Portal(boss.x, boss.y));
                     this.showNotification("portal opened", '#aa00ff');
@@ -2820,10 +2822,12 @@ export class Game {
     tryActivateVaultChest(chest) {
         if (chest.ambushActive) return; // Busy
 
-        if (this.currentRoom && this.currentRoom.cleared && !chest.locked) {
-            // Reward Phase (ambush cleared)
+        // Reward Phase: Room is clear AND the chest was recently 'unlocked' by an ambush
+        // If it's a vault room that hasn't started an ambush yet, chest.locked is false, 
+        // but it hasn't been paid for.
+        if (this.currentRoom && this.currentRoom.cleared && !chest.locked && chest.wasPaid) {
             this.openVaultChest(chest);
-        } else if (!chest.locked && !chest.opened) {
+        } else if (!chest.locked && !chest.opened && !chest.wasPaid) {
             // Payment Phase
             if (chest.costType === 'gold') {
                 if (this.gold >= chest.costAmount) {
@@ -2845,16 +2849,28 @@ export class Game {
 
     triggerVaultAmbush(chest) {
         // Trigger room ambush
+        chest.wasPaid = true;
         if (this.currentRoom) {
             this.currentRoom.startAmbush(this);
         }
+    }
+
+    spawnExplosion(x, y, radius = 50, duration = 0.5, color = '#ffaa44') {
+        this.explosions.push({
+            x: x,
+            y: y,
+            radius: radius,
+            life: duration,
+            maxLife: duration,
+            color: color
+        });
     }
 
     openVaultChest(chest) {
         chest.opened = true;
         this.showNotification("VAULT LOOT ACQUIRED!", '#00ff00');
         this.audio.play('hit', { volume: 0.8, pitch: 0.5 });
-        this.addExplosion(chest.x, chest.y, 80, 0.8);
+        this.spawnExplosion(chest.x, chest.y, 80, 0.8);
 
         // Drop 3 items
         const count = 3;
