@@ -24,8 +24,11 @@ export class GameLoop {
     loop(currentTime) {
         if (!this.isRunning) return;
 
-        const deltaTime = (currentTime - this.lastTime) / 1000; // Convert to seconds
+        let deltaTime = (currentTime - this.lastTime) / 1000; // Convert to seconds
         this.lastTime = currentTime;
+
+        // Cap delta time to avoid physics explosions during lag spikes
+        if (deltaTime > 0.05) deltaTime = 0.05;
 
         this.updateFn(deltaTime);
         this.drawFn();

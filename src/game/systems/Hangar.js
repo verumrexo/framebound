@@ -10,13 +10,9 @@ export class Hangar {
         this.rotateDebounce = false;
         this.draftShip = null; // The temporary ship we edit
 
+        this.hasInfiniteParts = false;
         this.inventory = {};
-        // Infinite Inventory for Testing
-        Object.keys(PartsLibrary).forEach(key => {
-            if (key !== 'core') {
-                this.inventory[key] = 999;
-            }
-        });
+
 
         // Create UI
         this.ui = document.createElement('div');
@@ -115,8 +111,7 @@ export class Hangar {
 
             // Loop to show EVERY physical item
             // If count is 0 but it's selected, show 1 'ghost' item
-            // FIX: For infinite inventory, only show 1 item to prevent generating 22,000 DOM elements
-            const displayCount = 1;
+            const displayCount = (count === 0 && this.selectedPartId === key) ? 1 : count;
 
             for (let i = 0; i < displayCount; i++) {
                 const isGhost = (count === 0);
@@ -453,7 +448,10 @@ export class Hangar {
                         // Check if we already placed here this click-hold
                         if (this.lastPlacedGrid !== currentGridKey) {
                             if (this.draftShip.addPart(gx, gy, this.selectedPartId, this.rotation)) {
-                                // this.inventory[this.selectedPartId]--;
+                                // Only decrement if NOT in infinite mode
+                                if (!this.hasInfiniteParts) {
+                                    this.inventory[this.selectedPartId]--;
+                                }
                                 this.updateUI();
                                 this.lastPlacedGrid = currentGridKey; // Mark this cell as handled
                             }

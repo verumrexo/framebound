@@ -28,6 +28,7 @@ import { ShipBuilder } from '../game/systems/ShipBuilder.js';
 import { AudioManager } from './AudioManager.js';
 import { MainMenu } from '../game/ui/MainMenu.js';
 import { HighScoreManager } from '../game/systems/HighScoreManager.js';
+import { DevTools } from '../game/systems/DevTools.js';
 
 export class Game {
     constructor(canvas) {
@@ -59,7 +60,7 @@ export class Game {
         this.xpToNext = 100;
         this.xpToNext = 100;
         this.enemySpawnTimer = 0;
-        this.version = "v0.2.2";
+        this.version = "v0.2.2.3";
 
         this.starfield = new Starfield(400, 4000, 4000); // Many stars, large area
         this.grid = new Grid(200); // 200px cells
@@ -103,103 +104,16 @@ export class Game {
             if (e.key === 'Escape') {
                 this.paused = !this.paused;
             }
+        });
 
-            if (e.key === 'f' || e.key === 'F') {
-                // Spawn Shipwreck nearby
-                this.shipwrecks.push(new Shipwreck(this.x + 200, this.y + 200));
-            }
+        // Dev Tools
+        this.devTools = new DevTools(this);
 
-            if (e.key === 'g' || e.key === 'G') {
-                // Spawn Training Dummy near player
-                this.enemies.push(new TrainingDummy(this.x + 200, this.y));
-            }
-
-            if (e.key === 'm' || e.key === 'M') {
-                // Open Ship Builder (Dev Tool)
-                if (!this.hangar.active && !this.designer.active) {
-                    this.shipBuilder.toggle();
-                }
-            }
-
-            // Spawn XP Orb at Cursor for testing
-            if (e.code === 'KeyP') { // Original KeyP for XP Orb
-                const mouse = this.input.getMousePos();
-                const zoom = this.camera.zoom || 1;
-                const worldX = (mouse.x / zoom) + this.camera.x;
-                const worldY = (mouse.y / zoom) + this.camera.y;
-                this.xpOrbs.push(new XPOrb(worldX, worldY, 10));
-            }
-
-            if (e.code === 'KeyO') {
-                const mouse = this.input.getMousePos();
-                const zoom = this.camera.zoom || 1;
-                const worldX = (mouse.x / zoom) + this.camera.x;
-                const worldY = (mouse.y / zoom) + this.camera.y;
-                this.goldOrbs.push(new GoldOrb(worldX, worldY, 1));
-            }
-
-            // Spawn Asteroid at Cursor for testing
+        window.addEventListener('keydown', (e) => {
+            // Toggle Dev Tools
             if (e.code === 'KeyL') {
-                const mouse = this.input.getMousePos();
-                const zoom = this.camera.zoom || 1;
-                const worldX = (mouse.x / zoom) + this.camera.x;
-                const worldY = (mouse.y / zoom) + this.camera.y;
-
-                // Randomize type
-                const rType = Math.random();
-                let type = 'rock';
-                if (rType < 0.3) type = 'crystal_blue';
-                else if (rType < 0.6) type = 'crystal_gold';
-
-                this.asteroids.push(new Asteroid(worldX, worldY, 'medium', type));
-            }
-
-            // Spawn Loot Crate at Cursor for testing
-            if (e.code === 'KeyK') {
-                const mouse = this.input.getMousePos();
-                const zoom = this.camera.zoom || 1;
-                const worldX = (mouse.x / zoom) + this.camera.x;
-                const worldY = (mouse.y / zoom) + this.camera.y;
-
-                // Randomize Size
-                const sizes = ['1x1', '1x2', '2x2'];
-                const size = sizes[Math.floor(Math.random() * sizes.length)];
-                this.lootCrates.push(new LootCrate(worldX, worldY, size));
-            }
-
-            // NUKE: Kill all enemies in the room (for testing)
-            if (e.code === 'KeyI') {
-                console.log('[Dev] NUKE TRIGGERED');
-                this.enemies.forEach(e => { if (e.takeDamage) e.takeDamage(99999); });
-                this.bosses.forEach(b => { if (b.takeDamage) b.takeDamage(99999); });
-                this.notifications.push({ text: "NUKE DETONATED!", life: 1.5, color: '#ff0000' });
-                this.audio.play('enemy_death1', { volume: 1.0 });
-            }
-
-            // Name Entry Input
-            if (this.nameEntryActive) {
-                e.preventDefault();
-
-                if (e.key === 'Enter' && this.nameEntry.length > 0) {
-                    // Submit score to Supabase
-                    console.log('[HighScore] Submitting score:', this.nameEntry, this.score);
-                    HighScoreManager.addScore(this.nameEntry, this.score)
-                        .then(() => {
-                            console.log('[HighScore] Score submitted successfully!');
-                            this.nameEntryActive = false;
-                        })
-                        .catch(err => {
-                            console.error('[HighScore] Failed to submit:', err);
-                            this.nameEntryActive = false;
-                        });
-                } else if (e.key === 'Backspace') {
-                    this.nameEntry = this.nameEntry.slice(0, -1);
-                } else if (e.key.length === 1 && this.nameEntry.length < 5) {
-                    // Accept letters and numbers
-                    if (/[a-zA-Z0-9]/.test(e.key)) {
-                        this.nameEntry += e.key.toUpperCase();
-                    }
-                }
+                if (this.nameEntryActive) return; // Don't open if typing name
+                this.devTools.toggle();
             }
         });
 
@@ -237,7 +151,6 @@ export class Game {
         this.dashCooldown = 0;
         this.dashMaxCooldown = 10;
         this.dashActiveTimer = 0;
-        this.dashDuration = 1.5; // 3x longer (was 0.5)
         this.dashDuration = 1.5; // 3x longer (was 0.5)
         this.dashPower = 4000;
 
@@ -544,6 +457,14 @@ export class Game {
             item.update(dt, this.playerShip.isDead ? null : { x: this.x, y: this.y });
 
             if (!this.playerShip.isDead) {
+                // Optimization: Broad-phase AABB/Radius check first
+                const shipRadius = 300; // Approximate max ship size buffer
+                const dxGlobal = this.x - item.x;
+                const dyGlobal = this.y - item.y;
+                if (dxGlobal * dxGlobal + dyGlobal * dyGlobal > shipRadius * shipRadius) {
+                    continue; // Too far from ship center, skip detailed part check
+                }
+
                 // Check collision with every part of the ship
                 let collected = false;
                 for (const partRef of this.playerShip.getUniqueParts()) {
