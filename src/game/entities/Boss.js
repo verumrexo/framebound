@@ -1,4 +1,4 @@
-import { PartsLibrary, TILE_SIZE, UserPartsLibrary } from '../parts/Part.js';
+import { PartsLibrary, TILE_SIZE } from '../parts/Part.js';
 import { Projectile } from './Projectile.js';
 
 export class Boss {
@@ -62,7 +62,13 @@ export class Boss {
         // Place Weapons (try to place on outer edges if possible, or just random)
         // Refresh available slots based on current hull layout
         let weaponsLeft = this.weaponCount;
-        const weaponTypes = ['gun_basic', 'lps', 'scattr', 'rocketle', 'railgun', 'ggbm'];
+
+        // Dynamic weapon types from library
+        const weaponTypes = Object.keys(PartsLibrary).filter(id => {
+            const def = PartsLibrary[id];
+            // Only use official or valid weapons
+            return def.type === 'weapon';
+        });
 
         while (weaponsLeft > 0 && availableSlots.size > 0) {
             const slots = Array.from(availableSlots);
@@ -87,7 +93,7 @@ export class Boss {
     }
 
     addPart(x, y, partId) {
-        const def = PartsLibrary[partId] || UserPartsLibrary[partId];
+        const def = PartsLibrary[partId];
         if (!def) return false;
 
         const w = def.width;
@@ -122,7 +128,7 @@ export class Boss {
         this.stats = { totalHp: 0 };
         const uniqueParts = new Set(this.parts.values());
         for (const p of uniqueParts) {
-            const def = PartsLibrary[p.partId] || UserPartsLibrary[p.partId];
+            const def = PartsLibrary[p.partId];
             this.stats.totalHp += def.stats.hp;
         }
     }
@@ -146,31 +152,59 @@ export class Boss {
         // 2. Fire weapons
         const uniqueParts = new Set(this.parts.values());
         for (const part of uniqueParts) {
-            const def = PartsLibrary[part.partId] || UserPartsLibrary[part.partId];
+            const def = PartsLibrary[part.partId];
             if (def.type === 'weapon') {
                 if (part.cooldown > 0) part.cooldown -= dt;
 
-                // Fire
-                if (part.cooldown <= 0 && dist < 1000) {
-                    // Calc aim angle
-                    // Boss parts are relative to boss X,Y
-                    // Coordinates: bossX + (partX * TILE_SIZE) rotated by bossAngle...
-                    // For now, simplify boss angle ~ 0
+                // Aim Logic
+                // If charging, stop tracking 0.5s before shot (Telegraph)
+                const isCharging = (part.chargeLeft > 0);
+                const shouldTrack = !isCharging || (part.chargeLeft > 0.5);
+
+                if (shouldTrack) {
                     const pX = this.x + part.x * TILE_SIZE;
                     const pY = this.y + part.y * TILE_SIZE;
+                    part.aimAngle = Math.atan2(playerY - pY, playerX - pX);
+                }
 
-                    const aimAngle = Math.atan2(playerY - pY, playerX - pX);
-                    part.aimAngle = aimAngle;
+                // Charge & Fire Logic
+                if (isCharging) {
+                    part.chargeLeft -= dt;
+                    if (part.chargeLeft <= 0) {
+                        // FIRE!
+                        const pX = this.x + part.x * TILE_SIZE;
+                        const pY = this.y + part.y * TILE_SIZE;
+                        const pSpeed = def.stats.projectileType === 'laser' ? 800 : 400;
 
-                    // Spawn Projectile
-                    const pSpeed = def.stats.projectileType === 'laser' ? 800 : 400;
-                    // Add some spread
-                    const finalAngle = aimAngle + (Math.random() - 0.5) * 0.1;
+                        // Use locked aimAngle
+                        const finalAngle = part.aimAngle + (Math.random() - 0.5) * 0.1;
 
-                    const proj = new Projectile(pX, pY, finalAngle, def.stats.projectileType || 'bullet', pSpeed, 'enemy', def.stats.damage);
-                    projectiles.push(proj);
+                        const proj = new Projectile(pX, pY, finalAngle, def.stats.projectileType || 'bullet', pSpeed, 'enemy', def.stats.damage);
+                        projectiles.push(proj);
 
-                    part.cooldown = def.stats.cooldown * 1.5; // Boss fires slightly slower
+                        part.chargeLeft = 0;
+                        part.cooldown = def.stats.cooldown * 1.5;
+                    }
+                } else {
+                    // Start Attack?
+                    if (part.cooldown <= 0 && dist < 1000) {
+                        if (def.stats.chargeTime) {
+                            // Start Charge
+                            part.chargeLeft = def.stats.chargeTime;
+                            // Optional: Sound hint?
+                        } else {
+                            // Instant Fire
+                            const pX = this.x + part.x * TILE_SIZE;
+                            const pY = this.y + part.y * TILE_SIZE;
+                            const pSpeed = def.stats.projectileType === 'laser' ? 800 : 400;
+                            const finalAngle = part.aimAngle + (Math.random() - 0.5) * 0.1;
+
+                            const proj = new Projectile(pX, pY, finalAngle, def.stats.projectileType || 'bullet', pSpeed, 'enemy', def.stats.damage);
+                            projectiles.push(proj);
+
+                            part.cooldown = def.stats.cooldown * 1.5;
+                        }
+                    }
                 }
             }
         }
@@ -198,7 +232,7 @@ export class Boss {
         const sin = Math.sin(this.angle);
 
         for (const part of uniqueParts) {
-            const def = PartsLibrary[part.partId] || UserPartsLibrary[part.partId];
+            const def = PartsLibrary[part.partId];
 
             // Relative position
             const rx = part.x * TILE_SIZE;

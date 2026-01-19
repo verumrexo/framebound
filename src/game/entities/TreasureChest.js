@@ -1,4 +1,5 @@
-import { PartsLibrary, UserPartsLibrary, TILE_SIZE } from '../parts/Part.js';
+import { PartsLibrary, TILE_SIZE } from '../parts/Part.js';
+import { Assets } from '../../Assets.js';
 
 export class TreasureChest {
     constructor(x, y) {
@@ -10,8 +11,8 @@ export class TreasureChest {
         this.opened = false;
         this.rotation = 0;
 
-        // Get chest sprite from UserParts
-        this.sprite = UserPartsLibrary['treasure_chest']?.sprite || null;
+        // Get chest sprite from Assets
+        this.sprite = Assets.TreasureChest;
     }
 
     update(dt) {

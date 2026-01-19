@@ -1,4 +1,4 @@
-import { PartsLibrary, UserPartsLibrary } from '../parts/Part.js';
+import { PartsLibrary } from '../parts/Part.js';
 import { TILE_SIZE } from '../parts/PartDefinitions.js';
 import { Assets } from '../../Assets.js';
 
@@ -24,7 +24,7 @@ export class ItemPickup {
         this.magnetForce = 500;
 
         // Get Def for sprite
-        this.def = PartsLibrary[partId] || UserPartsLibrary[partId];
+        this.def = PartsLibrary[partId];
     }
 
     update(dt, player) {

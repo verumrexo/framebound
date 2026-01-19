@@ -1,4 +1,5 @@
-import { PartsLibrary, UserPartsLibrary, TILE_SIZE } from '../parts/Part.js';
+import { PartsLibrary, TILE_SIZE } from '../parts/Part.js';
+import { Assets } from '../../Assets.js';
 
 export class VaultChest {
     constructor(x, y, costType, costAmount) {
@@ -14,8 +15,8 @@ export class VaultChest {
         this.ambushActive = false; // Waiting for ambush to clear
         this.rotation = 0;
 
-        // Get chest sprite from UserParts (reuse treasure chest or use a variant)
-        this.sprite = UserPartsLibrary['treasure_chest']?.sprite || null;
+        // Get chest sprite from Assets
+        this.sprite = Assets.TreasureChest;
     }
 
     update(dt) {

@@ -1,8 +1,7 @@
 import { Sprite } from '../../engine/Sprite.js';
 import { Projectile } from './Projectile.js';
 import { TILE_SIZE } from '../parts/PartDefinitions.js';
-import { UserParts } from '../parts/UserParts.js';
-import { PartsLibrary, UserPartsLibrary } from '../parts/Part.js';
+import { PartsLibrary } from '../parts/Part.js';
 
 export class Enemy {
     constructor(x, y, type = 'basic') {
@@ -38,7 +37,7 @@ export class Enemy {
             this.weaponCooldowns = [];
             this.activeBursts = []; // Initialize burst state
             for (const part of this.shipParts) {
-                const def = PartsLibrary[part.partId] || UserPartsLibrary[part.partId];
+                const def = PartsLibrary[part.partId];
                 if (def && def.type === 'weapon') {
                     this.weaponCooldowns.push({
                         part: part,
@@ -73,7 +72,7 @@ export class Enemy {
             this.weaponCooldowns = [];
             this.activeBursts = [];
             for (const part of this.shipParts) {
-                const def = PartsLibrary[part.partId] || UserPartsLibrary[part.partId];
+                const def = PartsLibrary[part.partId];
                 if (def && def.type === 'weapon') {
                     this.weaponCooldowns.push({
                         part: part,
@@ -199,7 +198,7 @@ export class Enemy {
                         // Add spread
                         const spread = (Math.random() - 0.5) * (burst.def.stats.spread || 0);
                         const pType = burst.def.stats.projectileType || 'bullet';
-                        const pSpeed = pType === 'laser' || pType === 'small_laser' ? 800 : 400;
+                        const pSpeed = burst.def.stats.projectileSpeed || (pType === 'laser' || pType === 'small_laser' ? 800 : 400);
                         const baseDamage = burst.def.stats.damage || 5;
                         const finalDamage = baseDamage * (this.damageMultiplier || 1);
 
@@ -248,7 +247,7 @@ export class Enemy {
 
                             const spread = (Math.random() - 0.5) * (wep.def.stats.spread || 0);
                             const pType = wep.def.stats.projectileType || 'bullet';
-                            const pSpeed = pType === 'laser' || pType === 'small_laser' ? 800 : 400;
+                            const pSpeed = wep.def.stats.projectileSpeed || (pType === 'laser' || pType === 'small_laser' ? 800 : 400);
                             const baseDamage = wep.def.stats.damage || 5;
                             const finalDamage = baseDamage * (this.damageMultiplier || 1);
 
@@ -280,7 +279,7 @@ export class Enemy {
             ctx.rotate(this.rotation + this.rotationOffset);
 
             for (const partData of this.shipParts) {
-                const def = PartsLibrary[partData.partId] || UserPartsLibrary[partData.partId];
+                const def = PartsLibrary[partData.partId];
                 if (!def) continue;
 
                 const isRotated = ((partData.rotation || 0) % 2 !== 0);
@@ -362,7 +361,7 @@ export class Enemy {
             let maxWorldX = -Infinity;
 
             for (const partData of this.shipParts) {
-                const def = PartsLibrary[partData.partId] || UserPartsLibrary[partData.partId];
+                const def = PartsLibrary[partData.partId];
                 if (!def) continue;
 
                 const isRotated = ((partData.rotation || 0) % 2 !== 0);

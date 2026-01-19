@@ -1,4 +1,4 @@
-import { PartsLibrary, UserPartsLibrary, TILE_SIZE } from '../parts/Part.js';
+import { PartsLibrary, TILE_SIZE } from '../parts/Part.js';
 
 export class ShopItem {
     constructor(x, y, itemData) {
@@ -12,7 +12,7 @@ export class ShopItem {
 
         // Get part def if it's a part
         if (this.data.type === 'part' && this.data.partId) {
-            this.partDef = PartsLibrary[this.data.partId] || UserPartsLibrary[this.data.partId];
+            this.partDef = PartsLibrary[this.data.partId];
         }
     }
 

@@ -1,5 +1,5 @@
 import { Assets } from '../../Assets.js';
-import { PartsLibrary, UserPartsLibrary, TILE_SIZE } from '../parts/Part.js';
+import { PartsLibrary, TILE_SIZE } from '../parts/Part.js';
 import { Ship } from '../entities/Ship.js';
 import { Hangar } from './Hangar.js';
 
@@ -17,10 +17,6 @@ export class ShipBuilder {
         for (const key of Object.keys(PartsLibrary)) {
             this.inventory[key] = 999;
         }
-        for (const key of Object.keys(UserPartsLibrary)) {
-            this.inventory[key] = 999;
-        }
-
         // Create UI
         this.ui = document.createElement('div');
         this.ui.id = 'ship-builder-ui';
@@ -179,7 +175,7 @@ export class ShipBuilder {
         let minY = Infinity, maxY = -Infinity;
 
         for (const part of rawParts) {
-            const def = PartsLibrary[part.partId] || UserPartsLibrary[part.partId];
+            const def = PartsLibrary[part.partId];
             const isRotated = ((part.rotation || 0) % 2 !== 0);
             const w = isRotated ? (def?.height || 1) : (def?.width || 1);
             const h = isRotated ? (def?.width || 1) : (def?.height || 1);
@@ -228,7 +224,7 @@ export class ShipBuilder {
         list.innerHTML = '';
 
         // Show one of each part type
-        const allParts = { ...PartsLibrary, ...UserPartsLibrary };
+        const allParts = PartsLibrary;
 
         Object.keys(allParts).forEach(key => {
             const def = allParts[key];
@@ -360,7 +356,7 @@ export class ShipBuilder {
 
         // Draw Ship Parts
         for (const partRef of this.draftShip.getUniqueParts()) {
-            const def = PartsLibrary[partRef.partId] || UserPartsLibrary[partRef.partId];
+            const def = PartsLibrary[partRef.partId];
             if (def) {
                 const isRotated = ((partRef.rotation || 0) % 2 !== 0);
                 const w = isRotated ? def.height : def.width;
@@ -391,7 +387,7 @@ export class ShipBuilder {
         const localX = mouse.x - centerX;
         const localY = mouse.y - centerY;
 
-        const partDef = PartsLibrary[this.selectedPartId] || UserPartsLibrary[this.selectedPartId];
+        const partDef = PartsLibrary[this.selectedPartId];
         if (partDef) {
             const isRotated = (this.rotation % 2 !== 0);
             const w = isRotated ? partDef.height : partDef.width;

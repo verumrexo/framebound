@@ -1,6 +1,6 @@
 
 import { Assets, AssetsData } from '../../Assets.js';
-import { PartsLibrary, UserPartsLibrary, PartDef, PartType, TILE_SIZE } from '../parts/Part.js';
+import { PartsLibrary, PartDef, PartType, TILE_SIZE } from '../parts/Part.js';
 import { Sprite } from '../../engine/Sprite.js';
 
 export class Designer {
@@ -129,7 +129,7 @@ export class Designer {
         AssetsData[id] = [...this.gridData];
         const sprite = new Sprite(AssetsData[id], this.gridWidth, this.gridHeight, 4, { 1: '#26d426', 2: '#333' });
         const def = new PartDef(id, name, PartType.HULL, sprite, { hp: 20 * width * height, mass: 2 * width * height }, width, height);
-        UserPartsLibrary[id] = def;
+        PartsLibrary[id] = def;
 
         if (this.game.hangar) {
             this.game.hangar.inventory[id] = 10;

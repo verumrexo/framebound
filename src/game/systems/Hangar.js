@@ -1,5 +1,5 @@
 import { Assets } from '../../Assets.js';
-import { PartsLibrary, UserPartsLibrary, TILE_SIZE } from '../parts/Part.js';
+import { PartsLibrary, TILE_SIZE } from '../parts/Part.js';
 
 export class Hangar {
     constructor(game) {
@@ -11,6 +11,12 @@ export class Hangar {
         this.draftShip = null; // The temporary ship we edit
 
         this.inventory = {};
+        // Infinite Inventory for Testing
+        Object.keys(PartsLibrary).forEach(key => {
+            if (key !== 'core') {
+                this.inventory[key] = 999;
+            }
+        });
 
         // Create UI
         this.ui = document.createElement('div');
@@ -104,12 +110,13 @@ export class Hangar {
 
         Object.keys(this.inventory).forEach(key => {
             const count = this.inventory[key];
-            const def = PartsLibrary[key] || UserPartsLibrary[key];
+            const def = PartsLibrary[key];
             if (!def) return;
 
             // Loop to show EVERY physical item
             // If count is 0 but it's selected, show 1 'ghost' item
-            const displayCount = (count === 0 && this.selectedPartId === key) ? 1 : count;
+            // FIX: For infinite inventory, only show 1 item to prevent generating 22,000 DOM elements
+            const displayCount = 1;
 
             for (let i = 0; i < displayCount; i++) {
                 const isGhost = (count === 0);
@@ -337,7 +344,7 @@ export class Hangar {
         // Since we translated to center, drawing at (part.x * STRIDE) works as local coord.
 
         for (const partRef of this.draftShip.getUniqueParts()) {
-            const def = PartsLibrary[partRef.partId] || UserPartsLibrary[partRef.partId];
+            const def = PartsLibrary[partRef.partId];
             if (def) {
                 const isRotated = ((partRef.rotation || 0) % 2 !== 0);
                 const w = isRotated ? def.height : def.width;
@@ -375,7 +382,7 @@ export class Hangar {
         const localY = mouse.y - centerY;
 
         // Determine tool dimensions
-        const partDef = PartsLibrary[this.selectedPartId] || UserPartsLibrary[this.selectedPartId];
+        const partDef = PartsLibrary[this.selectedPartId];
         if (partDef) {
             const isRotated = (this.rotation % 2 !== 0);
             const w = isRotated ? partDef.height : partDef.width;
@@ -446,7 +453,7 @@ export class Hangar {
                         // Check if we already placed here this click-hold
                         if (this.lastPlacedGrid !== currentGridKey) {
                             if (this.draftShip.addPart(gx, gy, this.selectedPartId, this.rotation)) {
-                                this.inventory[this.selectedPartId]--;
+                                // this.inventory[this.selectedPartId]--;
                                 this.updateUI();
                                 this.lastPlacedGrid = currentGridKey; // Mark this cell as handled
                             }

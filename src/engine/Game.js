@@ -6,7 +6,7 @@ import { Assets } from '../Assets.js';
 import { Projectile } from '../game/entities/Projectile.js';
 import { Ship } from '../game/entities/Ship.js';
 import { Enemy } from '../game/entities/Enemy.js';
-import { PartsLibrary, UserPartsLibrary, TILE_SIZE } from '../game/parts/Part.js';
+import { PartsLibrary, TILE_SIZE } from '../game/parts/Part.js';
 import { Hangar } from '../game/systems/Hangar.js';
 import { Designer } from '../game/systems/Designer.js';
 
@@ -547,7 +547,7 @@ export class Game {
                 // Check collision with every part of the ship
                 let collected = false;
                 for (const partRef of this.playerShip.getUniqueParts()) {
-                    const def = PartsLibrary[partRef.partId] || UserPartsLibrary[partRef.partId];
+                    const def = PartsLibrary[partRef.partId];
                     if (!def) continue;
 
                     // Calculate part center (anchor is top-left in grid units relative to center)
@@ -589,7 +589,7 @@ export class Game {
                     this.hangar.updateUI(); // Refresh UI if open? Or just data.
 
                     // Show Notification
-                    const def = PartsLibrary[item.partId] || UserPartsLibrary[item.partId];
+                    const def = PartsLibrary[item.partId];
                     const name = def ? (def.name || item.partId) : item.partId;
 
                     let color = '#00ff00'; // Common
@@ -911,13 +911,17 @@ export class Game {
             if (part.shieldCooldown > 0) {
                 part.shieldCooldown -= dt;
             }
+            if (part.recoil > 0) {
+                part.recoil -= dt * 20; // 5px recovers in 0.25s
+                if (part.recoil < 0) part.recoil = 0;
+            }
         }
 
         // Collect all weapons grouped by definition ID (Class)
         const weaponGroups = {};
 
         for (const partRef of this.playerShip.getUniqueParts()) {
-            const def = PartsLibrary[partRef.partId] || UserPartsLibrary[partRef.partId];
+            const def = PartsLibrary[partRef.partId];
             if (!def || def.type !== 'weapon') continue;
 
             // Initialize or decay ramp level for miniguns
@@ -1092,11 +1096,16 @@ export class Game {
                                     pX += perpX * offset;
                                     pY += perpY * offset;
                                 }
-                                const p = new Projectile(pX, pY, finalAngle, def.stats.projectileType || 'bullet', 600, 'player', def.stats.damage || 10);
+                                const p = new Projectile(pX, pY, finalAngle, def.stats.projectileType || 'bullet', def.stats.projectileSpeed || 600, 'player', def.stats.damage || 10);
                                 if (def.stats.projectileType === 'railgun') p.isBeam = true; // Safety
                                 // Randomize interval between 0.01 and 0.03 (50%-150% of 0.02 base)
                                 p.delay = i * pInterval * (0.5 + Math.random());
                                 this.projectiles.push(p);
+
+                                // Set Recoil (Visual only) - Velocity guns only
+                                if (def.stats.weaponGroup === 'velocity') {
+                                    partRef.recoil = 5.0; // Pushes back 5 pixels
+                                }
                             }
 
                             // Play Sound
@@ -1147,7 +1156,7 @@ export class Game {
             if (partRef.burstLeft > 0) {
                 partRef.burstTimer -= dt;
                 if (partRef.burstTimer <= 0) {
-                    const def = PartsLibrary[partRef.partId] || UserPartsLibrary[partRef.partId];
+                    const def = PartsLibrary[partRef.partId];
                     if (def) {
                         const isRotated = ((partRef.rotation || 0) % 2 !== 0);
                         const pw = isRotated ? def.height : def.width;
@@ -1185,6 +1194,11 @@ export class Game {
                             // Randomize interval between 0.01 and 0.03 (50%-150% of 0.02 base)
                             p.delay = i * pInterval * (0.5 + Math.random());
                             this.projectiles.push(p);
+
+                            // Set Recoil (Visual only) - Velocity guns only
+                            if (def.stats.weaponGroup === 'velocity') {
+                                partRef.recoil = 5.0; // Pushes back 5 pixels
+                            }
                         }
 
                         partRef.burstLeft--;
@@ -1487,7 +1501,7 @@ export class Game {
 
                         // We need the part definition to know effective radius
                         const partRef = this.playerShip.parts.get(key);
-                        const def = PartsLibrary[partRef.partId] || UserPartsLibrary[partRef.partId];
+                        const def = PartsLibrary[partRef.partId];
                         let effectiveRadius = cellRadius;
                         if (def.type === 'shield' && (!partRef.shieldCooldown || partRef.shieldCooldown <= 0)) {
                             effectiveRadius *= (def.stats.shieldRadiusScale || 1.4);
@@ -1507,7 +1521,7 @@ export class Game {
                         const distSq = dx * dx + dy * dy;
 
                         const partRef = this.playerShip.parts.get(key);
-                        const def = PartsLibrary[partRef.partId] || UserPartsLibrary[partRef.partId];
+                        const def = PartsLibrary[partRef.partId];
                         let effectiveRadius = cellRadius;
                         if (def.type === 'shield' && (!partRef.shieldCooldown || partRef.shieldCooldown <= 0)) {
                             effectiveRadius *= (def.stats.shieldRadiusScale || 1.4);
@@ -1523,7 +1537,7 @@ export class Game {
                     if (isHit) {
                         // Check if this part is a SHIELD
                         const partRef = this.playerShip.parts.get(key);
-                        const def = PartsLibrary[partRef.partId] || UserPartsLibrary[partRef.partId];
+                        const def = PartsLibrary[partRef.partId];
 
                         if (def.type === 'shield') {
                             if (!partRef.shieldCooldown || partRef.shieldCooldown <= 0) {
@@ -2179,7 +2193,7 @@ export class Game {
             // Draw Player Ship (On top of debris/crates/asteroids, but below explosions maybe?)
             if (!this.playerShip.isDead) {
                 for (const partRef of this.playerShip.getUniqueParts()) {
-                    const def = PartsLibrary[partRef.partId] || UserPartsLibrary[partRef.partId];
+                    const def = PartsLibrary[partRef.partId];
                     if (!def) continue;
 
                     const isRotated = ((partRef.rotation || 0) % 2 !== 0);
@@ -2204,7 +2218,9 @@ export class Game {
 
                         // Draw turret (aimed)
                         const angle = Math.atan2(worldMouseY - worldPartY, worldMouseX - worldPartX);
-                        const drawOffset = def.turretDrawOffset || 0;
+                        let drawOffset = def.turretDrawOffset || 0;
+                        if (partRef.recoil) drawOffset -= partRef.recoil;
+
                         const drawX = worldPartX + Math.cos(angle) * drawOffset;
                         const drawY = worldPartY + Math.sin(angle) * drawOffset;
 
@@ -2426,7 +2442,7 @@ export class Game {
             let topPriority = -1; // 2: Peak, 1: Overheat, 0: Ramp
 
             for (const part of this.playerShip.getUniqueParts()) {
-                const def = PartsLibrary[part.partId] || UserPartsLibrary[part.partId];
+                const def = PartsLibrary[part.partId];
                 if (def && def.stats.rampUp) {
                     let priority = -1;
                     if (part.peakMeter > 0) priority = 2;
@@ -2604,6 +2620,14 @@ export class Game {
             }
             this.renderer.ctx.restore();
         }
+
+        // Version Display
+        this.renderer.ctx.save();
+        this.renderer.ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+        this.renderer.ctx.font = "16px 'VT323'";
+        this.renderer.ctx.textAlign = 'right';
+        this.renderer.ctx.fillText("v0.2.2.2", this.renderer.width - 10, this.renderer.height - 10);
+        this.renderer.ctx.restore();
 
         // Name Entry Screen (Game Over)
         if (this.nameEntryActive) {
@@ -2793,9 +2817,6 @@ export class Game {
         for (const id of Object.keys(PartsLibrary)) {
             if (id !== 'core') allParts.push({ id, def: PartsLibrary[id] });
         }
-        for (const id of Object.keys(UserPartsLibrary)) {
-            if (!id.startsWith('treasure_')) allParts.push({ id, def: UserPartsLibrary[id] });
-        }
 
         if (allParts.length === 0) {
             this.showNotification("Chest is empty!", '#ff4444');
@@ -2879,9 +2900,6 @@ export class Game {
         const possibleParts = [];
         for (const id of Object.keys(PartsLibrary)) {
             if (id !== 'core') possibleParts.push(id);
-        }
-        for (const id of Object.keys(UserPartsLibrary)) {
-            if (!id.startsWith('treasure_')) possibleParts.push(id);
         }
 
         for (let i = 0; i < count; i++) {

@@ -1,4 +1,4 @@
-import { PartsLibrary, UserPartsLibrary } from '../parts/Part.js';
+import { PartsLibrary } from '../parts/Part.js';
 
 export class Ship {
     constructor() {
@@ -38,7 +38,7 @@ export class Ship {
     }
 
     canPlaceAt(x, y, partId, rotation = 0) {
-        const def = PartsLibrary[partId] || UserPartsLibrary[partId];
+        const def = PartsLibrary[partId];
         if (!def) return false;
 
         const isRotated = (rotation % 2 !== 0);
@@ -84,7 +84,7 @@ export class Ship {
             return false;
         }
 
-        const def = PartsLibrary[partId] || UserPartsLibrary[partId];
+        const def = PartsLibrary[partId];
         const isRotated = (rotation % 2 !== 0);
         const w = isRotated ? def.height : def.width;
         const h = isRotated ? def.width : def.height;
@@ -117,7 +117,7 @@ export class Ship {
         const originX = part.x;
         const originY = part.y;
 
-        const def = PartsLibrary[part.partId] || UserPartsLibrary[part.partId];
+        const def = PartsLibrary[part.partId];
         if (!def) {
             this.parts.delete(key);
             return;
@@ -177,7 +177,7 @@ export class Ship {
         this.stats.turnSpeed = 0; // Initialize turnSpeed
 
         for (const part of this.getUniqueParts()) {
-            const def = PartsLibrary[part.partId] || UserPartsLibrary[part.partId];
+            const def = PartsLibrary[part.partId];
             if (def) {
                 this.stats.totalHp += def.stats.hp || 0;
                 this.stats.totalMass += def.stats.mass || 0;

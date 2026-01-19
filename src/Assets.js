@@ -39,5 +39,6 @@ export const Assets = {
     PlayerBase: new Sprite(BASE_DATA, 8, 8, 4, COLORS), // 8x8 pixels, scaled up 4x
     Peashooter: new Sprite(TURRET_DATA, 8, 6, 4, COLORS),
     BigHull: new Sprite(AssetsData.BigHull, 15, 15, 4, COLORS), // 15x15 
-    LongHull: new Sprite(AssetsData.LongHull, 8, 15, 4, COLORS) // 8x15 (1x2)
+    LongHull: new Sprite(AssetsData.LongHull, 8, 15, 4, COLORS), // 8x15 (1x2)
+    TreasureChest: new Sprite([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 15, 15, 4, { 1: '#ffd700', 2: '#8b4513' })
 };

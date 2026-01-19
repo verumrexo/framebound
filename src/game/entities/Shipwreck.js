@@ -1,5 +1,7 @@
+
+
 import { Ship } from './Ship.js';
-import { PartsLibrary, UserPartsLibrary } from '../parts/Part.js';
+import { PartsLibrary } from '../parts/Part.js';
 import { TILE_SIZE } from '../parts/PartDefinitions.js';
 import { ItemPickup } from './ItemPickup.js';
 import { Assets } from '../../Assets.js';
@@ -26,7 +28,9 @@ export class Shipwreck {
         // Start with a center block (Hull or Structural)
         this.ship.addPart(0, 0, 'hull');
 
-        const partTypes = ['hull', 'structure_bar', 'gun_basic', 'thruster', 'scattr', 'lps', 'rocketle', 'minigun'];
+        const partTypes = Object.keys(PartsLibrary).filter(k => {
+            return k !== 'core'; // Exclude core
+        });
         const count = 5 + Math.floor(Math.random() * 8);
 
         // Random walk generation
@@ -69,7 +73,7 @@ export class Shipwreck {
                     // Add HP to the part instance
                     const part = this.ship.getPart(target.x, target.y);
                     if (part) {
-                        const def = PartsLibrary[type] || UserPartsLibrary[type];
+                        const def = PartsLibrary[type];
                         part.maxHp = (def.stats.hp || 10) * 0.5; // Wrecks are weak
                         part.hp = part.maxHp;
                     }
@@ -134,7 +138,7 @@ export class Shipwreck {
         const originX = part.x;
         const originY = part.y;
 
-        const def = PartsLibrary[part.partId] || UserPartsLibrary[part.partId];
+        const def = PartsLibrary[part.partId];
         if (!def) {
             this.ship.parts.delete(key);
             return;
@@ -157,7 +161,7 @@ export class Shipwreck {
 
         // Draw parts tinted red
         for (const part of this.ship.getUniqueParts()) {
-            const def = PartsLibrary[part.partId] || UserPartsLibrary[part.partId];
+            const def = PartsLibrary[part.partId];
             if (!def) continue;
 
             const isRotated = ((part.rotation || 0) % 2 !== 0);

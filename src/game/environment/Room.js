@@ -87,13 +87,10 @@ export class Room {
 
         // Import ShopItem and parts synchronously
         import('../entities/ShopItem.js').then(({ ShopItem }) => {
-            import('../parts/Part.js').then(({ PartsLibrary: PL, UserPartsLibrary: UPL }) => {
+            import('../parts/Part.js').then(({ PartsLibrary: PL }) => {
                 const allParts = [];
                 for (const id of Object.keys(PL)) {
                     if (id !== 'core') allParts.push({ id, def: PL[id] });
-                }
-                for (const id of Object.keys(UPL)) {
-                    allParts.push({ id, def: UPL[id] });
                 }
 
                 // Shuffle and pick 3 random parts
