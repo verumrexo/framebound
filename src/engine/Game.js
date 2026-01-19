@@ -27,6 +27,7 @@ import { SaveManager } from '../game/systems/SaveManager.js';
 import { ShipBuilder } from '../game/systems/ShipBuilder.js';
 import { AudioManager } from './AudioManager.js';
 import { MainMenu } from '../game/ui/MainMenu.js';
+import { HighScoreManager } from '../game/systems/HighScoreManager.js';
 
 export class Game {
     constructor(canvas) {
@@ -58,7 +59,7 @@ export class Game {
         this.xpToNext = 100;
         this.xpToNext = 100;
         this.enemySpawnTimer = 0;
-        this.version = "v0.2.1";
+        this.version = "v0.2.2";
 
         this.starfield = new Starfield(400, 4000, 4000); // Many stars, large area
         this.grid = new Grid(200); // 200px cells
@@ -165,6 +166,32 @@ export class Game {
                 const size = sizes[Math.floor(Math.random() * sizes.length)];
                 this.lootCrates.push(new LootCrate(worldX, worldY, size));
             }
+
+            // Name Entry Input
+            if (this.nameEntryActive) {
+                e.preventDefault();
+
+                if (e.key === 'Enter' && this.nameEntry.length > 0) {
+                    // Submit score to Supabase
+                    console.log('[HighScore] Submitting score:', this.nameEntry, this.score);
+                    HighScoreManager.addScore(this.nameEntry, this.score)
+                        .then(() => {
+                            console.log('[HighScore] Score submitted successfully!');
+                            this.nameEntryActive = false;
+                        })
+                        .catch(err => {
+                            console.error('[HighScore] Failed to submit:', err);
+                            this.nameEntryActive = false;
+                        });
+                } else if (e.key === 'Backspace') {
+                    this.nameEntry = this.nameEntry.slice(0, -1);
+                } else if (e.key.length === 1 && this.nameEntry.length < 5) {
+                    // Accept letters and numbers
+                    if (/[a-zA-Z0-9]/.test(e.key)) {
+                        this.nameEntry += e.key.toUpperCase();
+                    }
+                }
+            }
         });
 
         this.loop = new GameLoop(
@@ -202,7 +229,18 @@ export class Game {
         this.dashMaxCooldown = 10;
         this.dashActiveTimer = 0;
         this.dashDuration = 1.5; // 3x longer (was 0.5)
+        this.dashDuration = 1.5; // 3x longer (was 0.5)
         this.dashPower = 4000;
+
+        // Leveling Separation
+        this.floor = 1; // Dungeon Depth
+        // this.level is Player Level (already set in constructor or load)
+
+        // High Score System
+        this.score = 0;
+        this.isGameOver = false;
+        this.nameEntry = '';
+        this.nameEntryActive = false;
     }
 
     start() {
@@ -257,9 +295,17 @@ export class Game {
 
         document.getElementById('btn-new').onclick = () => {
             SaveManager.clearSave();
+            this.hasPendingSave = false;
+
+            // Resume audio context if needed
+            if (this.audio.context.state === 'suspended') {
+                this.audio.context.resume();
+            }
+
+            // Start fresh game
+            this.loop.start();
+            this.audio.playMusic('bgm', 0.4);
             overlay.remove();
-            this.hasPendingSave = false; // logic update
-            this.showStartScreen(); // Go to normal start flow
         };
     }
 
@@ -277,6 +323,7 @@ export class Game {
 
         // Restore basic stats
         this.level = save.level;
+        this.score = save.score || 0;
         this.xp = save.xp;
         this.gold = save.gold;
         this.xpToNext = save.xpToNext;
@@ -400,6 +447,26 @@ export class Game {
     }
 
     update(dt) {
+        // --- DEATH CHECK (Must be FIRST) ---
+        if (this.playerShip.isDead && !this.isGameOver) {
+            console.log('[Death] Ship died! Setting up name entry');
+            this.isGameOver = true;
+            this.paused = true;
+
+            // Check if this is a high score (async)
+            HighScoreManager.isHighScore(this.score).then(isHigh => {
+                if (isHigh) {
+                    this.nameEntryActive = true;
+                    this.nameEntry = '';
+                    console.log('[Death] Score qualifies for leaderboard!');
+                } else {
+                    console.log('[Death] Score does not qualify for leaderboard');
+                }
+            });
+
+            this.audio.play('frame_death', { volume: 0.7 });
+        }
+
         if (this.isGameOver) {
             if (this.input.isKeyDown('KeyR')) {
                 SaveManager.clearSave(); // Delete save on death
@@ -418,6 +485,26 @@ export class Game {
         if (this.shipBuilder.active) {
             this.shipBuilder.update(dt);
             return;
+        }
+
+        // --- DEATH CHECK ---
+        if (this.playerShip.isDead && !this.isGameOver) {
+            this.isGameOver = true;
+            this.paused = true;
+
+            // Always show name entry
+            console.log('[Death] Setting nameEntryActive to true');
+            this.nameEntryActive = true;
+            this.nameEntry = '';
+            console.log('[Death] nameEntryActive is now:', this.nameEntryActive);
+
+            this.audio.play('frame_death', { volume: 0.7 });
+        }
+
+        // Name Entry Input
+        if (this.nameEntryActive) {
+            // Handle keyboard input for name entry
+            return; // Don't update game while entering name
         }
 
         // --- PAUSE CHECK ---
@@ -495,7 +582,12 @@ export class Game {
                     // Show Notification
                     const def = PartsLibrary[item.partId] || UserPartsLibrary[item.partId];
                     const name = def ? (def.name || item.partId) : item.partId;
-                    this.notifications.push({ text: `+1 ${name}`, life: 2.0, color: '#00ff00' });
+
+                    let color = '#00ff00'; // Common
+                    if (def && def.rarity === 'rare') color = '#0088ff';
+                    if (def && def.rarity === 'epic') color = '#aa00ff';
+
+                    this.notifications.push({ text: `+1 ${name}`, life: 2.0, color: color });
                     this.audio.play('hit', { volume: 0.5, pitch: 2.0 });
 
                     this.itemPickups.splice(i, 1);
@@ -663,8 +755,16 @@ export class Game {
         const mouse = this.input.getMousePos();
         // Adjust for Zoom: World = (Screen / Zoom) + CameraPos
         const zoom = this.camera.zoom || 1;
-        const worldMouseX = (mouse.x / zoom) + this.camera.x;
-        const worldMouseY = (mouse.y / zoom) + this.camera.y;
+        let worldMouseX = (mouse.x / zoom) + this.camera.x;
+        let worldMouseY = (mouse.y / zoom) + this.camera.y;
+
+        // Mobile Aiming Override (Update Loop)
+        if (this.input.joysticks && this.input.joysticks.right.active) {
+            const v = this.input.joysticks.right.vector;
+            const farDist = 2000;
+            worldMouseX = this.x + v.x * farDist;
+            worldMouseY = this.y + v.y * farDist;
+        }
 
         // Calculate Ship Rotation based on movement
         const currentSpeedWrapper = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
@@ -880,6 +980,17 @@ export class Game {
                 }
             }
 
+            // Hangar Button Click Detection
+            if (this.hangarButtonRect && !this.mouseDownLastFrame) {
+                const mousePos = this.input.getMousePos();
+                const btn = this.hangarButtonRect;
+                if (mousePos.x >= btn.x && mousePos.x <= btn.x + btn.w &&
+                    mousePos.y >= btn.y && mousePos.y <= btn.y + btn.h) {
+                    this.hangar.toggle();
+                    return; // Don't fire weapons
+                }
+            }
+
             // Process EACH group independently
             for (const [groupId, group] of Object.entries(weaponGroups)) {
 
@@ -1060,7 +1171,8 @@ export class Game {
                                 pX += perpX * offset;
                                 pY += perpY * offset;
                             }
-                            const p = new Projectile(pX, pY, finalAngle, def.stats.projectileType || 'bullet', 600, 'player', def.stats.damage || 10);
+                            // Pass def.stats.lifetime (or null) as the new 8th argument
+                            const p = new Projectile(pX, pY, finalAngle, def.stats.projectileType || 'bullet', 600, 'player', def.stats.damage || 10, def.stats.lifetime);
                             // Randomize interval between 0.01 and 0.03 (50%-150% of 0.02 base)
                             p.delay = i * pInterval * (0.5 + Math.random());
                             this.projectiles.push(p);
@@ -1529,7 +1641,21 @@ export class Game {
                 }
             }
 
-            if (p.isDead) this.projectiles.splice(i, 1);
+            if (p.isDead) {
+                if (p.shouldExplode) {
+                    // Manual add since helper doesn't exist
+                    this.explosions.push({
+                        x: p.x,
+                        y: p.y,
+                        radius: p.type === 'ggbm' ? 60 : 40,
+                        life: p.type === 'ggbm' ? 0.6 : 0.4,
+                        maxLife: p.type === 'ggbm' ? 0.6 : 0.4,
+                        color: '#ffaa00'
+                    });
+                    this.audio.play('explosion', { volume: 0.3, pitch: 1.2 });
+                }
+                this.projectiles.splice(i, 1);
+            }
         }
 
         // Update Portals
@@ -1574,10 +1700,14 @@ export class Game {
                     this.portals.push(new Portal(boss.x, boss.y));
                     this.showNotification("portal opened", '#aa00ff');
 
-                    // Spawn many XP Orbs
                     for (let k = 0; k < 10; k++) {
                         this.xpOrbs.push(new XPOrb(boss.x + (Math.random() - 0.5) * 100, boss.y + (Math.random() - 0.5) * 100, 50));
                     }
+
+                    // Boss Kill: Double Score!
+                    this.score *= 2;
+                    this.showNotification(`SCORE DOUBLED! ${this.score}`, '#ffff00');
+
                     this.bosses.splice(i, 1);
                 }
             }
@@ -1599,6 +1729,11 @@ export class Game {
 
                     const deathSound = Math.random() > 0.5 ? 'enemy_death1' : 'enemy_death2';
                     this.audio.play(deathSound, { volume: 0.5, randomizePitch: 0.2 });
+
+                    // Award Score
+                    const points = enemy.type === 'striker' ? 50 : 10;
+                    this.score += points;
+
                     this.enemies.splice(i, 1);
                 }
             }
@@ -1639,13 +1774,8 @@ export class Game {
             }
         }
 
-        // Death Check
-        if (this.playerShip.isDead) {
-            if (!this.isGameOver) {
-                this.audio.play('frame_death', { volume: 1.0 });
-                this.isGameOver = true;
-            }
-        } else {
+        // (Death check moved to start of update() method)
+        if (!this.playerShip.isDead) {
             // Apply Regeneration
             if (this.playerShip.hp < this.playerShip.maxHp) {
                 this.playerShip.hp += (this.playerShip.stats.regen || 0) * levelBonus * dt;
@@ -1972,8 +2102,16 @@ export class Game {
 
             const mouse = this.input.getMousePos();
             const zoom = this.camera.zoom || 1;
-            const worldMouseX = (mouse.x / zoom) + this.camera.x;
-            const worldMouseY = (mouse.y / zoom) + this.camera.y;
+            let worldMouseX = (mouse.x / zoom) + this.camera.x;
+            let worldMouseY = (mouse.y / zoom) + this.camera.y;
+
+            // Mobile Aiming Override (Draw Loop)
+            if (this.input.joysticks && this.input.joysticks.right.active) {
+                const v = this.input.joysticks.right.vector;
+                const farDist = 2000;
+                worldMouseX = this.x + v.x * farDist;
+                worldMouseY = this.y + v.y * farDist;
+            }
 
             // SHIP DRAWING MOVED DOWN
 
@@ -2168,6 +2306,26 @@ export class Game {
             this.renderer.ctx.fillStyle = 'white';
             this.renderer.ctx.fillText("tab for hangar", 25, 67);
 
+            // HANGAR BUTTON (Bottom Right - Mobile Only)
+            if (this.input.isTouch) {
+                const hangarBtnX = this.renderer.width - 120;
+                const hangarBtnY = this.renderer.height - 60;
+                this.hangarButtonRect = { x: hangarBtnX, y: hangarBtnY, w: 100, h: 40 };
+
+                this.renderer.drawRect(hangarBtnX, hangarBtnY, 100, 40, 'rgba(0, 255, 0, 0.1)');
+                this.renderer.ctx.strokeStyle = '#00ffff';
+                this.renderer.ctx.lineWidth = 1;
+                this.renderer.ctx.strokeRect(hangarBtnX, hangarBtnY, 100, 40);
+
+                this.renderer.ctx.fillStyle = '#00ffff';
+                this.renderer.ctx.font = "20px 'VT323'";
+                this.renderer.ctx.textAlign = 'center';
+                this.renderer.ctx.fillText("HANGAR", hangarBtnX + 50, hangarBtnY + 26);
+                this.renderer.ctx.textAlign = 'left'; // Reset
+            } else {
+                this.hangarButtonRect = null;
+            }
+
             // XP Bar
             const xpPct = this.xp / this.xpToNext;
             const barY = 85;
@@ -2175,7 +2333,7 @@ export class Game {
             this.renderer.drawRect(20, barY, 200 * xpPct, 12, '#00ffff'); // Cyan fill
             this.renderer.ctx.fillStyle = '#00ffff';
             this.renderer.ctx.font = "18px 'VT323'";
-            this.renderer.ctx.fillText(`level ${this.level} - core experience`, 20, barY + 28);
+            this.renderer.ctx.fillText(`LVL ${this.level} | FLOOR ${this.floor}`, 20, barY + 28);
 
             // Gold Display (Styled)
             const goldY = barY + 35;
@@ -2224,6 +2382,13 @@ export class Game {
                 this.minimap.x = this.renderer.width - 220; // Keep anchored right
                 this.minimap.draw(this.renderer, this);
             }
+
+            // Score Display (Below Minimap - drawn AFTER minimap to avoid clip issues)
+            this.renderer.ctx.fillStyle = '#ffff00';
+            this.renderer.ctx.font = "18px 'VT323'";
+            this.renderer.ctx.textAlign = 'right';
+            this.renderer.ctx.fillText(`SCORE: ${this.score}`, this.renderer.width - 20, 220);
+            this.renderer.ctx.textAlign = 'left'; // Reset
 
             // Version & Seed (Bottom Left)
             this.renderer.ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
@@ -2338,16 +2503,20 @@ export class Game {
             this.hangar.draw(this.renderer);
         } else if (this.shipBuilder.active) {
             this.shipBuilder.draw(this.renderer);
-        } else if (this.isGameOver) {
+        } else if (this.isGameOver && !this.nameEntryActive) {
+            // Simple death screen (no high score)
             this.renderer.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
             this.renderer.ctx.fillRect(0, 0, this.renderer.width, this.renderer.height);
             this.renderer.ctx.fillStyle = 'red';
             this.renderer.ctx.font = "bold 64px 'VT323'";
             this.renderer.ctx.textAlign = 'center';
-            this.renderer.ctx.fillText("frame destroyed", this.renderer.width / 2, this.renderer.height / 2 - 20);
+            this.renderer.ctx.fillText("frame destroyed", this.renderer.width / 2, this.renderer.height / 2 - 80);
+            this.renderer.ctx.fillStyle = '#ffff00';
+            this.renderer.ctx.font = "36px 'VT323'";
+            this.renderer.ctx.fillText(`FINAL SCORE: ${this.score}`, this.renderer.width / 2, this.renderer.height / 2);
             this.renderer.ctx.fillStyle = 'white';
             this.renderer.ctx.font = "32px 'VT323'";
-            this.renderer.ctx.fillText("press r to restart", this.renderer.width / 2, this.renderer.height / 2 + 40);
+            this.renderer.ctx.fillText("press r to restart", this.renderer.width / 2, this.renderer.height / 2 + 60);
             this.renderer.ctx.textAlign = 'left';
         }
 
@@ -2433,13 +2602,65 @@ export class Game {
             }
             this.renderer.ctx.restore();
         }
+
+        // Name Entry Screen (Game Over)
+        if (this.nameEntryActive) {
+            console.log('[Draw] Name Entry Active! Entry:', this.nameEntry);
+            const ctx = this.renderer.ctx;
+
+            // Dark overlay
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+            ctx.fillRect(0, 0, this.renderer.width, this.renderer.height);
+
+            // Title
+            ctx.fillStyle = '#ff4444';
+            ctx.font = "48px 'VT323'";
+            ctx.textAlign = 'center';
+            ctx.fillText('GAME OVER', this.renderer.width / 2, this.renderer.height / 2 - 150);
+
+            // Score
+            ctx.fillStyle = '#ffff00';
+            ctx.font = "36px 'VT323'";
+            ctx.fillText(`FINAL SCORE: ${this.score}`, this.renderer.width / 2, this.renderer.height / 2 - 80);
+
+            // High Score Message
+            ctx.fillStyle = '#00ff00';
+            ctx.font = "24px 'VT323'";
+            ctx.fillText('NEW HIGH SCORE!', this.renderer.width / 2, this.renderer.height / 2 - 30);
+
+            // Name Entry Prompt
+            ctx.fillStyle = '#ffffff';
+            ctx.font = "20px 'VT323'";
+            ctx.fillText('ENTER YOUR NAME (5 CHARS)', this.renderer.width / 2, this.renderer.height / 2 + 20);
+
+            // Name Entry Box
+            const boxWidth = 300;
+            const boxHeight = 60;
+            const boxX = this.renderer.width / 2 - boxWidth / 2;
+            const boxY = this.renderer.height / 2 + 40;
+
+            ctx.strokeStyle = '#00ff00';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(boxX, boxY, boxWidth, boxHeight);
+
+            // Current Name
+            ctx.fillStyle = '#00ff00';
+            ctx.font = "32px 'VT323'";
+            const displayName = this.nameEntry + '_'.repeat(5 - this.nameEntry.length);
+            ctx.fillText(displayName, this.renderer.width / 2, boxY + 42);
+
+            // Instructions
+            ctx.fillStyle = '#aaaaaa';
+            ctx.font = "16px 'VT323'";
+            ctx.fillText('Press ENTER to submit', this.renderer.width / 2, boxY + 90);
+        }
     }
 
 
 
     async nextLevel() {
-        this.level++;
-        this.showNotification(`WARPING TO LEVEL ${this.level}...`, '#aa00ff');
+        this.floor++;
+        this.showNotification(`WARPING TO FLOOR ${this.floor}...`, '#aa00ff');
 
         // Reset Logic
         this.projectiles = [];
@@ -2451,7 +2672,10 @@ export class Game {
         this.goldOrbs = [];
 
         // Regenerate
-        this.rooms = this.levelGen.generate(15 + this.level * 2);
+        this.goldOrbs = [];
+
+        // Regenerate (Use Floor for difficulty/size)
+        this.rooms = this.levelGen.generate(15 + this.floor * 2);
 
         // Reset Player Pos
         this.currentRoom = this.levelGen.getRoom(0, 0);
@@ -2655,3 +2879,4 @@ export class Game {
         }
     }
 }
+

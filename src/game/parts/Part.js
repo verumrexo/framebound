@@ -45,7 +45,7 @@ export const PartsLibrary = {
     'ggbm': (() => {
         const d = new PartDef('ggbm', 'GGBM', PartType.WEAPON,
             new Sprite([0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0], 8, 15, 4, { 1: '#26d426', 2: '#333' }),
-            { hp: 40, mass: 4, damage: 45, cooldown: 1.8, projectileType: 'guided_rocket', weaponGroup: 'rocket' }, 1, 2
+            { hp: 40, mass: 4, damage: 45, cooldown: 1.8, projectileType: 'guided_rocket', weaponGroup: 'rocket', lifetime: 3.0 }, 1, 2
         );
         d.baseSprite = new Sprite([0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 1, 0], 8, 15, 4, { 1: '#26d426', 2: '#333' });
         d.rotationOffset = Math.PI / 2;
@@ -54,7 +54,7 @@ export const PartsLibrary = {
     'rocketle': (() => {
         const d = new PartDef('rocketle', 'Rocketle', PartType.WEAPON,
             new Sprite([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 8, 8, 4, { 1: '#26d426', 2: '#333' }),
-            { hp: 20, mass: 2, damage: 30, cooldown: 3.5, burstCount: 2, burstInterval: 0.3, projectileType: 'rocket', weaponGroup: 'rocket' }, 1, 1
+            { hp: 20, mass: 2, damage: 30, cooldown: 3.5, burstCount: 2, burstInterval: 0.3, projectileType: 'rocket', weaponGroup: 'rocket', lifetime: 3.0 }, 1, 1
         );
         d.baseSprite = new Sprite([0, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 1, 0], 8, 8, 4, { 1: '#26d426', 2: '#333' });
         return d;

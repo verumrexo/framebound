@@ -3,16 +3,18 @@ export class Input {
         this.canvas = canvas;
         this.keys = new Set();
         this.mouse = { x: 0, y: 0, isDown: false };
+        this.isTouch = false; // Detection flag
 
         window.addEventListener('keydown', (e) => this.keys.add(e.code));
         window.addEventListener('keyup', (e) => this.keys.delete(e.code));
 
         window.addEventListener('mousemove', (e) => {
-            // We use getBoundingClientRect to ensure we are relative to the canvas,
             // regardless of any padding/margin/offset in the DOM.
             const rect = this.canvas.getBoundingClientRect();
-            this.mouse.x = e.clientX - rect.left;
-            this.mouse.y = e.clientY - rect.top;
+            const scaleX = this.canvas.width / rect.width;
+            const scaleY = this.canvas.height / rect.height;
+            this.mouse.x = (e.clientX - rect.left) * scaleX;
+            this.mouse.y = (e.clientY - rect.top) * scaleY;
         });
 
         window.addEventListener('mousedown', (e) => {
@@ -41,15 +43,26 @@ export class Input {
 
     handleTouchStart(e) {
         e.preventDefault();
+        this.isTouch = true; // Flag as touch user
         const rect = this.canvas.getBoundingClientRect();
+        const scaleX = this.canvas.width / rect.width;
+        const scaleY = this.canvas.height / rect.height;
 
         for (let i = 0; i < e.changedTouches.length; i++) {
             const t = e.changedTouches[i];
-            const x = t.clientX - rect.left;
-            const y = t.clientY - rect.top;
+            // Scale Coordinates
+            const x = (t.clientX - rect.left) * scaleX;
+            const y = (t.clientY - rect.top) * scaleY;
 
-            // Divide screen in half
-            if (x < rect.width / 2) {
+            // Emulate Mouse for UI Clicks
+            this.mouse.x = x;
+            this.mouse.y = y;
+            this.mouse.isDown = true;
+
+            // Divide screen in half (Use logical/client pixels for zone decision?)
+            // Actually, best to use screen space coordinates (x/y) which are now scaled.
+            // But we must compare against canvas.width now.
+            if (x < this.canvas.width / 2) {
                 if (!this.joysticks.left.active) {
                     this.joysticks.left.active = true;
                     this.joysticks.left.id = t.identifier;
@@ -72,17 +85,19 @@ export class Input {
     handleTouchMove(e) {
         e.preventDefault();
         const rect = this.canvas.getBoundingClientRect();
+        const scaleX = this.canvas.width / rect.width;
+        const scaleY = this.canvas.height / rect.height;
 
         for (let i = 0; i < e.changedTouches.length; i++) {
             const t = e.changedTouches[i];
 
             if (t.identifier === this.joysticks.left.id) {
-                const x = t.clientX - rect.left;
-                const y = t.clientY - rect.top;
+                const x = (t.clientX - rect.left) * scaleX;
+                const y = (t.clientY - rect.top) * scaleY;
                 this.updateJoystick(this.joysticks.left, x, y);
             } else if (t.identifier === this.joysticks.right.id) {
-                const x = t.clientX - rect.left;
-                const y = t.clientY - rect.top;
+                const x = (t.clientX - rect.left) * scaleX;
+                const y = (t.clientY - rect.top) * scaleY;
                 this.updateJoystick(this.joysticks.right, x, y);
             }
         }
@@ -102,6 +117,10 @@ export class Input {
                 this.joysticks.right.id = null;
                 this.joysticks.right.vector = { x: 0, y: 0 };
             }
+        }
+
+        if (e.touches.length === 0) {
+            this.mouse.isDown = false;
         }
     }
 

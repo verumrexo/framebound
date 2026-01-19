@@ -10,21 +10,7 @@ export class Hangar {
         this.rotateDebounce = false;
         this.draftShip = null; // The temporary ship we edit
 
-        this.inventory = {
-            'hull': 5,
-            'gun_basic': 20,
-            'railgun': 1,
-            'lps': 2,
-            'scattr': 2,
-            'ggbm': 2,
-            'rocketle': 2,
-            'minigun': 2,
-            // Automatically add all user-created parts
-            ...Object.keys(UserPartsLibrary).reduce((acc, key) => {
-                acc[key] = 10; // Give 10 as default for any saved part
-                return acc;
-            }, {})
-        };
+        this.inventory = {};
 
         // Create UI
         this.ui = document.createElement('div');
@@ -233,8 +219,17 @@ export class Hangar {
             if (def.type === 'booster') statsHtml += `<div style="color:#00ffff">enables dash system</div>`;
         }
 
+        let rarityColor = '#0f0'; // Common
+        if (def && def.rarity === 'rare') rarityColor = '#0088ff';
+        if (def && def.rarity === 'epic') rarityColor = '#aa00ff';
+
         tooltipEl.innerHTML = `
-            <div style="font-size: 20px; color: #0f0; margin-bottom: 5px; border-bottom: 1px solid rgba(0,255,0,0.3);">${def.name}</div>
+            <div style="font-size: 20px; color: ${rarityColor}; margin-bottom: 5px; border-bottom: 1px solid rgba(0,255,0,0.3); text-transform: uppercase;">
+                ${def.name}
+            </div>
+            <div style="font-size: 14px; color: ${rarityColor}; margin-bottom: 8px; font-weight: bold;">
+                [${def.rarity || 'common'}]
+            </div>
             <div style="font-size: 14px; color: #888; margin-bottom: 8px;">class: ${def.type} ${def.stats.weaponGroup ? `[${def.stats.weaponGroup}]` : ''} (${def.width}x${def.height})</div>
             <div style="display: flex; flex-direction: column; gap: 2px;">
                 ${statsHtml}
@@ -469,10 +464,8 @@ export class Hangar {
                         const existing = this.draftShip.getPart(rGx, rGy);
                         if (existing && existing.partId !== 'core') {
                             this.draftShip.removePart(rGx, rGy);
-                            if (this.inventory[existing.partId] !== undefined) {
-                                this.inventory[existing.partId]++;
-                                this.updateUI();
-                            }
+                            this.inventory[existing.partId] = (this.inventory[existing.partId] || 0) + 1;
+                            this.updateUI();
                             this.lastPlacedGrid = currentGridKey;
                         }
                     }

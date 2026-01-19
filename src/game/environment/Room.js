@@ -406,10 +406,30 @@ export class Room {
             }
         }
 
+        // --- NEW: Set Asteroids & Boxes to 1hp for easy cleanup ---
+        if (game.asteroids) {
+            for (const asteroid of game.asteroids) {
+                if (this.contains(asteroid.x, asteroid.y) && !asteroid.isBroken) {
+                    asteroid.hp = 1;
+                }
+            }
+        }
+        if (game.lootCrates) {
+            for (const crate of game.lootCrates) {
+                if (this.contains(crate.x, crate.y) && !crate.isOpened) {
+                    crate.hp = 1;
+                }
+            }
+        }
+
         // Auto-save on room clear (safer checkpoint than room enter)
         if (game.autoSave && game.playerShip) {
             game.autoSave();
         }
+
+        // Room Clear Bonus: +100 Points
+        game.score = (game.score || 0) + 100;
+        game.showNotification('ROOM CLEARED! +100', '#ffff00');
     }
 
     draw(renderer, camera) {

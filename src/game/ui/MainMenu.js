@@ -1,4 +1,6 @@
 
+import { HighScoreManager } from '../systems/HighScoreManager.js';
+
 export class MainMenu {
     constructor(game) {
         this.game = game;
@@ -47,13 +49,14 @@ export class MainMenu {
     renderMenu() {
         if (!this.overlay) return;
         this.overlay.innerHTML = `
-            <h1 style="color: #00ffff; font-size: 80px; margin-bottom: 0px; text-shadow: 0 0 20px #00ffff; letter-spacing: -2px;">frame bound</h1>
-            <p style="color: #666; font-size: 24px; margin-bottom: 60px;">v0.2.1 - curséd vaults</p>
+            <h1 style="color: #00ffff; font-size: 80px; margin-bottom: 0px; text-shadow: 0 0 20px #00ffff; letter-spacing: -2px;">framebound</h1>
+            <p style="color: #666; font-size: 24px; margin-bottom: 60px;">v0.2.2 - curséd vaults</p>
 
             <div id="loading-text" style="color: #ffd700; font-size: 24px; display: none;">initializing systems...</div>
 
             <div style="display: flex; flex-direction: column; gap: 20px; width: 300px;">
                 <button id="btn-start" class="menu-btn" style="background: #00aaee; color: white;">launch mission</button>
+                <button id="btn-leaderboard" class="menu-btn" style="background: transparent; color: #ffaa00; border: 1px solid #ffaa00;">leaderboard</button>
                 <button id="btn-changelog" class="menu-btn" style="background: transparent; color: #888; border: 1px solid #444;">changelog</button>
             </div>
 
@@ -79,9 +82,11 @@ export class MainMenu {
         // Attach Listeners
         setTimeout(() => {
             const btnStart = document.getElementById('btn-start');
+            const btnLeaderboard = document.getElementById('btn-leaderboard');
             const btnChange = document.getElementById('btn-changelog');
 
             if (btnStart) btnStart.onclick = () => this.startGame();
+            if (btnLeaderboard) btnLeaderboard.onclick = () => this.renderLeaderboard();
             if (btnChange) btnChange.onclick = () => this.renderChangelog();
         }, 0);
     }
@@ -90,6 +95,18 @@ export class MainMenu {
         if (!this.overlay) return;
 
         const changes = [
+            {
+                ver: "v0.2.2",
+                date: "2026-01-19",
+                items: [
+                    "- high score system with name entry",
+                    "- leaderboard in main menu",
+                    "- score display on HUD",
+                    "- points for kills and room clears",
+                    "- size-based rarity system (common/rare/epic)",
+                    "- rarity color coding in tooltips"
+                ]
+            },
             {
                 ver: "v0.2.1",
                 date: "2026-01-18",
@@ -134,6 +151,68 @@ export class MainMenu {
         });
 
         html += `</div>
+            <button id="btn-back" class="menu-btn" style="background: transparent; color: white; border: 1px solid #fff; width: 200px;">back</button>
+        `;
+
+        this.overlay.innerHTML = html;
+
+        setTimeout(() => {
+            document.getElementById('btn-back').onclick = () => this.renderMenu();
+        }, 0);
+    }
+
+    async renderLeaderboard() {
+        if (!this.overlay) return;
+
+        // Show loading state
+        this.overlay.innerHTML = `
+            <h2 style="color: #ffff00; margin-bottom: 40px; font-size: 48px; text-shadow: 0 0 10px #ffff00;">HIGH SCORES</h2>
+            <p style="color: #888; font-size: 24px;">Loading global leaderboard...</p>
+        `;
+
+        const scores = await HighScoreManager.getHighScores();
+
+        let html = `
+            <h2 style="color: #ffff00; margin-bottom: 40px; font-size: 48px; text-shadow: 0 0 10px #ffff00;">HIGH SCORES</h2>
+            <div style="
+                width: 500px; 
+                text-align: left; 
+                margin-bottom: 40px;
+                background: rgba(0,0,0,0.5);
+                padding: 30px;
+                border: 2px solid #ffaa00;
+            ">
+        `;
+
+        if (scores.length === 0) {
+            html += `<p style="color: #888; text-align: center; font-size: 24px;">No scores yet. Be the first!</p>`;
+        } else {
+            html += `<div style="display: flex; flex-direction: column; gap: 15px;">`;
+            scores.forEach((score, index) => {
+                const rank = index + 1;
+                const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `${rank}.`;
+                const color = rank === 1 ? '#ffd700' : rank === 2 ? '#c0c0c0' : rank === 3 ? '#cd7f32' : '#00ffff';
+
+                html += `
+                    <div style="
+                        display: flex; 
+                        justify-content: space-between; 
+                        align-items: center;
+                        padding: 10px;
+                        background: rgba(255,255,255,0.05);
+                        border-left: 3px solid ${color};
+                    ">
+                        <span style="color: ${color}; font-size: 24px; width: 50px;">${medal}</span>
+                        <span style="color: white; font-size: 28px; flex: 1;">${score.name}</span>
+                        <span style="color: #ffff00; font-size: 28px; font-weight: bold;">${score.score}</span>
+                    </div>
+                `;
+            });
+            html += `</div>`;
+        }
+
+        html += `
+            </div>
             <button id="btn-back" class="menu-btn" style="background: transparent; color: white; border: 1px solid #fff; width: 200px;">back</button>
         `;
 

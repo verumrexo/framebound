@@ -52,10 +52,17 @@ export class ShipBuilder {
                 </div>
 
                 <!-- Right Side: Inventory -->
-                <div style="background: rgba(0,0,0,0.9); padding: 15px; border: 2px solid #f44; min-width: 400px; max-width: 550px; pointer-events: auto; display: flex; flex-direction: column; max-height: calc(100vh - 40px);">
-                    <div style="color: #f44; margin-bottom: 15px; font-size: 24px; border-bottom: 1px solid #f44; padding-bottom: 5px;">all parts (∞)</div>
-                    <div id="builder-part-list" style="display: grid; grid-template-columns: repeat(auto-fill, 64px); grid-auto-rows: 64px; gap: 8px; overflow-y: auto; padding-right: 5px;">
+                <div style="background: rgba(0,0,0,0.9); padding: 10px; border: 2px solid #f44; width: 40%; max-width: 220px; min-width: 140px; pointer-events: auto; display: flex; flex-direction: column; max-height: calc(100vh - 40px); margin-left: auto;">
+                    <div style="color: #f44; margin-bottom: 10px; font-size: 20px; border-bottom: 1px solid #f44;">PARTS</div>
+                    <div id="builder-part-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(50px, 1fr)); gap: 4px; overflow-y: auto;">
                     </div>
+                </div>
+
+                <!-- Mobile Controls (Bottom Center) -->
+                <div id="mobile-builder-controls" style="position: absolute; bottom: 20px; left: 20px; display: flex; gap: 20px; pointer-events: auto;">
+                    <button id="btn-builder-rotate" style="width: 80px; height: 80px; background: #44a; color: white; border: 2px solid white; border-radius: 50%; font-size: 18px; font-weight: bold; box-shadow: 0 0 10px black;">ROTATE</button>
+                    <button id="btn-builder-place" style="width: 100px; height: 100px; background: #4a4; color: white; border: 3px solid white; border-radius: 50%; font-size: 24px; font-weight: bold; box-shadow: 0 0 10px black;">PLACE</button>
+                    <button id="btn-builder-remove" style="width: 60px; height: 60px; background: #a44; color: white; border: 2px solid white; border-radius: 50%; font-size: 14px; font-weight: bold; box-shadow: 0 0 10px black;">DEL</button>
                 </div>
             </div>
         `;
@@ -66,11 +73,13 @@ export class ShipBuilder {
         this.ui.onmouseenter = () => this.isHoveringUI = true;
         this.ui.onmouseleave = () => this.isHoveringUI = false;
 
-        // Stop events from reaching game
         this.ui.addEventListener('mousedown', (e) => e.stopPropagation());
         this.ui.addEventListener('mouseup', (e) => e.stopPropagation());
         this.ui.addEventListener('click', (e) => e.stopPropagation());
         this.ui.addEventListener('contextmenu', (e) => e.stopPropagation());
+        // Stop Touch Events too (keeps ghost steady)
+        this.ui.addEventListener('touchstart', (e) => e.stopPropagation());
+        this.ui.addEventListener('touchend', (e) => e.stopPropagation());
 
         // Tooltip (reuse Hangar's style)
         this.tooltip = document.createElement('div');
@@ -114,6 +123,45 @@ export class ShipBuilder {
                 e.stopPropagation();
                 this.clearShip();
             };
+        }
+
+        // Mobile Buttons
+        const rBtn = document.getElementById('btn-builder-rotate');
+        const pBtn = document.getElementById('btn-builder-place');
+        const dBtn = document.getElementById('btn-builder-remove');
+
+        if (rBtn) rBtn.onclick = (e) => { e.stopPropagation(); this.rotation = (this.rotation + 1) % 4; };
+        if (pBtn) pBtn.onclick = (e) => { e.stopPropagation(); this.placeAtGhost(); };
+        if (dBtn) dBtn.onclick = (e) => { e.stopPropagation(); this.removeAtGhost(); };
+
+        // Hide mobile controls on Desktop (if not touch)
+        const mobileCtrls = document.getElementById('mobile-builder-controls');
+        if (mobileCtrls && !this.game.input.isTouch) {
+            mobileCtrls.style.display = 'none';
+        }
+    }
+
+    placeAtGhost() {
+        if (!this.ghostGrid) return;
+        const { x, y } = this.ghostGrid;
+
+        // Check validity again just in case
+        if (this.draftShip.canPlaceAt(x, y, this.selectedPartId, this.rotation)) {
+            this.draftShip.addPart(x, y, this.selectedPartId, this.rotation);
+            this.game.audio.play('click_short');
+            // No lastPlacedGrid check needed for button tapping
+        } else {
+            this.game.showNotification("Can't place here!", '#ff4444');
+        }
+    }
+
+    removeAtGhost() {
+        if (!this.ghostGrid) return;
+        const { x, y } = this.ghostGrid;
+        const existing = this.draftShip.getPart(x, y);
+        if (existing && existing.partId !== 'core') {
+            this.draftShip.removePart(x, y);
+            this.game.audio.play('click_short');
         }
     }
 
@@ -191,9 +239,10 @@ export class ShipBuilder {
             const spanH = def.height || 1;
             itemWrapper.style.cssText = `
                 grid-column: span ${spanW};
+                grid-column: span ${spanW};
                 grid-row: span ${spanH};
-                width: ${64 * spanW}px;
-                height: ${64 * spanH}px;
+                width: ${spanW * 50}px;
+                height: ${spanH * 50}px;
                 cursor: pointer;
                 display: flex;
                 align-items: center;
@@ -350,6 +399,9 @@ export class ShipBuilder {
 
             const gx = Math.round(localX / CELL_STRIDE - (w - 1) / 2);
             const gy = Math.round(localY / CELL_STRIDE - (h - 1) / 2);
+
+            // Store for Button Actions
+            this.ghostGrid = { x: gx, y: gy };
 
             const isValid = this.draftShip.canPlaceAt(gx, gy, this.selectedPartId, this.rotation);
 

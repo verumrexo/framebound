@@ -26,6 +26,7 @@ export class SaveManager {
             const saveData = {
                 version: SAVE_VERSION,
                 level: game.level,
+                score: game.score,
                 levelSeed: game.levelGen.seed, // Store the seed for deterministic regeneration
                 xp: game.xp,
                 gold: game.gold,

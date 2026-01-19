@@ -1,5 +1,5 @@
 export class Projectile {
-    constructor(x, y, angle, type = 'bullet', speed = 600, owner = 'player', damage = 10) {
+    constructor(x, y, angle, type = 'bullet', speed = 600, owner = 'player', damage = 10, lifetime = null) {
         this.x = x;
         this.y = y;
         this.type = type;
@@ -12,7 +12,7 @@ export class Projectile {
         this.angle = angle;
 
         this.radius = (type === 'laser' || type === 'small_laser' || type === 'pellet') ? 2 : (type === 'mini_bullet' ? 1.5 : (type === 'railgun' ? 6 : (type === 'saber' ? 3 : 4)));
-        this.life = (type === 'railgun') ? 2.4 : ((type === 'saber') ? 1.6 : 60.0);
+        this.life = lifetime !== null ? lifetime : ((type === 'railgun') ? 2.4 : ((type === 'saber') ? 1.6 : 60.0));
         this.maxLife = this.life;
         this.railStayTime = (type === 'railgun') ? 1.1 : ((type === 'saber') ? 0.6 : 0);
         this.isDead = false;

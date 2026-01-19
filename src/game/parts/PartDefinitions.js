@@ -27,6 +27,13 @@ export class PartDef {
         this.baseSprite = null; // Optional custom base frame
         this.rotationOffset = 0; // Optional rotation offset for turrets
         this.turretDrawOffset = 0; // Optional positional offset for turrets (along aim vector)
+
+        // Auto-assign rarity based on size
+        const size = width * height;
+        this.rarity = 'common';
+        if (size === 2) this.rarity = 'rare'; // 1x2 or 2x1
+        if (size >= 4) this.rarity = 'epic'; // 2x2 or larger
+
         this.stats = {
             hp: 10,
             mass: 1,
