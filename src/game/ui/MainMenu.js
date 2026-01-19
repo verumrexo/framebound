@@ -50,8 +50,7 @@ export class MainMenu {
         if (!this.overlay) return;
         this.overlay.innerHTML = `
             <h1 style="color: #00ffff; font-size: 80px; margin-bottom: 0px; text-shadow: 0 0 20px #00ffff; letter-spacing: -2px;">framebound</h1>
-            <p style="color: #666; font-size: 24px; margin-bottom: 60px;">v0.2.2.1 - curséd vaults (hotfix)</p>
-
+            <p style="color: #666; font-size: 24px; margin-bottom: 60px;">v0.2.2.3 - unified systems</p>
             <div id="loading-text" style="color: #ffd700; font-size: 24px; display: none;">initializing systems...</div>
 
             <div style="display: flex; flex-direction: column; gap: 20px; width: 300px;">
@@ -95,6 +94,17 @@ export class MainMenu {
         if (!this.overlay) return;
 
         const changes = [
+            {
+                ver: "v0.2.2.3",
+                date: "2026-01-20",
+                items: [
+                    "- advanced dev tools (spawn, place, infinite)",
+                    "- physics lag fix (dt capping)",
+                    "- collision optimization",
+                    "- updated chest visuals",
+                    "- unified L-key menu"
+                ]
+            },
             {
                 ver: "v0.2.2.1",
                 date: "2026-01-19",

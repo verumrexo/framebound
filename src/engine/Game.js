@@ -2547,7 +2547,7 @@ export class Game {
         this.renderer.ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
         this.renderer.ctx.font = "16px 'VT323'";
         this.renderer.ctx.textAlign = 'right';
-        this.renderer.ctx.fillText("v0.2.2.2", this.renderer.width - 10, this.renderer.height - 10);
+        this.renderer.ctx.fillText(this.version, this.renderer.width - 10, this.renderer.height - 10);
         this.renderer.ctx.restore();
 
         // Name Entry Screen (Game Over)
