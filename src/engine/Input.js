@@ -2,10 +2,16 @@ export class Input {
     constructor(canvas) {
         this.canvas = canvas;
         this.keys = new Set();
+        this.keysPressed = new Set(); // Track newly pressed keys this frame
         this.mouse = { x: 0, y: 0, isDown: false };
         this.isTouch = false; // Detection flag
 
-        window.addEventListener('keydown', (e) => this.keys.add(e.code));
+        window.addEventListener('keydown', (e) => {
+            if (!this.keys.has(e.code)) {
+                this.keysPressed.add(e.code); // Only add if not already held
+            }
+            this.keys.add(e.code);
+        });
         window.addEventListener('keyup', (e) => this.keys.delete(e.code));
 
         window.addEventListener('mousemove', (e) => {
@@ -148,6 +154,14 @@ export class Input {
 
     isKeyDown(code) {
         return this.keys.has(code);
+    }
+
+    isKeyPressed(code) {
+        return this.keysPressed.has(code);
+    }
+
+    clearPressed() {
+        this.keysPressed.clear();
     }
 
     isMouseDown() {

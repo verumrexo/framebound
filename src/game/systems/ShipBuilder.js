@@ -34,17 +34,17 @@ export class ShipBuilder {
         `;
         this.ui.innerHTML = `
             <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                <!-- Left Side: Controls -->
-                <div id="builder-controls" style="background: rgba(20,20,40,0.95); padding: 18px; border: 2px solid #6699ff; min-width: 220px; pointer-events: auto; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
-                    <div style="color: #6699ff; font-size: 18px; margin-bottom: 12px; text-transform: uppercase; border-bottom: 2px solid #6699ff; padding-bottom: 8px;">⚙ ship builder</div>
-                    <div style="color: #aabbff; margin-bottom: 15px; font-size: 12px;">part designer</div>
-                    <button id="builder-export" style="width: 100%; padding: 12px; background: linear-gradient(135deg, #4a9eff, #3377cc); color: white; border: none; cursor: pointer; font-family: 'Press Start 2P', monospace; font-size: 14px; margin-bottom: 10px; border-radius: 4px; transition: transform 0.1s;">📋 export json</button>
-                    <button id="builder-clear" style="width: 100%; padding: 12px; background: linear-gradient(135deg, #ff6666, #cc4444); color: white; border: none; cursor: pointer; font-family: 'Press Start 2P', monospace; font-size: 14px; margin-bottom: 10px; border-radius: 4px; transition: transform 0.1s;">🗑 clear ship</button>
-                    <button id="builder-turret-toggle" style="width: 100%; padding: 12px; background: linear-gradient(135deg, #ff9944, #dd7722); color: white; border: none; cursor: pointer; font-family: 'Press Start 2P', monospace; font-size: 14px; border-radius: 4px; transition: transform 0.1s;">🔧 turret editor</button>
-                    <div style="color: #8899bb; font-size: 8px; margin-top: 15px; line-height: 1.6; border-top: 1px solid rgba(102, 153, 255, 0.3); padding-top: 10px;">
+                <!-- Left Side: Controls - BOTTOM LEFT -->
+                <div id="builder-controls" style="position: absolute; bottom: 20px; left: 20px; background: rgba(20,20,40,0.95); padding: 12px; border: 2px solid #6699ff; min-width: 110px; pointer-events: auto; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); z-index: 10;">
+                    <div style="color: #6699ff; font-size: 12px; margin-bottom: 8px; text-transform: uppercase; border-bottom: 2px solid #6699ff; padding-bottom: 6px;">⚙ builder</div>
+                    <button id="builder-import" style="width: 100%; padding: 8px; background: linear-gradient(135deg, #ff9944, #dd7722); color: white; border: none; cursor: pointer; font-family: 'Press Start 2P', monospace; font-size: 9px; margin-bottom: 6px; border-radius: 4px; transition: transform 0.1s;">📥 import</button>
+                    <button id="builder-export" style="width: 100%; padding: 8px; background: linear-gradient(135deg, #4a9eff, #3377cc); color: white; border: none; cursor: pointer; font-family: 'Press Start 2P', monospace; font-size: 9px; margin-bottom: 6px; border-radius: 4px; transition: transform 0.1s;">📋 export</button>
+                    <button id="builder-clear" style="width: 100%; padding: 8px; background: linear-gradient(135deg, #ff6666, #cc4444); color: white; border: none; cursor: pointer; font-family: 'Press Start 2P', monospace; font-size: 9px; margin-bottom: 6px; border-radius: 4px; transition: transform 0.1s;">🗑 clear</button>
+                    <button id="builder-turret-toggle" style="width: 100%; padding: 8px; background: linear-gradient(135deg, #ff9944, #dd7722); color: white; border: none; cursor: pointer; font-family: 'Press Start 2P', monospace; font-size: 9px; border-radius: 4px; transition: transform 0.1s;">🔧 turret</button>
+                    <div style="color: #8899bb; font-size: 7px; margin-top: 10px; line-height: 1.4; border-top: 1px solid rgba(102, 153, 255, 0.3); padding-top: 8px;">
                         R: rotate<br>
-                        left click: place<br>
-                        right click: remove<br>
+                        LC: place<br>
+                        RC: remove<br>
                         M: close
                     </div>
                 </div>
@@ -97,8 +97,27 @@ export class ShipBuilder {
 
         window.addEventListener('mousemove', (e) => {
             if (!this.active || this.tooltip.style.display === 'none') return;
-            this.tooltip.style.left = (e.clientX + 15) + 'px';
-            this.tooltip.style.top = (e.clientY + 15) + 'px';
+
+            // Keep tooltip on screen
+            const maxWidth = 150;
+            const padding = 15;
+            let x = e.clientX + padding;
+            let y = e.clientY + padding;
+
+            // If too close to right edge, show on left of cursor
+            if (x + maxWidth > window.innerWidth) {
+                x = e.clientX - maxWidth - padding;
+            }
+
+            // If too close to bottom, show above cursor
+            if (y + 200 > window.innerHeight) {
+                y = e.clientY - 200;
+            }
+
+            this.tooltip.style.left = Math.max(10, x) + 'px';
+            this.tooltip.style.top = Math.max(10, y) + 'px';
+            this.tooltip.style.maxWidth = maxWidth + 'px';
+            this.tooltip.style.wordWrap = 'break-word';
         });
 
         // Setup buttons after DOM is available
@@ -106,9 +125,17 @@ export class ShipBuilder {
     }
 
     setupButtons() {
+        const importBtn = document.getElementById('builder-import');
         const exportBtn = document.getElementById('builder-export');
         const clearBtn = document.getElementById('builder-clear');
         const turretToggle = document.getElementById('builder-turret-toggle');
+
+        if (importBtn) {
+            importBtn.onclick = (e) => {
+                e.stopPropagation();
+                this.importJSON();
+            };
+        }
 
         if (exportBtn) {
             exportBtn.onclick = (e) => {
@@ -176,6 +203,38 @@ export class ShipBuilder {
         if (existing && existing.partId !== 'core') {
             this.draftShip.removePart(x, y);
             this.game.audio.play('click_short');
+        }
+    }
+
+    importJSON() {
+        const json = prompt('Paste ship JSON:');
+        if (!json) return;
+
+        try {
+            const data = JSON.parse(json);
+            if (!data.parts || !Array.isArray(data.parts)) {
+                this.game.showNotification('invalid json format!', '#ff4444');
+                return;
+            }
+
+            // Clear current ship
+            this.clearShip();
+
+            // Import all parts
+            let importedCount = 0;
+            for (const part of data.parts) {
+                if (part.partId && typeof part.x === 'number' && typeof part.y === 'number') {
+                    const rotation = part.rotation || 0;
+                    if (this.draftShip.addPart(part.x, part.y, part.partId, rotation)) {
+                        importedCount++;
+                    }
+                }
+            }
+
+            this.game.showNotification(`imported ${importedCount} parts!`, '#4f4');
+        } catch (err) {
+            console.error('Import error:', err);
+            this.game.showNotification('failed to parse json!', '#ff4444');
         }
     }
 

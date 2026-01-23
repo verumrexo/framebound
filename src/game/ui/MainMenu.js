@@ -261,10 +261,25 @@ export class MainMenu {
 
         const changes = [
             {
+                ver: "v0.4.0",
+                date: "2026-01-24",
+                items: [
+                    "- new: 'rocketeer' enemy (heavy 4x rockets, 2x2 rooms)",
+                    "- new: 'sniperer' enemy (long-range, stationary)",
+                    "- new: 'circler' enemy (fast approach + orbit)",
+                    "- improved: ship builder UI (repositioned panel)",
+                    "- improved: burst weapon damage (5.0 DPS)",
+                    "- improved: part designer (2x4 legendary parts)"
+                ]
+            },
+            {
                 ver: "v0.3.1",
                 date: "2026-01-23",
                 items: [
-                    "- hotfix: edge browser performance (outline caching)"
+                    "- hotfix: edge browser performance (outline caching)",
+                    "- hotfix: removed CSS filters from enemies (4x faster)",
+                    "- new: pause menu with settings access",
+                    "- new: in-game audio controls (esc menu)"
                 ]
             },
             {

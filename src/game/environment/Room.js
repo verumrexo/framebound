@@ -336,6 +336,7 @@ export class Room {
 
         // Density based on room size
         const count = 3 + Math.floor(Math.random() * 4) * (this.widthUnits * this.heightUnits);
+        const is2x2Room = this.widthUnits === 2 && this.heightUnits === 2;
 
         for (let i = 0; i < count; i++) {
             // Random position within room, padded from walls
@@ -343,8 +344,32 @@ export class Room {
             const ex = this.x + pad + Math.random() * (this.width - pad * 2);
             const ey = this.y + pad + Math.random() * (this.height - pad * 2);
 
-            // 30% chance for a striker
-            const type = Math.random() < 0.3 ? 'striker' : 'basic';
+            let type = 'basic';
+            const r = Math.random();
+
+            // 20% chance for Sniperer in any room
+            if (r < 0.2) {
+                type = 'sniperer';
+            } else if (r < 0.35) {
+                // 15% chance for Circler
+                type = 'circler';
+            } else if (is2x2Room) {
+                // Always spawn at least one Rocketeer in 2x2 rooms
+                if (i === 0) {
+                    type = 'rocketeer';
+                } else {
+                    // Mix of striker and basic for others
+                    type = Math.random() < 0.3 ? 'striker' : 'basic';
+                }
+            } else {
+                // 10% chance for Rocketeer in smaller rooms
+                const r = Math.random();
+                if (r < 0.1) {
+                    type = 'rocketeer';
+                } else if (r < 0.4) {
+                    type = 'striker';
+                }
+            }
 
             const enemy = new Enemy(ex, ey, type);
             game.enemies.push(enemy);

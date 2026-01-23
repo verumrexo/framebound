@@ -67,8 +67,8 @@ export class Game {
         this.xpToNext = 100;
         this.xpToNext = 100;
         this.enemySpawnTimer = 0;
-        this.version = 'v0.3.1';
-        this.versionName = 'polish update';
+        this.version = 'v0.4.0';
+        this.versionName = 'enemy update';
 
         this.starfield = new Starfield(400, 4000, 4000); // Many stars, large area
         this.grid = new Grid(200); // 200px cells
@@ -395,6 +395,58 @@ export class Game {
         if (this.nameEntryActive) {
             // Handle keyboard input for name entry
             return; // Don't update game while entering name
+        }
+
+        // --- PAUSE MENU INTERACTION ---
+        if (this.paused) {
+            const mouse = this.input.getMousePos();
+            const isMouseDown = this.input.isMouseDown();
+            const mouseClicked = isMouseDown && !this.mouseDownLastFrame;
+
+            // Pause Settings Interaction
+            if (this.showPauseSettings) {
+                // Slider interaction
+                if (this.pauseSettingsSliders && isMouseDown) {
+                    for (const slider of this.pauseSettingsSliders) {
+                        if (mouse.y >= slider.y - 10 && mouse.y <= slider.y + slider.height + 10) {
+                            if (mouse.x >= slider.x && mouse.x <= slider.x + slider.width) {
+                                const newValue = Math.max(0, Math.min(1, (mouse.x - slider.x) / slider.width));
+
+                                if (slider.type === 'master') {
+                                    this.audio.setMasterVolume(newValue);
+                                } else if (slider.type === 'music') {
+                                    this.audio.setMusicVolume(newValue);
+                                } else if (slider.type === 'sfx') {
+                                    this.audio.setSfxVolume(newValue);
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Back button
+                if (mouseClicked && this.pauseSettingsBackButton) {
+                    const btn = this.pauseSettingsBackButton;
+                    if (mouse.x >= btn.x && mouse.x <= btn.x + btn.width &&
+                        mouse.y >= btn.y && mouse.y <= btn.y + btn.height) {
+                        this.showPauseSettings = false;
+                    }
+                }
+            } else {
+                // Pause menu button clicks
+                if (mouseClicked && this.pauseButtons) {
+                    for (const btn of this.pauseButtons) {
+                        if (mouse.x >= btn.x && mouse.x <= btn.x + btn.width &&
+                            mouse.y >= btn.y && mouse.y <= btn.y + btn.height) {
+                            btn.action();
+                            break;
+                        }
+                    }
+                }
+            }
+
+            this.mouseDownLastFrame = isMouseDown;
+            return; // Don't update game while paused
         }
 
         // --- PAUSE CHECK ---
@@ -1011,12 +1063,14 @@ export class Game {
                                 'custom_1768036702131': 'shoot_rocket_he',
                                 'custom_1768397007593': 'rail_shot',
                                 'custom_1768857172136': 'shoot_sniper',
+                                'custom_1769204337665': 'shoot_dart', // Burst
                                 'railgun': 'rail_shot'
                             };
                             if (weaponSounds[def.id]) snd = weaponSounds[def.id];
 
                             this.audio.play(snd, {
-                                volume: 0.6,
+                                volume: def.stats.soundVolume ?? 0.6,
+                                pitch: def.stats.soundPitch,
                                 randomizePitch: 0.15
                             });
                         }
@@ -1119,12 +1173,14 @@ export class Game {
                             'custom_1768036702131': 'shoot_rocket_he',
                             'custom_1768397007593': 'rail_shot',
                             'custom_1768857172136': 'shoot_sniper',
+                            'custom_1769204337665': 'shoot_dart', // Burst
                             'railgun': 'rail_shot'
                         };
                         if (weaponSounds[def.id]) snd = weaponSounds[def.id];
 
                         this.audio.play(snd, {
-                            volume: 0.6,
+                            volume: def.stats.soundVolume ?? 0.6,
+                            pitch: def.stats.soundPitch,
                             randomizePitch: 0.15
                         });
                     } else {
@@ -2465,6 +2521,178 @@ export class Game {
             this.renderer.ctx.font = "20px 'Press Start 2P'";
             this.renderer.ctx.fillText("press r to restart", this.renderer.width / 2, this.renderer.height / 2 + 60);
             this.renderer.ctx.textAlign = 'left';
+        }
+
+        // Pause Screen Overlay
+        if (this.paused && !this.hangar.active && !this.shipBuilder.active && !this.isGameOver) {
+            const ctx = this.renderer.ctx;
+            const centerX = this.renderer.width / 2;
+            const centerY = this.renderer.height / 2;
+
+            // Dark overlay
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+            ctx.fillRect(0, 0, this.renderer.width, this.renderer.height);
+
+            // Title
+            ctx.fillStyle = '#00ffff';
+            ctx.font = "bold 48px 'Press Start 2P'";
+            ctx.textAlign = 'center';
+            ctx.fillText("paused", centerX, centerY - 100);
+
+            // Define pause menu buttons
+            const buttonWidth = 300;
+            const buttonHeight = 50;
+            const buttonSpacing = 20;
+
+            this.pauseButtons = [
+                {
+                    label: "resume",
+                    x: centerX - buttonWidth / 2,
+                    y: centerY - 20,
+                    width: buttonWidth,
+                    height: buttonHeight,
+                    action: () => { this.paused = false; }
+                },
+                {
+                    label: "settings",
+                    x: centerX - buttonWidth / 2,
+                    y: centerY + buttonHeight + buttonSpacing - 20,
+                    width: buttonWidth,
+                    height: buttonHeight,
+                    action: () => { this.showPauseSettings = true; }
+                }
+            ];
+
+            // Check mouse hover
+            const mouse = this.input.getMousePos();
+
+            // Draw buttons
+            for (const btn of this.pauseButtons) {
+                const isHovered = mouse.x >= btn.x && mouse.x <= btn.x + btn.width &&
+                    mouse.y >= btn.y && mouse.y <= btn.y + btn.height;
+
+                // Button background
+                ctx.fillStyle = isHovered ? 'rgba(0, 255, 255, 0.2)' : 'rgba(0, 40, 60, 0.6)';
+                ctx.fillRect(btn.x, btn.y, btn.width, btn.height);
+
+                // Button border
+                ctx.strokeStyle = isHovered ? '#00ffff' : 'rgba(0, 255, 255, 0.4)';
+                ctx.lineWidth = isHovered ? 3 : 2;
+                ctx.strokeRect(btn.x, btn.y, btn.width, btn.height);
+
+                // Button text
+                ctx.fillStyle = isHovered ? '#ffffff' : '#00ffff';
+                ctx.font = "16px 'Press Start 2P'";
+                ctx.textAlign = 'center';
+                ctx.fillText(btn.label, btn.x + btn.width / 2, btn.y + btn.height / 2 + 6);
+            }
+
+            // Hint text
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.font = "12px 'Press Start 2P'";
+            ctx.fillText("press esc to resume", centerX, centerY + 150);
+
+            ctx.textAlign = 'left';
+        }
+
+        // Pause Settings Overlay
+        if (this.showPauseSettings && this.paused) {
+            const ctx = this.renderer.ctx;
+            const centerX = this.renderer.width / 2;
+            const centerY = this.renderer.height / 2;
+
+            // Dark overlay
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+            ctx.fillRect(0, 0, this.renderer.width, this.renderer.height);
+
+            // Title
+            ctx.fillStyle = '#00ffff';
+            ctx.font = "32px 'Press Start 2P'";
+            ctx.textAlign = 'center';
+            ctx.fillText("settings", centerX, centerY - 150);
+
+            // Volume sliders
+            const sliderWidth = 300;
+            const sliderHeight = 8;
+            const sliderSpacing = 80;
+            const startY = centerY - 60;
+
+            const masterVol = this.audio.masterGain.gain.value;
+            const musicVol = this.audio.musicGain.gain.value;
+            const sfxVol = this.audio.sfxGain.gain.value;
+
+            const sliders = [
+                { label: "master", value: masterVol, y: startY },
+                { label: "music", value: musicVol, y: startY + sliderSpacing },
+                { label: "sfx", value: sfxVol, y: startY + sliderSpacing * 2 }
+            ];
+
+            // Store sliders for interaction
+            this.pauseSettingsSliders = sliders.map((s, idx) => ({
+                ...s,
+                x: centerX - sliderWidth / 2,
+                width: sliderWidth,
+                height: sliderHeight,
+                type: idx === 0 ? 'master' : idx === 1 ? 'music' : 'sfx'
+            }));
+
+            // Draw sliders
+            for (const slider of sliders) {
+                const sliderX = centerX - sliderWidth / 2;
+
+                // Label
+                ctx.fillStyle = 'white';
+                ctx.font = "14px 'Press Start 2P'";
+                ctx.textAlign = 'left';
+                ctx.fillText(slider.label, sliderX, slider.y - 15);
+
+                // Value percentage
+                ctx.textAlign = 'right';
+                ctx.fillText(Math.round(slider.value * 100) + '%', sliderX + sliderWidth, slider.y - 15);
+
+                // Slider track
+                ctx.fillStyle = '#333';
+                ctx.fillRect(sliderX, slider.y, sliderWidth, sliderHeight);
+
+                // Slider fill
+                ctx.fillStyle = '#00ffff';
+                ctx.fillRect(sliderX, slider.y, sliderWidth * slider.value, sliderHeight);
+
+                // Slider handle
+                const handleX = sliderX + sliderWidth * slider.value;
+                ctx.fillStyle = '#ffffff';
+                ctx.fillRect(handleX - 3, slider.y - 4, 6, sliderHeight + 8);
+            }
+
+            // Back button
+            const backBtnWidth = 200;
+            const backBtnHeight = 50;
+            const backBtnX = centerX - backBtnWidth / 2;
+            const backBtnY = centerY + 120;
+
+            this.pauseSettingsBackButton = {
+                x: backBtnX,
+                y: backBtnY,
+                width: backBtnWidth,
+                height: backBtnHeight
+            };
+
+            const mouse = this.input.getMousePos();
+            const isBackHovered = mouse.x >= backBtnX && mouse.x <= backBtnX + backBtnWidth &&
+                mouse.y >= backBtnY && mouse.y <= backBtnY + backBtnHeight;
+
+            // Back button
+            ctx.fillStyle = isBackHovered ? 'rgba(0, 255, 255, 0.2)' : 'rgba(0, 40, 60, 0.6)';
+            ctx.fillRect(backBtnX, backBtnY, backBtnWidth, backBtnHeight);
+            ctx.strokeStyle = isBackHovered ? '#00ffff' : 'rgba(0, 255, 255, 0.4)';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(backBtnX, backBtnY, backBtnWidth, backBtnHeight);
+            ctx.fillStyle = isBackHovered ? '#ffffff' : '#00ffff';
+            ctx.font = "16px 'Press Start 2P'";
+            ctx.textAlign = 'center';
+            ctx.fillText("back", centerX, backBtnY + backBtnHeight / 2 + 6);
+
+            ctx.textAlign = 'left';
         }
 
 
