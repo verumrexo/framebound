@@ -326,19 +326,17 @@ export class Enemy {
                     drawAngle = 0;
                 }
 
-                // Red tint for enemy
-                ctx.save();
-                ctx.filter = 'hue-rotate(-100deg) saturate(2)';
+                // Red tint for enemy (using sprite override instead of CSS filter for Edge performance)
+                const enemyColor = '#ff6666'; // Red tint
 
                 // Draw base block for weapons (like player ship does)
                 if (def.type === 'weapon' && def.baseSprite) {
                     // Base uses hull rotation (original mounting)
-                    def.baseSprite.draw(ctx, drawX, drawY, (partData.rotation || 0) * (Math.PI / 2));
+                    def.baseSprite.draw(ctx, drawX, drawY, (partData.rotation || 0) * (Math.PI / 2), 0.5, 0.5, null, enemyColor);
                 }
 
                 // Turret uses tracked rotation (Forward)
-                def.sprite.draw(ctx, drawX, drawY, drawAngle + (def.rotationOffset || 0));
-                ctx.restore();
+                def.sprite.draw(ctx, drawX, drawY, drawAngle + (def.rotationOffset || 0), 0.5, 0.5, null, enemyColor);
             }
 
             ctx.restore();
