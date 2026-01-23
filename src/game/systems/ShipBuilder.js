@@ -11,6 +11,7 @@ export class ShipBuilder {
         this.rotation = 0;
         this.rotateDebounce = false;
         this.draftShip = null;
+        this.turretEditorMode = false; // New toggle for turret editor
 
         // Infinite inventory - one of each part
         this.inventory = {};
@@ -27,19 +28,20 @@ export class ShipBuilder {
             right: 10px;
             display: none;
             color: white;
-            font-family: 'VT323', monospace;
-            font-size: 20px;
+            font-family: 'Press Start 2P', monospace;
+            font-size: 16px;
             pointer-events: none;
         `;
         this.ui.innerHTML = `
             <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                 <!-- Left Side: Controls -->
-                <div id="builder-controls" style="background: rgba(80,0,0,0.9); padding: 15px; border: 2px solid #f44; min-width: 220px; pointer-events: auto;">
-                    <div style="color: #f44; font-size: 22px; margin-bottom: 10px; text-transform: uppercase; border-bottom: 1px solid #f44;">⚠ DEV TOOL</div>
-                    <div style="color: #faa; margin-bottom: 10px;">Ship Builder</div>
-                    <button id="builder-export" style="width: 100%; padding: 10px; background: #4a4; color: white; border: none; cursor: pointer; font-family: 'VT323', monospace; font-size: 18px; margin-bottom: 8px;">📋 EXPORT JSON</button>
-                    <button id="builder-clear" style="width: 100%; padding: 10px; background: #a44; color: white; border: none; cursor: pointer; font-family: 'VT323', monospace; font-size: 18px;">🗑 CLEAR SHIP</button>
-                    <div style="color: #888; font-size: 14px; margin-top: 10px;">
+                <div id="builder-controls" style="background: rgba(20,20,40,0.95); padding: 18px; border: 2px solid #6699ff; min-width: 220px; pointer-events: auto; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
+                    <div style="color: #6699ff; font-size: 18px; margin-bottom: 12px; text-transform: uppercase; border-bottom: 2px solid #6699ff; padding-bottom: 8px;">⚙ ship builder</div>
+                    <div style="color: #aabbff; margin-bottom: 15px; font-size: 12px;">part designer</div>
+                    <button id="builder-export" style="width: 100%; padding: 12px; background: linear-gradient(135deg, #4a9eff, #3377cc); color: white; border: none; cursor: pointer; font-family: 'Press Start 2P', monospace; font-size: 14px; margin-bottom: 10px; border-radius: 4px; transition: transform 0.1s;">📋 export json</button>
+                    <button id="builder-clear" style="width: 100%; padding: 12px; background: linear-gradient(135deg, #ff6666, #cc4444); color: white; border: none; cursor: pointer; font-family: 'Press Start 2P', monospace; font-size: 14px; margin-bottom: 10px; border-radius: 4px; transition: transform 0.1s;">🗑 clear ship</button>
+                    <button id="builder-turret-toggle" style="width: 100%; padding: 12px; background: linear-gradient(135deg, #ff9944, #dd7722); color: white; border: none; cursor: pointer; font-family: 'Press Start 2P', monospace; font-size: 14px; border-radius: 4px; transition: transform 0.1s;">🔧 turret editor</button>
+                    <div style="color: #8899bb; font-size: 8px; margin-top: 15px; line-height: 1.6; border-top: 1px solid rgba(102, 153, 255, 0.3); padding-top: 10px;">
                         R: rotate<br>
                         left click: place<br>
                         right click: remove<br>
@@ -48,17 +50,17 @@ export class ShipBuilder {
                 </div>
 
                 <!-- Right Side: Inventory -->
-                <div style="background: rgba(0,0,0,0.9); padding: 10px; border: 2px solid #f44; width: 40%; max-width: 220px; min-width: 140px; pointer-events: auto; display: flex; flex-direction: column; max-height: calc(100vh - 40px); margin-left: auto;">
-                    <div style="color: #f44; margin-bottom: 10px; font-size: 20px; border-bottom: 1px solid #f44;">PARTS</div>
-                    <div id="builder-part-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(50px, 1fr)); gap: 4px; overflow-y: auto;">
+                <div style="background: rgba(20,20,40,0.95); padding: 12px; border: 2px solid #6699ff; width: 40%; max-width: 220px; min-width: 140px; pointer-events: auto; display: flex; flex-direction: column; max-height: calc(100vh - 40px); margin-left: auto; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
+                    <div style="color: #6699ff; margin-bottom: 12px; font-size: 16px; border-bottom: 2px solid #6699ff; padding-bottom: 8px;">parts library</div>
+                    <div id="builder-part-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(50px, 1fr)); gap: 6px; overflow-y: auto; padding: 4px;">
                     </div>
                 </div>
 
                 <!-- Mobile Controls (Bottom Center) -->
                 <div id="mobile-builder-controls" style="position: absolute; bottom: 20px; left: 20px; display: flex; gap: 20px; pointer-events: auto;">
-                    <button id="btn-builder-rotate" style="width: 80px; height: 80px; background: #44a; color: white; border: 2px solid white; border-radius: 50%; font-size: 18px; font-weight: bold; box-shadow: 0 0 10px black;">ROTATE</button>
-                    <button id="btn-builder-place" style="width: 100px; height: 100px; background: #4a4; color: white; border: 3px solid white; border-radius: 50%; font-size: 24px; font-weight: bold; box-shadow: 0 0 10px black;">PLACE</button>
-                    <button id="btn-builder-remove" style="width: 60px; height: 60px; background: #a44; color: white; border: 2px solid white; border-radius: 50%; font-size: 14px; font-weight: bold; box-shadow: 0 0 10px black;">DEL</button>
+                    <button id="btn-builder-rotate" style="width: 80px; height: 80px; background: #44a; color: white; border: 2px solid white; border-radius: 50%; font-size: 16px; font-weight: bold; box-shadow: 0 0 10px black;">rotate</button>
+                    <button id="btn-builder-place" style="width: 100px; height: 100px; background: #4a4; color: white; border: 3px solid white; border-radius: 50%; font-size: 16px; font-weight: bold; box-shadow: 0 0 10px black;">place</button>
+                    <button id="btn-builder-remove" style="width: 60px; height: 60px; background: #a44; color: white; border: 2px solid white; border-radius: 50%; font-size: 8px; font-weight: bold; box-shadow: 0 0 10px black;">del</button>
                 </div>
             </div>
         `;
@@ -85,7 +87,7 @@ export class ShipBuilder {
             border: 1px solid #f44;
             padding: 12px;
             color: white;
-            font-family: 'VT323', monospace;
+            font-family: 'Press Start 2P', monospace;
             pointer-events: none;
             display: none;
             z-index: 9999;
@@ -106,6 +108,7 @@ export class ShipBuilder {
     setupButtons() {
         const exportBtn = document.getElementById('builder-export');
         const clearBtn = document.getElementById('builder-clear');
+        const turretToggle = document.getElementById('builder-turret-toggle');
 
         if (exportBtn) {
             exportBtn.onclick = (e) => {
@@ -118,6 +121,21 @@ export class ShipBuilder {
             clearBtn.onclick = (e) => {
                 e.stopPropagation();
                 this.clearShip();
+            };
+        }
+
+        if (turretToggle) {
+            turretToggle.onclick = (e) => {
+                e.stopPropagation();
+                this.turretEditorMode = !this.turretEditorMode;
+                turretToggle.textContent = this.turretEditorMode ? '✓ turret editor' : '🔧 turret editor';
+                turretToggle.style.background = this.turretEditorMode
+                    ? 'linear-gradient(135deg, #44ff66, #22cc44)'
+                    : 'linear-gradient(135deg, #ff9944, #dd7722)';
+                this.game.showNotification(
+                    this.turretEditorMode ? 'turret editor enabled' : 'turret editor disabled',
+                    this.turretEditorMode ? '#4f4' : '#fa4'
+                );
             };
         }
 
@@ -147,7 +165,7 @@ export class ShipBuilder {
             this.game.audio.play('click_short');
             // No lastPlacedGrid check needed for button tapping
         } else {
-            this.game.showNotification("Can't place here!", '#ff4444');
+            this.game.showNotification("can't place here!", '#ff4444');
         }
     }
 
@@ -244,7 +262,10 @@ export class ShipBuilder {
                 align-items: center;
                 justify-content: center;
                 position: relative;
-                border: ${this.selectedPartId === key ? '2px solid #f44' : '1px solid #444'};
+                border: ${this.selectedPartId === key ? '3px solid #6699ff' : '1px solid #555'};
+                background: ${this.selectedPartId === key ? 'rgba(102, 153, 255, 0.2)' : 'rgba(40, 40, 60, 0.5)'};
+                border-radius: 4px;
+                transition: all 0.15s ease;
             `;
 
             const canvas = document.createElement('canvas');
@@ -264,6 +285,19 @@ export class ShipBuilder {
                 e.stopPropagation();
                 this.selectedPartId = key;
                 this.updateUI();
+            };
+
+            itemWrapper.onmouseover = () => {
+                if (this.selectedPartId !== key) {
+                    itemWrapper.style.background = 'rgba(80, 80, 120, 0.5)';
+                    itemWrapper.style.borderColor = '#7799dd';
+                }
+            };
+            itemWrapper.onmouseout = () => {
+                if (this.selectedPartId !== key) {
+                    itemWrapper.style.background = 'rgba(40, 40, 60, 0.5)';
+                    itemWrapper.style.borderColor = '#555';
+                }
             };
 
             itemWrapper.onmouseenter = () => {
@@ -313,8 +347,8 @@ export class ShipBuilder {
     draw(renderer) {
         if (!this.active || !this.draftShip) return;
 
-        // Draw Modal Background (same as Hangar)
-        renderer.ctx.fillStyle = 'rgba(40,0,0,0.95)';
+        // Draw Modal Background
+        renderer.ctx.fillStyle = 'rgba(10,10,20,0.97)';
         renderer.ctx.fillRect(0, 0, renderer.width, renderer.height);
 
         const centerX = renderer.width / 2;
@@ -323,36 +357,104 @@ export class ShipBuilder {
         renderer.ctx.save();
         renderer.ctx.translate(centerX, centerY);
 
-        // Draw Grid
+        // Adjust offset if in turret editor mode (show two grids side by side)
+        const gridOffset = this.turretEditorMode ? -200 : 0;
+        const secondGridOffset = this.turretEditorMode ? 200 : 0;
+
+        // Draw Grid(s)
         const CELL_STRIDE = TILE_SIZE;
         const gridSize = 10;
-        renderer.ctx.strokeStyle = '#ff4444';  // Bright red
-        renderer.ctx.lineWidth = 2;
-        renderer.ctx.beginPath();
-        for (let x = -gridSize; x <= gridSize; x++) {
-            renderer.ctx.moveTo(x * CELL_STRIDE - CELL_STRIDE / 2, -gridSize * CELL_STRIDE - CELL_STRIDE / 2);
-            renderer.ctx.lineTo(x * CELL_STRIDE - CELL_STRIDE / 2, gridSize * CELL_STRIDE + CELL_STRIDE / 2);
-        }
-        for (let y = -gridSize; y <= gridSize; y++) {
-            renderer.ctx.moveTo(-gridSize * CELL_STRIDE - CELL_STRIDE / 2, y * CELL_STRIDE - CELL_STRIDE / 2);
-            renderer.ctx.lineTo(gridSize * CELL_STRIDE + CELL_STRIDE / 2, y * CELL_STRIDE - CELL_STRIDE / 2);
-        }
-        renderer.ctx.stroke();
 
-        // Draw Direction Arrow (pointing RIGHT = front)
-        renderer.ctx.beginPath();
-        renderer.ctx.strokeStyle = '#ffff00';
-        renderer.ctx.lineWidth = 3;
-        renderer.ctx.moveTo(100, 0);
-        renderer.ctx.lineTo(200, 0);
-        renderer.ctx.lineTo(175, -15);
-        renderer.ctx.moveTo(200, 0);
-        renderer.ctx.lineTo(175, 15);
-        renderer.ctx.stroke();
-        renderer.ctx.fillStyle = '#ffff00';
-        renderer.ctx.font = "16px 'VT323'";
-        renderer.ctx.textAlign = 'left';
-        renderer.ctx.fillText('FRONT', 210, 5);
+        const drawGrid = (offsetX, label) => {
+            renderer.ctx.save();
+            renderer.ctx.translate(offsetX, 0);
+
+            // Draw label for grid
+            if (label) {
+                renderer.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+                renderer.ctx.fillRect(-CELL_STRIDE * 5, -CELL_STRIDE * 6 - 40, CELL_STRIDE * 10, 35);
+                renderer.ctx.fillStyle = '#6699ff';
+                renderer.ctx.font = "bold 10px 'Press Start 2P'";
+                renderer.ctx.textAlign = 'center';
+                renderer.ctx.fillText(label, 0, -CELL_STRIDE * 6 - 15);
+            }
+
+            // Draw subtle grid lines
+            renderer.ctx.strokeStyle = 'rgba(100, 100, 150, 0.3)';
+            renderer.ctx.lineWidth = 1;
+            renderer.ctx.beginPath();
+            for (let x = -gridSize; x <= gridSize; x++) {
+                renderer.ctx.moveTo(x * CELL_STRIDE - CELL_STRIDE / 2, -gridSize * CELL_STRIDE - CELL_STRIDE / 2);
+                renderer.ctx.lineTo(x * CELL_STRIDE - CELL_STRIDE / 2, gridSize * CELL_STRIDE + CELL_STRIDE / 2);
+            }
+            for (let y = -gridSize; y <= gridSize; y++) {
+                renderer.ctx.moveTo(-gridSize * CELL_STRIDE - CELL_STRIDE / 2, y * CELL_STRIDE - CELL_STRIDE / 2);
+                renderer.ctx.lineTo(gridSize * CELL_STRIDE + CELL_STRIDE / 2, y * CELL_STRIDE - CELL_STRIDE / 2);
+            }
+            renderer.ctx.stroke();
+
+            // Draw center crosshair
+            renderer.ctx.strokeStyle = 'rgba(150, 150, 200, 0.5)';
+            renderer.ctx.lineWidth = 2;
+            renderer.ctx.beginPath();
+            renderer.ctx.moveTo(-20, 0);
+            renderer.ctx.lineTo(20, 0);
+            renderer.ctx.moveTo(0, -20);
+            renderer.ctx.lineTo(0, 20);
+            renderer.ctx.stroke();
+
+            renderer.ctx.restore();
+        };
+
+        // Draw grid(s)
+        if (this.turretEditorMode) {
+            drawGrid(gridOffset, 'BASE HULL');
+            drawGrid(secondGridOffset, 'TURRET');
+        } else {
+            drawGrid(0, null);
+
+            // Draw Prominent Front Direction Indicator (only in normal mode)
+            const arrowX = 120;
+            const arrowY = 0;
+            const arrowSize = 60;
+
+            // Draw arrow background
+            renderer.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+            renderer.ctx.fillRect(arrowX - 10, arrowY - 30, arrowSize + 80, 60);
+
+            // Draw animated arrow (pulse effect based on time)
+            const pulseScale = 1 + Math.sin(Date.now() * 0.003) * 0.1;
+            renderer.ctx.save();
+            renderer.ctx.translate(arrowX + arrowSize / 2, arrowY);
+            renderer.ctx.scale(pulseScale, pulseScale);
+
+            renderer.ctx.strokeStyle = '#ffaa00';
+            renderer.ctx.fillStyle = '#ffaa00';
+            renderer.ctx.lineWidth = 4;
+            renderer.ctx.lineCap = 'round';
+            renderer.ctx.lineJoin = 'round';
+
+            renderer.ctx.beginPath();
+            renderer.ctx.moveTo(-arrowSize / 2, 0);
+            renderer.ctx.lineTo(arrowSize / 2 - 15, 0);
+            renderer.ctx.stroke();
+
+            // Arrow head
+            renderer.ctx.beginPath();
+            renderer.ctx.moveTo(arrowSize / 2, 0);
+            renderer.ctx.lineTo(arrowSize / 2 - 20, -12);
+            renderer.ctx.lineTo(arrowSize / 2 - 20, 12);
+            renderer.ctx.closePath();
+            renderer.ctx.fill();
+
+            renderer.ctx.restore();
+
+            // Draw label with background
+            renderer.ctx.fillStyle = '#ffaa00';
+            renderer.ctx.font = "bold 12px 'Press Start 2P'";
+            renderer.ctx.textAlign = 'left';
+            renderer.ctx.fillText('FRONT', arrowX + arrowSize + 20, arrowY + 5);
+        }
 
         // Draw Ship Parts
         for (const partRef of this.draftShip.getUniqueParts()) {
@@ -457,8 +559,8 @@ export class ShipBuilder {
         renderer.ctx.restore();
 
         // Title
-        renderer.ctx.fillStyle = "#f44";
-        renderer.ctx.font = "bold 28px 'VT323'";
-        renderer.ctx.fillText("⚠ SHIP BUILDER - DEV TOOL ⚠", 20, renderer.height - 20);
+        renderer.ctx.fillStyle = "#6699ff";
+        renderer.ctx.font = "bold 16px 'Press Start 2P'";
+        renderer.ctx.fillText("⚙ ship builder - part designer ⚙", 20, renderer.height - 20);
     }
 }

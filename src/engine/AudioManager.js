@@ -2,9 +2,21 @@ export class AudioManager {
     constructor() {
         this.sounds = new Map();
         this.context = new (window.AudioContext || window.webkitAudioContext)();
+
+        // Master Gain
         this.masterGain = this.context.createGain();
         this.masterGain.connect(this.context.destination);
         this.masterGain.gain.value = 0.5; // Default volume
+
+        // Music Channel
+        this.musicGain = this.context.createGain();
+        this.musicGain.connect(this.masterGain);
+        this.musicGain.gain.value = 0.5;
+
+        // SFX Channel
+        this.sfxGain = this.context.createGain();
+        this.sfxGain.connect(this.masterGain);
+        this.sfxGain.gain.value = 1.0;
     }
 
     async load(name, url) {
@@ -35,6 +47,7 @@ export class AudioManager {
         const pitch = options.pitch !== undefined ? options.pitch : 1.0;
         const randomizePitch = options.randomizePitch || 0;
         const loop = options.loop || false;
+        const type = options.type || 'sfx'; // 'sfx' or 'music'
 
         const gainNode = this.context.createGain();
         gainNode.gain.value = volume;
@@ -48,18 +61,26 @@ export class AudioManager {
         }
 
         source.connect(gainNode);
-        gainNode.connect(this.masterGain);
+
+        // Route to appropriate channel
+        if (type === 'music') {
+            gainNode.connect(this.musicGain);
+        } else {
+            gainNode.connect(this.sfxGain);
+        }
 
         source.start(0);
         return { source, gainNode }; // Return both for control
     }
 
-    playMusic(name, volume = 0.5) {
+    playMusic(name, volume = 0.8) {
         if (this.currentMusic && this.currentMusicName === name) return; // Already playing
 
         this.stopMusic();
 
-        const ref = this.play(name, { volume, loop: true });
+        // Music volume is handled by channel gain now, so individual track volume can be closer to 1.0 or used for relative mixing
+        // But we'll keep the parameter for flexibility
+        const ref = this.play(name, { volume, loop: true, type: 'music' });
         if (ref) {
             this.currentMusic = ref;
             this.currentMusicName = name;
@@ -75,6 +96,18 @@ export class AudioManager {
     }
 
     setMasterVolume(value) {
-        this.masterGain.gain.setTargetAtTime(value, this.context.currentTime, 0.1);
+        // Clamp between 0 and 1
+        const v = Math.max(0, Math.min(1, value));
+        this.masterGain.gain.setTargetAtTime(v, this.context.currentTime, 0.1);
+    }
+
+    setMusicVolume(value) {
+        const v = Math.max(0, Math.min(1, value));
+        this.musicGain.gain.setTargetAtTime(v, this.context.currentTime, 0.1);
+    }
+
+    setSfxVolume(value) {
+        const v = Math.max(0, Math.min(1, value));
+        this.sfxGain.gain.setTargetAtTime(v, this.context.currentTime, 0.1);
     }
 }

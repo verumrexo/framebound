@@ -65,7 +65,7 @@ export class ItemPickup {
 
         // Glow
         ctx.shadowColor = '#ffff00';
-        ctx.shadowBlur = 10;
+        // ctx.shadowBlur = 10;
 
         // Draw Part Sprite Scaled
         if (this.def) {

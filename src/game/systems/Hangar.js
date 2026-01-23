@@ -22,8 +22,8 @@ export class Hangar {
         this.ui.style.right = '10px';
         this.ui.style.display = 'none';
         this.ui.style.color = 'white';
-        this.ui.style.fontFamily = "'VT323', monospace";
-        this.ui.style.fontSize = "20px";
+        this.ui.style.fontFamily = "'Press Start 2P', monospace";
+        this.ui.style.fontSize = "16px";
         this.ui.style.pointerEvents = 'none'; // Allow clicking through the gap
         this.ui.innerHTML = `
             <div style="display: flex; justify-content: space-between; align-items: flex-start;">
@@ -35,7 +35,7 @@ export class Hangar {
 
                 <!-- Right Side: Inventory -->
                 <div style="background: rgba(0,0,0,0.8); padding: 15px; border: 1px solid #0f0; min-width: 400px; max-width: 550px; pointer-events: auto; display: flex; flex-direction: column; max-height: calc(100vh - 40px);">
-                    <div style="color:white; font-family:'VT323', monospace; margin-bottom:15px; font-size: 24px; border-bottom: 1px solid #0f0; padding-bottom: 5px;">ship configuration</div>
+                    <div style="color:white; font-family:'Press Start 2P', monospace; margin-bottom:15px; font-size: 20px; border-bottom: 1px solid #0f0; padding-bottom: 5px;">ship configuration</div>
                     <div id="part-list" style="display:grid; grid-template-columns: repeat(auto-fill, 64px); grid-auto-rows: 64px; gap:8px; margin-bottom: 15px; overflow-y: auto; padding-right: 5px; scrollbar-width: thin; scrollbar-color: #0f0 #222;">
                         <style>
                             #part-list::-webkit-scrollbar { width: 6px; }
@@ -71,7 +71,7 @@ export class Hangar {
             border: 1px solid #0f0;
             padding: 12px;
             color: white;
-            font-family: 'VT323', monospace;
+            font-family: 'Press Start 2P', monospace;
             pointer-events: none;
             display: none;
             z-index: 9999;
@@ -170,7 +170,7 @@ export class Hangar {
                     this.tooltip.style.display = 'block';
                     this.updateTooltip(def);
                     if (isGhost) {
-                        this.tooltip.innerHTML += `<div style="color:#f44; margin-top:5px; font-weight:bold;">OUT OF STOCK</div>`;
+                        this.tooltip.innerHTML += `<div style="color:#f44; margin-top:5px; font-weight:bold;">out of stock</div>`;
                     }
                 };
                 itemWrapper.onmouseleave = () => {
@@ -192,8 +192,8 @@ export class Hangar {
         designBtn.style.color = 'white';
         designBtn.style.border = 'none';
         designBtn.style.cursor = 'pointer';
-        designBtn.style.fontFamily = "'VT323', monospace";
-        designBtn.style.fontSize = "20px";
+        designBtn.style.fontFamily = "'Press Start 2P', monospace";
+        designBtn.style.fontSize = "16px";
         designBtn.onclick = (e) => {
             e.stopPropagation();
             this.game.designer.open(null);
@@ -226,13 +226,13 @@ export class Hangar {
         if (def && def.rarity === 'epic') rarityColor = '#aa00ff';
 
         tooltipEl.innerHTML = `
-            <div style="font-size: 20px; color: ${rarityColor}; margin-bottom: 5px; border-bottom: 1px solid rgba(0,255,0,0.3); text-transform: uppercase;">
+            <div style="font-size: 16px; color: ${rarityColor}; margin-bottom: 5px; border-bottom: 1px solid rgba(0,255,0,0.3); text-transform: uppercase;">
                 ${def.name}
             </div>
-            <div style="font-size: 14px; color: ${rarityColor}; margin-bottom: 8px; font-weight: bold;">
+            <div style="font-size: 8px; color: ${rarityColor}; margin-bottom: 8px; font-weight: bold;">
                 [${def.rarity || 'common'}]
             </div>
-            <div style="font-size: 14px; color: #888; margin-bottom: 8px;">class: ${def.type} ${def.stats.weaponGroup ? `[${def.stats.weaponGroup}]` : ''} (${def.width}x${def.height})</div>
+            <div style="font-size: 8px; color: #888; margin-bottom: 8px;">class: ${def.type} ${def.stats.weaponGroup ? `[${def.stats.weaponGroup}]` : ''} (${def.width}x${def.height})</div>
             <div style="display: flex; flex-direction: column; gap: 2px;">
                 ${statsHtml}
             </div>
@@ -485,7 +485,7 @@ export class Hangar {
 
         // UI Overlay for "DRAFT MODE"
         renderer.ctx.fillStyle = "yellow";
-        renderer.ctx.font = "24px 'VT323'";
+        renderer.ctx.font = "16px 'Press Start 2P'";
         renderer.ctx.fillText("hangar mode - editing draft", 20, renderer.height - 20);
     }
 }

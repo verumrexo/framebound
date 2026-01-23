@@ -25,7 +25,23 @@ export class Renderer {
 
         // Scale context
         this.ctx.scale(dpr, dpr);
-        this.ctx.imageSmoothingEnabled = false;
+
+        // Apply current smoothing setting (safe to re-apply)
+        this.ctx.imageSmoothingEnabled = this.smoothingEnabled || false;
+    }
+
+    setSmoothing(enabled) {
+        this.smoothingEnabled = enabled;
+        this.ctx.imageSmoothingEnabled = enabled;
+    }
+
+    setPixelation(enabled) {
+        this.pixelatedCSS = enabled;
+        if (enabled) {
+            this.canvas.style.imageRendering = 'pixelated';
+        } else {
+            this.canvas.style.imageRendering = 'auto';
+        }
     }
 
     clear(color = '#000') {

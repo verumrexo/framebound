@@ -26,14 +26,29 @@ export class DevTools {
         this.ui.style.border = '2px solid #00ff00';
         this.ui.style.display = 'none';
         this.ui.style.color = '#00ff00';
-        this.ui.style.fontFamily = "'VT323', monospace";
+        this.ui.style.fontFamily = "'Press Start 2P', monospace";
         this.ui.style.minWidth = '220px';
+        this.ui.style.maxHeight = '80vh';
+        this.ui.style.overflowY = 'auto';
+        this.ui.style.scrollbarWidth = 'thin';
+        this.ui.style.scrollbarColor = '#00ff00 #002200';
         this.ui.style.zIndex = '9999';
         this.ui.style.boxShadow = '0 0 20px rgba(0, 255, 0, 0.2)';
 
+        // Custom Scrollbar Styling
+        const style = document.createElement('style');
+        style.textContent = `
+            #devtools-ui::-webkit-scrollbar { width: 8px; }
+            #devtools-ui::-webkit-scrollbar-track { background: #002200; }
+            #devtools-ui::-webkit-scrollbar-thumb { background: #00ff00; border-radius: 4px; }
+            #devtools-ui::-webkit-scrollbar-thumb:hover { background: #44ff44; }
+        `;
+        this.ui.id = 'devtools-ui'; // ID for styling
+        this.ui.appendChild(style);
+
         // Header
         const header = document.createElement('div');
-        header.innerText = 'DEV TOOLS [L]';
+        header.innerText = 'dev tools [l]';
         header.style.fontSize = '24px';
         header.style.marginBottom = '10px';
         header.style.textAlign = 'center';
@@ -48,14 +63,104 @@ export class DevTools {
         container.style.gap = '8px';
         this.ui.appendChild(container);
 
-        // --- QUANTITY SLIDER ---
+        this.ui.appendChild(container);
+
+        // --- GRAPHICS SETTINGS ---
+        const graphicsHeader = document.createElement('div');
+        graphicsHeader.innerText = 'graphics';
+        graphicsHeader.style.color = '#00ffff';
+        graphicsHeader.style.borderBottom = '1px solid #00ffff';
+        graphicsHeader.style.marginBottom = '5px';
+        graphicsHeader.style.marginTop = '10px';
+        container.appendChild(graphicsHeader);
+
+        // Helper for Toggles
+        const createToggle = (label, getVal, setVal) => {
+            const row = document.createElement('div');
+            row.style.display = 'flex';
+            row.style.justifyContent = 'space-between';
+            row.style.fontSize = '12px';
+            row.style.marginBottom = '5px';
+
+            const txt = document.createElement('span');
+            txt.innerText = label;
+
+            const chk = document.createElement('input');
+            chk.type = 'checkbox';
+            chk.checked = getVal();
+            chk.style.cursor = 'pointer';
+            chk.onchange = (e) => setVal(e.target.checked);
+
+            row.appendChild(txt);
+            row.appendChild(chk);
+            container.appendChild(row);
+        };
+
+        // Helper for Sliders (Mini)
+        const createSlider = (label, min, max, step, getVal, setVal) => {
+            const div = document.createElement('div');
+            div.style.marginBottom = '5px';
+            const labelEl = document.createElement('div');
+            labelEl.innerText = `${label}: ${getVal()}`;
+            labelEl.style.fontSize = '12px';
+
+            const inp = document.createElement('input');
+            inp.type = 'range';
+            inp.min = min; inp.max = max; inp.step = step;
+            inp.value = getVal();
+            inp.style.width = '100%';
+            inp.style.height = '10px';
+            inp.oninput = (e) => {
+                const v = parseFloat(e.target.value);
+                setVal(v);
+                labelEl.innerText = `${label}: ${v}`;
+            };
+
+            div.appendChild(labelEl);
+            div.appendChild(inp);
+            container.appendChild(div);
+        };
+
+        // 1. Anti-Aliasing (Smoothing)
+        createToggle('anti-aliasing', () => this.game.renderer.smoothingEnabled, (v) => this.game.renderer.setSmoothing(v));
+
+        // 2. CSS Pixelation
+        createToggle('css pixelation', () => this.game.renderer.pixelatedCSS !== false, (v) => this.game.renderer.setPixelation(v));
+
+        // 3. Scanlines
+        createToggle('scanlines', () => document.getElementById('scanlines').style.display === 'block', (v) => {
+            document.getElementById('scanlines').style.display = v ? 'block' : 'none';
+        });
+
+        // 4. Vignette
+        createToggle('vignette', () => document.getElementById('vignette').style.display === 'block', (v) => {
+            document.getElementById('vignette').style.display = v ? 'block' : 'none';
+        });
+
+        // 5. Grid Opacity
+        createSlider('grid opacity', '0', '0.5', '0.05',
+            () => this.game.graphics.gridOpacity,
+            (v) => this.game.graphics.gridOpacity = v
+        );
+
+        // --- SPAWNER HEADER ---
+        const spawnHeader = document.createElement('div');
+        spawnHeader.innerText = 'spawners';
+        spawnHeader.style.color = '#00ff00';
+        spawnHeader.style.borderBottom = '1px solid #00ff00';
+        spawnHeader.style.marginBottom = '5px';
+        spawnHeader.style.marginTop = '10px';
+        container.appendChild(spawnHeader);
+
+
         const sliderContainer = document.createElement('div');
         sliderContainer.style.marginBottom = '10px';
         sliderContainer.style.background = 'rgba(0,50,0,0.5)';
         sliderContainer.style.padding = '5px';
+        container.appendChild(sliderContainer);
 
         const sliderLabel = document.createElement('div');
-        sliderLabel.innerText = `Spawn Amount: ${this.spawnAmount}`;
+        sliderLabel.innerText = `spawn amount: ${this.spawnAmount}`;
         sliderLabel.style.marginBottom = '4px';
 
         const slider = document.createElement('input');
@@ -66,8 +171,11 @@ export class DevTools {
         slider.style.width = '100%';
         slider.oninput = (e) => {
             this.spawnAmount = parseInt(e.target.value);
-            sliderLabel.innerText = `Spawn Amount: ${this.spawnAmount}`;
+            sliderLabel.innerText = `spawn amount: ${this.spawnAmount}`;
         };
+
+        sliderContainer.appendChild(sliderLabel);
+        sliderContainer.appendChild(slider);
 
         sliderContainer.appendChild(sliderLabel);
         sliderContainer.appendChild(slider);
@@ -83,8 +191,8 @@ export class DevTools {
             btn.style.border = `1px solid ${color}`;
             btn.style.padding = '8px';
             btn.style.cursor = 'pointer';
-            btn.style.fontFamily = "'VT323', monospace";
-            btn.style.fontSize = '18px';
+            btn.style.fontFamily = "'Press Start 2P', monospace";
+            btn.style.fontSize = '16px';
             btn.style.textAlign = 'left';
 
             btn.onmouseover = () => btn.style.background = `rgba(${parseInt(color.slice(1, 3), 16)}, ${parseInt(color.slice(3, 5), 16)}, ${parseInt(color.slice(5, 7), 16)}, 0.3)`;
@@ -102,22 +210,22 @@ export class DevTools {
         };
 
         // --- SPAWNERS (Click -> Placment Mode) ---
-        createBtn('✨ Spawn XP Orb', (x, y) => this.spawnXP(x, y));
-        createBtn('💰 Spawn Gold Orb', (x, y) => this.spawnGold(x, y), '#ffd700');
-        createBtn('🗿 Spawn Asteroid', (x, y) => this.spawnAsteroid(x, y), '#aaa');
-        createBtn('📦 Spawn Loot Crate', (x, y) => this.spawnCrate(x, y), '#88aaff');
-        createBtn('🎁 Spawn Chest', (x, y) => this.spawnChest(x, y), '#ffaa44');
-        createBtn('🎯 Spawn Dummy', (x, y) => this.spawnDummy(x, y), '#ffaa00');
-        createBtn('👾 Spawn Enemy', (x, y) => this.spawnEnemy(x, y), '#ff4444');
-        createBtn('👹 Spawn Boss', (x, y) => this.spawnBoss(x, y), '#ff00ff');
+        createBtn('✨ spawn xp orb', (x, y) => this.spawnXP(x, y));
+        createBtn('💰 spawn gold orb', (x, y) => this.spawnGold(x, y), '#ffd700');
+        createBtn('🗿 spawn asteroid', (x, y) => this.spawnAsteroid(x, y), '#aaa');
+        createBtn('📦 spawn loot crate', (x, y) => this.spawnCrate(x, y), '#88aaff');
+        createBtn('🎁 spawn chest', (x, y) => this.spawnChest(x, y), '#ffaa44');
+        createBtn('🎯 spawn dummy', (x, y) => this.spawnDummy(x, y), '#ffaa00');
+        createBtn('👾 spawn enemy', (x, y) => this.spawnEnemy(x, y), '#ff4444');
+        createBtn('👹 spawn boss', (x, y) => this.spawnBoss(x, y), '#ff00ff');
 
         // --- UTILITY ---
-        createBtn('☢️ NUKE ROOM', () => this.nuke(), '#ff0000', false);
-        createBtn('🔓 Unlock All Parts', () => this.unlockAllParts(), '#00ffff', false);
+        createBtn('☢️ nuke room', () => this.nuke(), '#ff0000', false);
+        createBtn('🔓 unlock all parts', () => this.unlockAllParts(), '#00ffff', false);
 
         // --- EDITORS ---
-        createBtn('🛠️ Ship Editor', () => this.openShipEditor(), '#00ffff', false);
-        createBtn('📐 Part Designer', () => this.openDesigner(), '#ff00ff', false);
+        createBtn('🛠️ ship editor', () => this.openShipEditor(), '#00ffff', false);
+        createBtn('📐 part designer', () => this.openDesigner(), '#ff00ff', false);
 
         document.body.appendChild(this.ui);
 
@@ -151,7 +259,7 @@ export class DevTools {
         this.ui.style.display = 'none';
 
         document.body.style.cursor = 'crosshair';
-        this.game.showNotification("Click to Spawn...", "#ffffff");
+        this.game.showNotification("click to spawn...", "#ffffff");
     }
 
     handleGlobalClick(e) {
@@ -199,12 +307,12 @@ export class DevTools {
 
     spawnXP(x, y) {
         this.game.xpOrbs.push(new XPOrb(x, y, 10));
-        this.game.showNotification("Spawned XP", "#00ff00");
+        this.game.showNotification("spawned xp", "#00ff00");
     }
 
     spawnGold(x, y) {
         this.game.goldOrbs.push(new GoldOrb(x, y, 1));
-        this.game.showNotification("Spawned Gold", "#ffd700");
+        this.game.showNotification("spawned gold", "#ffd700");
     }
 
     spawnAsteroid(x, y) {
@@ -213,34 +321,34 @@ export class DevTools {
         if (rType < 0.3) type = 'crystal_blue';
         else if (rType < 0.6) type = 'crystal_gold';
         this.game.asteroids.push(new Asteroid(x, y, 'medium', type));
-        this.game.showNotification(`Spawned ${type} Asteroid`, "#aaa");
+        this.game.showNotification(`spawned ${type} asteroid`, "#aaa");
     }
 
     spawnCrate(x, y) {
         const sizes = ['1x1', '1x2', '2x2'];
         const size = sizes[Math.floor(Math.random() * sizes.length)];
         this.game.lootCrates.push(new LootCrate(x, y, size));
-        this.game.showNotification(`Spawned ${size} Crate`, "#88aaff");
+        this.game.showNotification(`spawned ${size} crate`, "#88aaff");
     }
 
     spawnChest(x, y) {
         this.game.treasureChests.push(new TreasureChest(x, y));
-        this.game.showNotification("Spawned Treasure Chest", "#ffaa44");
+        this.game.showNotification("spawned treasure chest", "#ffaa44");
     }
 
     spawnDummy(x, y) {
         this.game.enemies.push(new TrainingDummy(x, y));
-        this.game.showNotification("Spawned Training Dummy", "#ffaa00");
+        this.game.showNotification("spawned training dummy", "#ffaa00");
     }
 
     spawnEnemy(x, y) {
         this.game.enemies.push(new Enemy(x, y, 'basic')); // Default to basic
-        this.game.showNotification("Spawned Enemy", "#ff4444");
+        this.game.showNotification("spawned enemy", "#ff4444");
     }
 
     spawnBoss(x, y) {
         this.game.bosses.push(new Boss(x, y, 1)); // Level 1 Boss
-        this.game.showNotification("Spawned BOSS", "#ff00ff");
+        this.game.showNotification("spawned boss", "#ff00ff");
     }
 
     nuke() {
@@ -248,14 +356,14 @@ export class DevTools {
         let count = 0;
         this.game.enemies.forEach(e => { if (e.takeDamage) { e.takeDamage(99999); count++; } });
         this.game.bosses.forEach(b => { if (b.takeDamage) { b.takeDamage(99999); count++; } });
-        this.game.showNotification(`NUKE: Eliminated ${count} entities`, '#ff0000');
+        this.game.showNotification(`nuke: eliminated ${count} entities`, '#ff0000');
         this.game.audio.play('enemy_death1', { volume: 1.0 });
     }
 
     unlockAllParts() {
         // Toggle Infinite Mode (Flag in Hangar)
         this.game.hangar.hasInfiniteParts = !this.game.hangar.hasInfiniteParts;
-        const state = this.game.hangar.hasInfiniteParts ? "ENABLED" : "DISABLED";
+        const state = this.game.hangar.hasInfiniteParts ? "enabled" : "disabled";
 
         let count = 0;
         // Ensure we have at least 1 of everything if enabling
@@ -271,7 +379,7 @@ export class DevTools {
         }
 
         this.game.hangar.updateUI(); // Refresh UI logic
-        this.game.showNotification(`Infinite Parts: ${state} (Added ${count} missing)`, "#00ffff");
+        this.game.showNotification(`infinite parts: ${state} (added ${count} missing)`, "#00ffff");
     }
 
     openShipEditor() {

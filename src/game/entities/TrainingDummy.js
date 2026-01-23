@@ -71,13 +71,13 @@ export class TrainingDummy {
 
         // UI
         renderer.ctx.fillStyle = '#fff';
-        renderer.ctx.font = "20px 'VT323'";
+        renderer.ctx.font = "12px 'Press Start 2P'";
         renderer.ctx.textAlign = 'center';
-        renderer.ctx.fillText(`TRAINING DUMMY`, this.x, this.y - (this.radius + 30));
+        renderer.ctx.fillText(`training dummy`, this.x, this.y - (this.radius + 30));
 
         renderer.ctx.fillStyle = '#0f0';
-        renderer.ctx.font = "30px 'VT323'";
-        renderer.ctx.fillText(`${this.currentDps} DPS`, this.x, this.y - (this.radius + 5));
+        renderer.ctx.font = "24px 'Press Start 2P'";
+        renderer.ctx.fillText(`${this.currentDps} dps`, this.x, this.y - (this.radius + 5));
 
         renderer.ctx.textAlign = 'start'; // Reset
     }

@@ -79,13 +79,13 @@ export class Asteroid {
             ctx.fillStyle = this.isBroken ? '#003333' : '#00ffff';
             if (!this.isBroken) {
                 ctx.shadowColor = '#00ffff';
-                ctx.shadowBlur = 10;
+                // ctx.shadowBlur = 10;
             }
         } else if (this.type === 'crystal_gold') {
             ctx.fillStyle = this.isBroken ? '#442200' : '#ffaa00';
             if (!this.isBroken) {
                 ctx.shadowColor = '#ffaa00';
-                ctx.shadowBlur = 10;
+                // ctx.shadowBlur = 10;
             }
         }
 

@@ -32,7 +32,8 @@ export class PartDef {
         const size = width * height;
         this.rarity = 'common';
         if (size === 2) this.rarity = 'rare'; // 1x2 or 2x1
-        if (size >= 4) this.rarity = 'epic'; // 2x2 or larger
+        if (size === 4) this.rarity = 'epic'; // 2x2
+        if (size === 8) this.rarity = 'legendary'; // 2x4 or 4x2
 
         this.stats = {
             hp: 10,

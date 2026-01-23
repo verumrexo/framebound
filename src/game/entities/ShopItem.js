@@ -58,7 +58,7 @@ export class ShopItem {
 
         // Price tag below
         ctx.fillStyle = '#ffd700';
-        ctx.font = "bold 14px 'VT323'";
+        ctx.font = "bold 10px 'Press Start 2P'";
         ctx.textAlign = 'center';
         ctx.fillText(`${this.data.price}g`, 0, this.radius + 18);
 
@@ -85,27 +85,27 @@ export class ShopItem {
 
         // Name
         ctx.fillStyle = '#fff';
-        ctx.font = "bold 16px 'VT323'";
+        ctx.font = "bold 12px 'Press Start 2P', monospace";
         ctx.textAlign = 'center';
         ctx.fillText(this.data.name, this.x, tooltipY + 20);
 
         // Description/Stats
         ctx.fillStyle = '#aaa';
-        ctx.font = "14px 'VT323'";
+        ctx.font = "12px 'Press Start 2P', monospace";
         ctx.fillText(this.data.description, this.x, tooltipY + 40);
 
         // Part stats if available
         if (this.partDef && this.partDef.stats) {
             const stats = this.partDef.stats;
             ctx.fillStyle = '#888';
-            ctx.font = "12px 'VT323'";
-            ctx.fillText(`HP: ${stats.hp || 0} | Mass: ${stats.mass || 0}`, this.x, tooltipY + 56);
+            ctx.font = "8px 'Press Start 2P'";
+            ctx.fillText(`hp: ${stats.hp || 0} | mass: ${stats.mass || 0}`, this.x, tooltipY + 56);
         }
 
         // Buy prompt
         ctx.fillStyle = canAfford ? '#44ff44' : '#ff4444';
-        ctx.font = "bold 14px 'VT323'";
-        const promptText = canAfford ? '[E] Buy' : 'Not enough gold!';
+        ctx.font = "bold 10px 'Press Start 2P'";
+        const promptText = canAfford ? '[e] buy' : 'not enough gold!';
         ctx.fillText(promptText, this.x, tooltipY + tooltipH - 8);
 
         ctx.textAlign = 'left';

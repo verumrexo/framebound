@@ -1,0 +1,8 @@
+# Framebound AI Rules
+
+1. **Game Identity**: 
+   - All UI text must be **lowercase**.
+   - Use 'Press Start 2P' font for all UI.
+   - Maintain a retro-sci-fi "Terminal" or "Holographic" look.
+2. **Process**:
+   - Add every meaningful change to the in-game changelog.

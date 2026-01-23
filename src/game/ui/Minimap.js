@@ -257,12 +257,12 @@ export class Minimap {
 
         // 7. Draw Player (Always Center)
         ctx.fillStyle = '#44ff44';
-        ctx.shadowBlur = 15;
+        // ctx.shadowBlur = 15;
         ctx.shadowColor = '#44ff44';
         ctx.beginPath();
         ctx.arc(cx, cy, 3, 0, Math.PI * 2);
         ctx.fill();
-        ctx.shadowBlur = 0;
+        // ctx.shadowBlur = 0;
 
         // Border around Minimap
         ctx.restore();

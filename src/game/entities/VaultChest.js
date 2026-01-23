@@ -80,7 +80,7 @@ export class VaultChest {
         // Name
         const name = this.costType === 'hp' ? 'Blood Vault' : 'Gilded Vault';
         ctx.fillStyle = this.costType === 'hp' ? '#ff4444' : '#ffd700';
-        ctx.font = "bold 16px 'VT323'";
+        ctx.font = "12px 'Press Start 2P'";
         ctx.textAlign = 'center';
         ctx.fillText(name, this.x, tooltipY + 20);
 
