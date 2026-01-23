@@ -261,6 +261,13 @@ export class MainMenu {
 
         const changes = [
             {
+                ver: "v0.3.1",
+                date: "2026-01-23",
+                items: [
+                    "- hotfix: edge browser performance (outline caching)"
+                ]
+            },
+            {
                 ver: "v0.3.0",
                 date: "2026-01-21",
                 items: [

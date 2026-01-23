@@ -40,6 +40,27 @@ export class Sprite {
                 }
             }
         }
+
+        // Pre-render outline to cache (Edge Performance Fix)
+        this.generateOutlineCache();
+    }
+
+    generateOutlineCache() {
+        // Create cached outline canvas
+        if (!this.outlineCtx) {
+            this.outlineCtx = document.createElement('canvas').getContext('2d');
+            this.outlineCtx.canvas.width = this.width * this.scale + 2; // +2 for 1px offset in each direction
+            this.outlineCtx.canvas.height = this.height * this.scale + 2;
+        }
+
+        this.outlineCtx.imageSmoothingEnabled = false;
+        this.outlineCtx.clearRect(0, 0, this.outlineCtx.canvas.width, this.outlineCtx.canvas.height);
+
+        // Draw silhouette shifted 4 directions (1px at scale)
+        this.outlineCtx.drawImage(this.silhouetteCtx.canvas, 0, 1); // down
+        this.outlineCtx.drawImage(this.silhouetteCtx.canvas, 2, 1); // right
+        this.outlineCtx.drawImage(this.silhouetteCtx.canvas, 1, 0); // up
+        this.outlineCtx.drawImage(this.silhouetteCtx.canvas, 1, 2); // left
     }
 
     update(newData) {
@@ -55,18 +76,11 @@ export class Sprite {
         const dx = -dw * anchorX;
         const dy = -dh * anchorY;
 
-        // Pixel-Perfect Outline (Silhouette Method)
-        if (strokeStyle) {
-            ctx.save();
-            ctx.translate(dx, dy);
-
-            // Draw silhouette shifted 4 directions (1px at scale)
+        // Pixel-Perfect Outline (Cached Method - Edge Performance Fix)
+        if (strokeStyle && this.outlineCtx) {
             ctx.globalAlpha = 1.0;
-            ctx.drawImage(this.silhouetteCtx.canvas, -1, 0);
-            ctx.drawImage(this.silhouetteCtx.canvas, 1, 0);
-            ctx.drawImage(this.silhouetteCtx.canvas, 0, -1);
-            ctx.drawImage(this.silhouetteCtx.canvas, 0, 1);
-            ctx.restore();
+            // Draw cached outline with offset to center it properly
+            ctx.drawImage(this.outlineCtx.canvas, dx - 1, dy - 1);
         }
 
         if (overrideColor) {

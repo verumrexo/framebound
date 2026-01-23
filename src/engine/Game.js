@@ -67,7 +67,7 @@ export class Game {
         this.xpToNext = 100;
         this.xpToNext = 100;
         this.enemySpawnTimer = 0;
-        this.version = 'v0.3.0';
+        this.version = 'v0.3.1';
         this.versionName = 'polish update';
 
         this.starfield = new Starfield(400, 4000, 4000); // Many stars, large area
