@@ -89,7 +89,7 @@ export class Shipwreck {
         }
     }
 
-    takeDamage(amount, worldX, worldY) {
+    takeDamage(amount, worldX, worldY, roomCleared = false) {
         // Find which part was hit
         // Transform world to local
         const dx = worldX - this.x;
@@ -106,7 +106,12 @@ export class Shipwreck {
 
         const part = this.ship.getPart(gx, gy);
         if (part) {
-            part.hp -= amount;
+            // One-shot if room is cleared
+            if (roomCleared) {
+                part.hp = 0;
+            } else {
+                part.hp -= amount;
+            }
             if (part.hp <= 0) {
                 // Destroy part
                 const partId = part.partId;

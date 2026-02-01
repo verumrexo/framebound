@@ -12,7 +12,7 @@ export class Projectile {
         this.angle = angle;
 
         this.radius = (type === 'laser' || type === 'small_laser' || type === 'pellet') ? 2 : (type === 'mini_bullet' ? 1.5 : (type === 'railgun' ? 6 : (type === 'saber' ? 3 : 4)));
-        this.life = lifetime !== null ? lifetime : ((type === 'railgun') ? 2.4 : ((type === 'saber') ? 1.6 : (type === 'beam_freeze') ? 0.1 : (type === 'rocket' || type === 'guided_rocket') ? 3.0 : (type === 'cluster_grenade') ? 1.8 : (type === 'mini_grenade') ? 1.0 : 60.0));
+        this.life = lifetime !== null ? lifetime : ((type === 'railgun') ? 2.4 : ((type === 'saber') ? 1.6 : (type === 'beam_freeze') ? 0.05 : (type === 'rocket' || type === 'guided_rocket') ? 3.0 : (type === 'cluster_grenade') ? 1.8 : (type === 'mini_grenade') ? 1.0 : 60.0));
         this.maxLife = this.life;
         this.railStayTime = (type === 'railgun') ? 1.1 : ((type === 'saber') ? 0.6 : 0);
         this.isDead = false;
@@ -21,7 +21,7 @@ export class Projectile {
         // Beam properties
         if (this.type === 'railgun' || this.type === 'saber' || this.type === 'beam_freeze') {
             this.isBeam = true;
-            this.beamLength = (this.type === 'saber') ? 120 : ((this.type === 'beam_freeze') ? 600 : 3000); // Shorter for Saber/Freeze
+            this.beamLength = (this.type === 'beam_freeze') ? 600 : 3000; // Full range for railgun/saber
             this.targetHits = new Map(); // Track target -> lastHitTime for multi-hit beams
         }
 

@@ -37,7 +37,35 @@ export class Settings {
     }
 
     load() {
-        // persistence if needed later
+        // Load cursor settings from localStorage
+        try {
+            const saved = localStorage.getItem('framebound_cursor_settings');
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                this.game.cursorSettings = {
+                    shape: parsed.shape || this.defaults.cursorShape,
+                    thickness: parsed.thickness || this.defaults.cursorThickness,
+                    length: parsed.length || this.defaults.cursorLength,
+                    gap: parsed.gap ?? this.defaults.cursorGap,
+                    color: parsed.color || this.defaults.cursorColor,
+                    outline: parsed.outline ?? this.defaults.cursorOutline
+                };
+                // Sync slider states
+                this.sliderStates.cursorThickness.current = this.sliderStates.cursorThickness.target = this.game.cursorSettings.thickness;
+                this.sliderStates.cursorLength.current = this.sliderStates.cursorLength.target = this.game.cursorSettings.length;
+                this.sliderStates.cursorGap.current = this.sliderStates.cursorGap.target = this.game.cursorSettings.gap;
+            }
+        } catch (e) {
+            console.warn('[Settings] Failed to load cursor settings:', e);
+        }
+    }
+
+    saveCursorSettings() {
+        try {
+            localStorage.setItem('framebound_cursor_settings', JSON.stringify(this.game.cursorSettings));
+        } catch (e) {
+            console.warn('[Settings] Failed to save cursor settings:', e);
+        }
     }
 
     render(parentOverlay, backCallback) {
@@ -282,6 +310,7 @@ export class Settings {
                         if (key.startsWith('cursor')) {
                             const prop = key.replace('cursor', '').toLowerCase();
                             this.game.cursorSettings[prop] = this.sliderStates[key].target;
+                            this.saveCursorSettings();
                         }
                     };
                 }
@@ -305,9 +334,9 @@ export class Settings {
 
             if (chkAliasing) chkAliasing.onchange = (e) => renderer.setSmoothing(e.target.checked);
             if (chkCss) chkCss.onchange = (e) => renderer.setPixelation(e.target.checked);
-            if (selShape) selShape.onchange = (e) => this.game.cursorSettings.shape = e.target.value;
-            if (clrColor) clrColor.onchange = (e) => this.game.cursorSettings.color = e.target.value;
-            if (chkOutline) chkOutline.onchange = (e) => this.game.cursorSettings.outline = e.target.checked;
+            if (selShape) selShape.onchange = (e) => { this.game.cursorSettings.shape = e.target.value; this.saveCursorSettings(); };
+            if (clrColor) clrColor.onchange = (e) => { this.game.cursorSettings.color = e.target.value; this.saveCursorSettings(); };
+            if (chkOutline) chkOutline.onchange = (e) => { this.game.cursorSettings.outline = e.target.checked; this.saveCursorSettings(); };
 
             if (btnBack) btnBack.onclick = () => {
                 if (this.updateInterval) clearInterval(this.updateInterval);

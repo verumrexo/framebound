@@ -15,6 +15,8 @@ export class DevTools {
         this.keypadActive = false;
         this.keypadEntry = "";
         this.correctCode = "2519";
+        // Persistent auth via localStorage
+        this.authenticated = localStorage.getItem('fb_dev_auth') === 'true';
         this.spawnAmount = 1;
         this.pendingSpawnAction = null; // Function to execute on map click
         this.placementMode = false;
@@ -256,9 +258,14 @@ export class DevTools {
 
         document.body.appendChild(this.ui);
 
-        // Prevent events passing through main UI
-        ['mousedown', 'mouseup', 'click', 'contextmenu', 'keydown', 'keyup'].forEach(evt => {
+        // Prevent events passing through main UI (except L key for toggle)
+        ['mousedown', 'mouseup', 'click', 'contextmenu'].forEach(evt => {
             this.ui.addEventListener(evt, (e) => e.stopPropagation());
+        });
+        ['keydown', 'keyup'].forEach(evt => {
+            this.ui.addEventListener(evt, (e) => {
+                if (e.code !== 'KeyL') e.stopPropagation(); // Allow L to toggle
+            });
         });
 
         // Create Keypad UI
@@ -292,17 +299,22 @@ export class DevTools {
 
     toggle() {
         if (this.active) {
+            // Close devtools
             this.active = false;
             this.ui.style.display = 'none';
-        } else {
-            this.showKeypad();
-        }
-
-        // Cancel placement if closing
-        if (!this.active && !this.keypadActive) {
             this.placementMode = false;
             this.pendingSpawnAction = null;
             document.body.style.cursor = 'default';
+        } else if (this.keypadActive) {
+            // Close keypad if it's open
+            this.hideKeypad();
+        } else if (this.authenticated) {
+            // Already authenticated this session, skip keypad
+            this.active = true;
+            this.ui.style.display = 'block';
+        } else {
+            // Not authenticated, show keypad
+            this.showKeypad();
         }
     }
 
@@ -363,6 +375,8 @@ export class DevTools {
             if (this.keypadEntry === this.correctCode) {
                 this.game.showNotification("access granted", "#00ff00");
                 this.hideKeypad();
+                this.authenticated = true;
+                localStorage.setItem('fb_dev_auth', 'true'); // Persistent auth
                 this.active = true;
                 this.ui.style.display = 'block';
             } else {

@@ -166,6 +166,23 @@ export class Minimap {
                     ctx.fillStyle = '#ffff00';    // Lock/clasp
                     ctx.fillRect(-1, -1, 2, 2);
                     ctx.restore();
+                } else if (room.type === RoomType.VAULT) {
+                    // Draw Vault icon (purple lock)
+                    const cx = pos.x + w / 2;
+                    const cy = pos.y + h / 2;
+                    ctx.save();
+                    ctx.translate(cx, cy);
+                    ctx.fillStyle = '#aa00ff';
+                    // Lock body
+                    ctx.fillRect(-3, -1, 6, 4);
+                    // Lock shackle
+                    ctx.fillRect(-2, -3, 1, 2);
+                    ctx.fillRect(1, -3, 1, 2);
+                    ctx.fillRect(-2, -3, 4, 1);
+                    // Keyhole
+                    ctx.fillStyle = '#000';
+                    ctx.fillRect(-0.5, 0, 1, 2);
+                    ctx.restore();
                 }
 
                 ctx.strokeStyle = color;

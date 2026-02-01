@@ -410,6 +410,10 @@ export class Game {
                             console.log('[Score] Submitted name:', finalName);
                         });
                     }
+                } else if (key === 'Escape') {
+                    this.nameEntryActive = false;
+                    SaveManager.clearSave();
+                    window.location.reload();
                 } else if (key === 'Backspace') {
                     this.nameEntry = this.nameEntry.slice(0, -1);
                 } else if (this.nameEntry.length < 5) {
@@ -1130,7 +1134,16 @@ export class Game {
                                     pY += perpY * offset;
                                 }
                                 const p = new Projectile(pX, pY, finalAngle, def.stats.projectileType || 'bullet', def.stats.projectileSpeed || 600, 'player', def.stats.damage || 10);
-                                if (def.stats.projectileType === 'railgun' || def.stats.projectileType === 'beam_freeze') p.isBeam = true; // Safety
+                                if (def.stats.projectileType === 'railgun' || def.stats.projectileType === 'beam_freeze') p.isBeam = true;
+
+                                // High visual rate, low hit rate for freeze ray
+                                if (def.stats.projectileType === 'beam_freeze') {
+                                    partRef.shotCount = (partRef.shotCount || 0) + 1;
+                                    if (partRef.shotCount % 5 !== 0) {
+                                        p.isVisualOnly = true;
+                                    }
+                                }
+
                                 // Randomize interval between 0.01 and 0.03 (50%-150% of 0.02 base)
                                 p.delay = i * pInterval * (0.5 + Math.random());
                                 this.projectiles.push(p);
@@ -1164,11 +1177,19 @@ export class Game {
                             let pitch = def.stats.soundPitch;
                             if (def.id === 'custom_1769336961268') pitch = 0.5; // Deep beam sound
 
-                            this.audio.play(snd, {
-                                volume: def.stats.soundVolume ?? 0.6,
-                                pitch: pitch,
-                                randomizePitch: 0.15
-                            });
+                            // Play Sound (per-weapon) - Throttle for high-rate visual beams
+                            let shouldPlayShoot = true;
+                            if (def.stats.projectileType === 'beam_freeze') {
+                                if (partRef.shotCount % 5 !== 0) shouldPlayShoot = false;
+                            }
+
+                            if (shouldPlayShoot) {
+                                this.audio.play(snd, {
+                                    volume: def.stats.soundVolume ?? 0.6,
+                                    pitch: pitch,
+                                    randomizePitch: 0.15
+                                });
+                            }
                         }
 
                         if (def.stats.rampUp) {
@@ -1316,156 +1337,166 @@ export class Game {
             p.update(dt, this);
 
             if (p.owner === 'player') {
-                // Enemy Collision
-                for (const enemy of this.enemies) {
-                    if (enemy.isDead) continue;
-                    if (p.isBeam) {
-                        const tdx = enemy.x - p.x;
-                        const tdy = enemy.y - p.y;
-                        const bx = tdx * Math.cos(-p.angle) - tdy * Math.sin(-p.angle);
-                        const by = tdx * Math.sin(-p.angle) + tdy * Math.cos(-p.angle);
-                        const hitRange = (p.radius || 10) + (enemy.radius || 20);
-                        if (bx > 0 && bx < p.beamLength && Math.abs(by) < hitRange) {
-                            const now = Date.now();
-                            const lastHit = p.targetHits.get(enemy) || 0;
-                            if (now - lastHit > 150) {
+                if (!p.isVisualOnly) { // High-rate visual beams don't do collision
+                    // Enemy Collision
+                    for (const enemy of this.enemies) {
+                        if (enemy.isDead) continue;
+                        if (p.isBeam) {
+                            const tdx = enemy.x - p.x;
+                            const tdy = enemy.y - p.y;
+                            const bx = tdx * Math.cos(-p.angle) - tdy * Math.sin(-p.angle);
+                            const by = tdx * Math.sin(-p.angle) + tdy * Math.cos(-p.angle);
+                            const hitRange = (p.radius || 10) + (enemy.radius || 20);
+                            if (bx > 0 && bx < p.beamLength && Math.abs(by) < hitRange) {
+                                const now = Date.now();
+                                const lastHit = p.targetHits.get(enemy) || 0;
+                                if (now - lastHit > 100) {
+                                    enemy.takeDamage(p.damage, p.type);
+                                    p.targetHits.set(enemy, now);
+                                    const isFreeze = p.type === 'beam_freeze';
+                                    const hitVol = isFreeze ? 0.05 : 0.3;
+                                    this.audio.play('hit', { volume: hitVol, pitch: 1.3, randomizePitch: 0.1, isSpammy: isFreeze });
+                                }
+                            }
+                        } else {
+                            const dx = p.x - enemy.x;
+                            const dy = p.y - enemy.y;
+                            const distSq = dx * dx + dy * dy;
+                            const minDist = (p.radius || 4) + (enemy.radius || 20);
+                            if (distSq < minDist * minDist) {
                                 enemy.takeDamage(p.damage, p.type);
-                                p.targetHits.set(enemy, now);
-                                this.audio.play('hit', { volume: 0.3, pitch: 1.3, randomizePitch: 0.1 });
+                                this.audio.play('hit', { volume: 0.5, pitch: 1.3, randomizePitch: 0.1 });
+                                p.isDead = true;
+                                if (p.type === 'rocket') p.shouldExplode = true;
                             }
                         }
-                    } else {
-                        const dx = p.x - enemy.x;
-                        const dy = p.y - enemy.y;
-                        const distSq = dx * dx + dy * dy;
-                        const minDist = (p.radius || 4) + (enemy.radius || 20);
-                        if (distSq < minDist * minDist) {
-                            enemy.takeDamage(p.damage, p.type);
-                            this.audio.play('hit', { volume: 0.5, pitch: 1.3, randomizePitch: 0.1 });
-                            p.isDead = true;
-                            if (p.type === 'rocket') p.shouldExplode = true;
-                        }
                     }
-                }
 
-                // Boss Collision
-                for (const boss of this.bosses) {
-                    if (boss.isDead) continue;
-                    if (p.isBeam) {
-                        const tdx = boss.x - p.x;
-                        const tdy = boss.y - p.y;
-                        const bx = tdx * Math.cos(-p.angle) - tdy * Math.sin(-p.angle);
-                        const by = tdx * Math.sin(-p.angle) + tdy * Math.cos(-p.angle);
-                        const hitRange = (p.radius || 10) + (boss.radius || 60);
-                        if (bx > 0 && bx < p.beamLength && Math.abs(by) < hitRange) {
-                            const now = Date.now();
-                            const lastHit = p.targetHits.get(boss) || 0;
-                            if (now - lastHit > 150) {
+                    // Boss Collision
+                    for (const boss of this.bosses) {
+                        if (boss.isDead) continue;
+                        if (p.isBeam) {
+                            const tdx = boss.x - p.x;
+                            const tdy = boss.y - p.y;
+                            const bx = tdx * Math.cos(-p.angle) - tdy * Math.sin(-p.angle);
+                            const by = tdx * Math.sin(-p.angle) + tdy * Math.cos(-p.angle);
+                            const hitRange = (p.radius || 10) + (boss.radius || 60);
+                            if (bx > 0 && bx < p.beamLength && Math.abs(by) < hitRange) {
+                                const now = Date.now();
+                                const lastHit = p.targetHits.get(boss) || 0;
+                                if (now - lastHit > 100) {
+                                    boss.takeDamage(p.damage, p.type);
+                                    p.targetHits.set(boss, now);
+                                    const isFreeze = p.type === 'beam_freeze';
+                                    const hitVol = isFreeze ? 0.08 : 0.4;
+                                    this.audio.play('hit', { volume: hitVol, pitch: 0.7, isSpammy: isFreeze });
+                                }
+                            }
+                        } else {
+                            const dx = p.x - boss.x;
+                            const dy = p.y - boss.y;
+                            if (Math.hypot(dx, dy) < boss.radius + p.radius) {
                                 boss.takeDamage(p.damage, p.type);
-                                p.targetHits.set(boss, now);
-                                this.audio.play('hit', { volume: 0.4, pitch: 0.7 });
-                            }
-                        }
-                    } else {
-                        const dx = p.x - boss.x;
-                        const dy = p.y - boss.y;
-                        if (Math.hypot(dx, dy) < boss.radius + p.radius) {
-                            boss.takeDamage(p.damage, p.type);
-                            this.audio.play('hit', { volume: 0.8, pitch: 0.8 });
-                            p.isDead = true;
-                            if (p.type === 'rocket') p.shouldExplode = true;
-                        }
-                    }
-                }
-
-                // Shipwreck Collision
-                for (let j = this.shipwrecks.length - 1; j >= 0; j--) {
-                    const wreck = this.shipwrecks[j];
-                    if (wreck.isDead) continue;
-                    const dx = p.x - wreck.x;
-                    const dy = p.y - wreck.y;
-                    if (dx * dx + dy * dy > 400 * 400) continue;
-
-                    if (p.isBeam) {
-                        // TODO: Beam vs Wreck parts
-                    } else {
-                        const hitResult = wreck.takeDamage(p.damage, p.x, p.y);
-                        if (hitResult && hitResult.destroyed !== undefined) {
-                            p.isDead = true;
-                            if (p.type === 'rocket') p.shouldExplode = true;
-                            this.audio.play('hit', { volume: 0.4, pitch: 0.8 });
-                            if (hitResult.destroyed && hitResult.shouldDrop) {
-                                this.itemPickups.push(new ItemPickup(hitResult.x, hitResult.y, hitResult.partId));
-                                this.audio.play('explosion', { volume: 0.4, pitch: 1.2 });
-                            } else if (hitResult.destroyed) {
-                                this.audio.play('explosion', { volume: 0.3, pitch: 1.5 });
+                                this.audio.play('hit', { volume: 0.8, pitch: 0.8 });
+                                p.isDead = true;
+                                if (p.type === 'rocket') p.shouldExplode = true;
                             }
                         }
                     }
-                    if (wreck.isDead) this.shipwrecks.splice(j, 1);
-                }
 
-                // Asteroid Collision
-                for (const asteroid of this.asteroids) {
-                    if (asteroid.isDead || asteroid.isBroken) continue;
-                    if (p.isBeam) {
-                        const tdx = asteroid.x - p.x;
-                        const tdy = asteroid.y - p.y;
-                        const bx = tdx * Math.cos(-p.angle) - tdy * Math.sin(-p.angle);
-                        const by = tdx * Math.sin(-p.angle) + tdy * Math.cos(-p.angle);
-                        const hitRange = (p.radius || 10) + asteroid.radius;
-                        if (bx > 0 && bx < p.beamLength && Math.abs(by) < hitRange) {
-                            const now = Date.now();
-                            const lastHit = p.targetHits.get(asteroid) || 0;
-                            if (now - lastHit > 150) {
+                    // Shipwreck Collision
+                    for (let j = this.shipwrecks.length - 1; j >= 0; j--) {
+                        const wreck = this.shipwrecks[j];
+                        if (wreck.isDead) continue;
+                        const dx = p.x - wreck.x;
+                        const dy = p.y - wreck.y;
+                        if (dx * dx + dy * dy > 400 * 400) continue;
+
+                        if (p.isBeam) {
+                            // TODO: Beam vs Wreck parts
+                        } else {
+                            const hitResult = wreck.takeDamage(p.damage, p.x, p.y);
+                            if (hitResult && hitResult.destroyed !== undefined) {
+                                p.isDead = true;
+                                if (p.type === 'rocket') p.shouldExplode = true;
+                                this.audio.play('hit', { volume: 0.4, pitch: 0.8 });
+                                if (hitResult.destroyed && hitResult.shouldDrop) {
+                                    this.itemPickups.push(new ItemPickup(hitResult.x, hitResult.y, hitResult.partId));
+                                    this.audio.play('explosion', { volume: 0.4, pitch: 1.2 });
+                                } else if (hitResult.destroyed) {
+                                    this.audio.play('explosion', { volume: 0.3, pitch: 1.5 });
+                                }
+                            }
+                        }
+                        if (wreck.isDead) this.shipwrecks.splice(j, 1);
+                    }
+
+                    // Asteroid Collision
+                    for (const asteroid of this.asteroids) {
+                        if (asteroid.isDead || asteroid.isBroken) continue;
+                        if (p.isBeam) {
+                            const tdx = asteroid.x - p.x;
+                            const tdy = asteroid.y - p.y;
+                            const bx = tdx * Math.cos(-p.angle) - tdy * Math.sin(-p.angle);
+                            const by = tdx * Math.sin(-p.angle) + tdy * Math.cos(-p.angle);
+                            const hitRange = (p.radius || 10) + asteroid.radius;
+                            if (bx > 0 && bx < p.beamLength && Math.abs(by) < hitRange) {
+                                const now = Date.now();
+                                const lastHit = p.targetHits.get(asteroid) || 0;
+                                if (now - lastHit > 100) {
+                                    if (asteroid.takeDamage(p.damage)) this.spawnAsteroidLoot(asteroid);
+                                    p.targetHits.set(asteroid, now);
+                                    const isFreeze = p.type === 'beam_freeze';
+                                    const hitVol = isFreeze ? 0.05 : 0.3;
+                                    this.audio.play('hit', { volume: hitVol, pitch: 0.5, isSpammy: isFreeze });
+                                }
+                            }
+                        } else {
+                            const dx = asteroid.x - p.x;
+                            const dy = p.y - asteroid.y;
+                            const distSq = dx * dx + dy * dy;
+                            const minDist = (p.radius || 4) + asteroid.radius;
+                            if (distSq < minDist * minDist) {
                                 if (asteroid.takeDamage(p.damage)) this.spawnAsteroidLoot(asteroid);
-                                p.targetHits.set(asteroid, now);
-                                this.audio.play('hit', { volume: 0.3, pitch: 0.5 });
+                                p.isDead = true;
+                                if (p.type === 'rocket') p.shouldExplode = true;
+                                this.audio.play('hit', { volume: 0.4, pitch: 0.5 });
                             }
                         }
-                    } else {
-                        const dx = asteroid.x - p.x;
-                        const dy = p.y - asteroid.y;
-                        const distSq = dx * dx + dy * dy;
-                        const minDist = (p.radius || 4) + asteroid.radius;
-                        if (distSq < minDist * minDist) {
-                            if (asteroid.takeDamage(p.damage)) this.spawnAsteroidLoot(asteroid);
-                            p.isDead = true;
-                            if (p.type === 'rocket') p.shouldExplode = true;
-                            this.audio.play('hit', { volume: 0.4, pitch: 0.5 });
-                        }
                     }
-                }
 
-                // Loot Crate Collision
-                for (const crate of this.lootCrates) {
-                    if (crate.isOpened) continue;
-                    if (p.isBeam) {
-                        const tdx = crate.x - p.x;
-                        const tdy = crate.y - p.y;
-                        const bx = tdx * Math.cos(-p.angle) - tdy * Math.sin(-p.angle);
-                        const by = tdx * Math.sin(-p.angle) + tdy * Math.cos(-p.angle);
-                        const hitRange = (p.radius || 10) + crate.radius;
-                        if (bx > 0 && bx < p.beamLength && Math.abs(by) < hitRange) {
-                            const now = Date.now();
-                            const lastHit = p.targetHits.get(crate) || 0;
-                            if (now - lastHit > 150) {
+                    // Loot Crate Collision
+                    for (const crate of this.lootCrates) {
+                        if (crate.isOpened) continue;
+                        if (p.isBeam) {
+                            const tdx = crate.x - p.x;
+                            const tdy = crate.y - p.y;
+                            const bx = tdx * Math.cos(-p.angle) - tdy * Math.sin(-p.angle);
+                            const by = tdx * Math.sin(-p.angle) + tdy * Math.cos(-p.angle);
+                            const hitRange = (p.radius || 10) + crate.radius;
+                            if (bx > 0 && bx < p.beamLength && Math.abs(by) < hitRange) {
+                                const now = Date.now();
+                                const lastHit = p.targetHits.get(crate) || 0;
+                                if (now - lastHit > 100) {
+                                    if (crate.takeDamage(p.damage)) this.spawnCrateLoot(crate);
+                                    p.targetHits.set(crate, now);
+                                    const isFreeze = p.type === 'beam_freeze';
+                                    const hitVol = isFreeze ? 0.05 : 0.3;
+                                    this.audio.play('hit', { volume: hitVol, pitch: 1.2, isSpammy: isFreeze });
+                                }
+                            }
+                        } else {
+                            const dx = crate.x - p.x;
+                            const dy = crate.y - p.y;
+                            const distSq = dx * dx + dy * dy;
+                            const minDist = (p.radius || 4) + crate.radius;
+                            if (distSq < minDist * minDist) {
                                 if (crate.takeDamage(p.damage)) this.spawnCrateLoot(crate);
-                                p.targetHits.set(crate, now);
+                                else crate.rotSpeed += (Math.random() - 0.5) * 3;
+                                p.isDead = true;
+                                if (p.type === 'rocket') p.shouldExplode = true;
                                 this.audio.play('hit', { volume: 0.3, pitch: 1.2 });
                             }
-                        }
-                    } else {
-                        const dx = crate.x - p.x;
-                        const dy = crate.y - p.y;
-                        const distSq = dx * dx + dy * dy;
-                        const minDist = (p.radius || 4) + crate.radius;
-                        if (distSq < minDist * minDist) {
-                            if (crate.takeDamage(p.damage)) this.spawnCrateLoot(crate);
-                            else crate.rotSpeed += (Math.random() - 0.5) * 3;
-                            p.isDead = true;
-                            if (p.type === 'rocket') p.shouldExplode = true;
-                            this.audio.play('hit', { volume: 0.3, pitch: 1.2 });
                         }
                     }
                 }
@@ -1821,7 +1852,8 @@ export class Game {
             if (isRoomCleared) orb.forced = true; // Auto-magnetize when room cleared
             const collected = orb.update(dt, this.x, this.y);
             if (collected) {
-                const healAmount = orb.value;
+                const missingHp = this.playerShip.maxHp - this.playerShip.hp;
+                const healAmount = Math.max(1, Math.ceil(missingHp * 0.05)); // 5% of missing HP
                 this.playerShip.hp = Math.min(this.playerShip.hp + healAmount, this.playerShip.maxHp);
                 this.showNotification(`+${healAmount} hp`, '#44ff44');
                 this.audio.play('gold_pickup', { volume: 0.5, pitch: 1.2, randomizePitch: 0.15 });
@@ -2180,9 +2212,10 @@ export class Game {
                         const centerY = room.y + room.height / 2;
 
                         // Draw instructions on the ground
-                        ctx.fillText("wasd: move", centerX, centerY - 150);
-                        ctx.fillText("l-click: shoot", centerX, centerY - 80);
-                        ctx.fillText("tab: hangar", centerX, centerY - 10);
+                        ctx.fillText("wasd: move", centerX - 100, centerY - 150);
+                        ctx.fillText("l-click: shoot", centerX - 100, centerY - 80);
+                        ctx.fillText("e: interact", centerX - 100, centerY - 10);
+                        ctx.fillText("tab: hangar", centerX - 100, centerY + 60);
                         ctx.restore();
                     }
                 }
@@ -2804,6 +2837,7 @@ export class Game {
             ctx.fillStyle = '#aaaaaa';
             ctx.font = "8px 'Press Start 2P'";
             ctx.fillText('press enter to submit', this.renderer.width / 2, boxY + 90);
+            ctx.fillText('press esc to skip', this.renderer.width / 2, boxY + 110);
             this.renderer.present();
         }
 

@@ -157,12 +157,12 @@ export const PartsLibrary = {
         const bs = new Sprite([0, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 1, 0, 0, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0], 8, 15, 4, { 1: '#26d426', 2: '#333' }, 0.500, 0.267);
 
         const d = new PartDef('custom_1769336961268', 'freeze ray', PartType.WEAPON, ts,
-            { hp: 40, mass: 4, damage: 0.02, cooldown: 0.01, projectileType: 'beam_freeze', range: 600, weaponGroup: 'utility', soundPitch: 0.5 }, 1, 2
+            { hp: 40, mass: 4, damage: 0.2, cooldown: 0.02, projectileType: 'beam_freeze', range: 600, weaponGroup: 'utility', soundPitch: 0.5, soundVolume: 0.1 }, 1, 2
         );
         d.baseSprite = bs;
         d.drawTurretInInventory = true;
         d.rotationOffset = 1.5708; // 90 degrees
-        d.turretDrawOffset = { x: 0, y: -TILE_SIZE * 0.5 }; // Offset to top tile center
+        d.turretDrawOffset = 0; // Rely on sprite anchor for placement
         return d;
     })(),
 

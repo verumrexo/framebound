@@ -1,10 +1,69 @@
 // Single source of truth for version info
 // UPDATE THIS FILE when making changes to the game
 
-export const VERSION = 'v0.5.8';
-export const VERSION_NAME = 'security measures';
+export const VERSION = 'v0.6.8';
+export const VERSION_NAME = 'audible density';
 
 export const CHANGELOG = [
+    {
+        ver: "v0.6.8",
+        name: "sonic architecture",
+        date: "2026-02-01",
+        items: [
+            "- complete audio engine overhaul (leaky bucket limiter)",
+            "- fixed audio crashes/silence during intense combat",
+            "- balanced volume mixing for high-rate weapons (freeze ray, saber)",
+            "- guaranteed 15% volume floor (never fully muted)",
+            "- reduced freeze ray tick rate to 10hz (visuals at 50hz)",
+            "- fixed visual beam despawn bugs",
+            "- optimized sound prioritization for spammy effects"
+        ]
+    },
+    {
+        ver: "v0.6.5",
+        name: "security protocols",
+        date: "2026-02-01",
+        items: [
+            "- devtools pin saved persistently (localStorage)",
+            "- fixed L-key menu closing issues",
+            "- keypad lock requires auth (2519) to access terminal",
+            "- improved dev ui event isolation"
+        ]
+    },
+    {
+        ver: "v0.6.3",
+        name: "calibrated optics",
+        date: "2026-02-01",
+        items: [
+            "- freeze ray hit sounds reduced to comfortable levels",
+            "- fixed freeze ray turret pivot placement",
+            "- weapon sprites now use correct anchor points"
+        ]
+    },
+    {
+        ver: "v0.6.0",
+        name: "quality of life",
+        date: "2026-02-01",
+        items: [
+            "- shipwrecks can be one-shot when room is cleared",
+            "- enemies now avoid stacking on each other",
+            "- cursor settings now persist between sessions",
+            "- hp orbs heal 5% of missing hp instead of flat value",
+            "- vault rooms now show purple lock icon on minimap",
+            "- freeze ray volume reduced by 90%",
+            "- saber now shoots full-screen beam (global range)",
+            "- added 'e: interact' to tutorial text, shifted left"
+        ]
+    },
+    {
+        ver: "v0.5.9",
+        name: "quick exit",
+        date: "2026-02-01",
+        items: [
+            "- added escape to skip highscore entry",
+            "- skips directly to main menu from death screen"
+        ]
+    },
     {
         ver: "v0.5.8",
         name: "security measures",

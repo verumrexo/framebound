@@ -18,6 +18,9 @@ export class AudioManager {
         this.sfxGain.connect(this.masterGain);
         this.sfxGain.gain.value = 1.0;
 
+        // Instancing control to prevent volume stacking
+        this.recentPlays = new Map(); // name -> { count, lastTime }
+
         // Load saved settings
         this.loadSettings();
     }
@@ -46,7 +49,47 @@ export class AudioManager {
 
     play(name, options = {}) {
         const buffer = this.sounds.get(name);
-        if (!buffer) return;
+        if (!buffer) return null;
+
+        const now = Date.now();
+        const recent = this.recentPlays.get(name) || { count: 0, lastTime: now };
+        const elapsed = now - recent.lastTime;
+        // Leaky bucket: decay the count MUCH faster (1 unit per 2ms)
+        // This prevents the count from snowballing during high-rate fire
+        recent.count = Math.max(0, (recent.count || 0) - (elapsed / 2));
+        recent.count += 1;
+
+        recent.lastTime = now;
+        this.recentPlays.set(name, recent);
+
+        let volumeMultiplier = 1.0;
+
+        // ONLY apply aggressive instance limiting to freeze ray laser or sounds marked as spammy (like freeze hits)
+        // This follows the "dont touch other sounds" request while still fixing the crash
+        if (name === 'shoot_lsr' || options.isSpammy) {
+            if (recent.count > 1) {
+                // "more freeze rays > more quiet sounds" 
+                volumeMultiplier = 1 / Math.pow(recent.count, 0.5);
+            }
+            // Hard limit on how quiet it can get
+            volumeMultiplier = Math.max(0.15, volumeMultiplier);
+
+            // Removed hard cap - keep playing
+        } else {
+            // For normal sounds, be much more permissive 
+            if (recent.count > 5) {
+                volumeMultiplier = 2 / Math.sqrt(recent.count);
+            }
+            volumeMultiplier = Math.max(0.2, volumeMultiplier);
+
+            if (recent.count > 1000) return null; // Extreme safety only
+        }
+
+        const baseVolume = (options.volume !== undefined ? options.volume : 1.0);
+        const finalVolume = baseVolume * volumeMultiplier;
+
+        // Never skip entirely unless it's truly silent
+        if (finalVolume < 0.001) return null;
 
         // Resume context if suspended (browser behavior)
         if (this.context.state === 'suspended') {
@@ -56,14 +99,13 @@ export class AudioManager {
         const source = this.context.createBufferSource();
         source.buffer = buffer;
 
-        const volume = options.volume !== undefined ? options.volume : 1.0;
         const pitch = options.pitch !== undefined ? options.pitch : 1.0;
         const randomizePitch = options.randomizePitch || 0;
         const loop = options.loop || false;
         const type = options.type || 'sfx'; // 'sfx' or 'music'
 
         const gainNode = this.context.createGain();
-        gainNode.gain.value = volume;
+        gainNode.gain.value = finalVolume;
 
         // Pitch randomization
         const finalPitch = pitch + (Math.random() - 0.5) * randomizePitch;

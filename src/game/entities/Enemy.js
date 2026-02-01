@@ -254,7 +254,7 @@ export class Enemy {
         }
     }
 
-    update(dt, playerX, playerY, projectiles, asteroids = [], lootCrates = []) {
+    update(dt, playerX, playerY, projectiles, asteroids = [], lootCrates = [], allEnemies = []) {
         if (this.isDead) return;
 
         // Frozen Logic
@@ -398,6 +398,20 @@ export class Enemy {
 
                 this.x += moveX + avoidX;
                 this.y += moveY + avoidY;
+            }
+        }
+
+        // --- ENEMY SEPARATION (prevent stacking) ---
+        for (const other of allEnemies) {
+            if (other === this || other.isDead) continue;
+            const ex = this.x - other.x;
+            const ey = this.y - other.y;
+            const eDist = Math.sqrt(ex * ex + ey * ey);
+            const minSep = 60; // Minimum separation distance
+            if (eDist < minSep && eDist > 0) {
+                const pushStrength = (minSep - eDist) / minSep;
+                this.x += (ex / eDist) * pushStrength * 50 * dt;
+                this.y += (ey / eDist) * pushStrength * 50 * dt;
             }
         }
 
