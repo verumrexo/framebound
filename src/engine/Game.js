@@ -9,6 +9,7 @@ import { Enemy } from '../game/entities/Enemy.js';
 import { PartsLibrary, TILE_SIZE } from '../game/parts/Part.js';
 import { Hangar } from '../game/systems/Hangar.js';
 import { Designer } from '../game/systems/Designer.js';
+import { DevTools } from '../game/systems/DevTools.js';
 
 import { Starfield } from '../game/environment/Starfield.js';
 import { Grid } from '../game/environment/Grid.js';
@@ -29,8 +30,8 @@ import { ShipBuilder } from '../game/systems/ShipBuilder.js';
 import { AudioManager } from './AudioManager.js';
 import { MainMenu } from '../game/ui/MainMenu.js';
 import { HighScoreManager } from '../game/systems/HighScoreManager.js';
-import { DevTools } from '../game/systems/DevTools.js';
 import { VERSION, VERSION_NAME } from '../version.js';
+import { Settings as GameSettings } from '../game/systems/Settings.js';
 
 export class Game {
     constructor(canvas) {
@@ -40,11 +41,19 @@ export class Game {
             bloom: true
         };
 
+        // Default Cursor Settings
+        this.cursorSettings = {
+            shape: '4-lines',
+            thickness: 2,
+            length: 15,
+            gap: 3,
+            color: '#00ffff',
+            outline: true
+        };
+
         this.renderer = new Renderer(canvas);
         this.renderer.setSmoothing(false); // Default to clean pixel art
         this.input = new Input(canvas);
-        this.camera = new Camera(this.renderer.width, this.renderer.height);
-        this.audio = new AudioManager();
         this.camera = new Camera(this.renderer.width, this.renderer.height);
         this.audio = new AudioManager();
         this.mainMenu = new MainMenu(this);
@@ -113,12 +122,16 @@ export class Game {
             }
 
             if (e.key === 'Escape') {
-                this.paused = !this.paused;
+                if (this.isGameOver) return;
+                this.togglePause();
             }
         });
 
         // Dev Tools
         this.devTools = new DevTools(this);
+        this.gameSettings = new GameSettings(this);
+        this.pauseOverlay = null;
+        this.showPauseSettings = false;
 
         window.addEventListener('keydown', (e) => {
             // Toggle Dev Tools
@@ -352,11 +365,17 @@ export class Game {
     }
 
     update(dt) {
-        // --- DEATH CHECK (Must be FIRST) ---
+        // Consolidate mouse/input state for the frame
+        let isMouseDown = this.input.isMouseDown();
+        const mouse = this.input.getMousePos();
+        const mouseClicked = isMouseDown && !this.mouseDownLastFrame;
+
+        // --- DEATH CHECK ---
         if (this.playerShip.isDead && !this.isGameOver) {
             console.log('[Death] Ship died! Setting up name entry');
             this.isGameOver = true;
             this.paused = true;
+            this.audio.play('frame_death', { volume: 0.7 });
 
             // Check if this is a high score (async)
             HighScoreManager.isHighScore(this.score).then(isHigh => {
@@ -368,55 +387,65 @@ export class Game {
                     console.log('[Death] Score does not qualify for leaderboard');
                 }
             });
-
-            this.audio.play('frame_death', { volume: 0.7 });
         }
 
-        if (this.isGameOver) {
+        if (this.isGameOver && !this.nameEntryActive) {
             if (this.input.isKeyDown('KeyR')) {
                 SaveManager.clearSave(); // Delete save on death
                 window.location.reload();
             }
+            this.mouseDownLastFrame = isMouseDown;
+            this.input.clearPressed();
+            return;
+        }
+
+        // Name Entry Input Handling
+        if (this.nameEntryActive) {
+            for (const key of this.input.keysPressed) {
+                if (key === 'Enter') {
+                    if (this.nameEntry.length > 0) {
+                        const finalName = this.nameEntry;
+                        this.nameEntryActive = false;
+                        HighScoreManager.addScore(finalName, this.score).then(() => {
+                            console.log('[Score] Submitted name:', finalName);
+                        });
+                    }
+                } else if (key === 'Backspace') {
+                    this.nameEntry = this.nameEntry.slice(0, -1);
+                } else if (this.nameEntry.length < 5) {
+                    let char = '';
+                    if (key.startsWith('Key')) char = key.charAt(3);
+                    else if (key.startsWith('Digit')) char = key.charAt(5);
+                    else if (key === 'Space') char = ' ';
+                    else if (key === 'Minus') char = '-';
+                    else if (key === 'Period') char = '.';
+
+                    if (char) {
+                        this.nameEntry += char.toLowerCase();
+                    }
+                }
+            }
+            this.input.clearPressed();
+            this.mouseDownLastFrame = isMouseDown;
             return;
         }
 
         if (this.hangar.active) {
             this.hangar.update(dt);
-            // If Hangar is active (and thus game paused), we return early.
-            // But we might want some background animations? For now, strict pause.
+            this.mouseDownLastFrame = isMouseDown;
+            this.input.clearPressed();
             return;
         }
 
         if (this.shipBuilder.active) {
             this.shipBuilder.update(dt);
+            this.mouseDownLastFrame = isMouseDown;
+            this.input.clearPressed();
             return;
-        }
-
-        // --- DEATH CHECK ---
-        if (this.playerShip.isDead && !this.isGameOver) {
-            this.isGameOver = true;
-            this.paused = true;
-
-            // Always show name entry
-            console.log('[Death] Setting nameEntryActive to true');
-            this.nameEntryActive = true;
-            this.nameEntry = '';
-            console.log('[Death] nameEntryActive is now:', this.nameEntryActive);
-
-            this.audio.play('frame_death', { volume: 0.7 });
-        }
-
-        // Name Entry Input
-        if (this.nameEntryActive) {
-            // Handle keyboard input for name entry
-            return; // Don't update game while entering name
         }
 
         // --- PAUSE MENU INTERACTION ---
         if (this.paused) {
-            const mouse = this.input.getMousePos();
-            const isMouseDown = this.input.isMouseDown();
-            const mouseClicked = isMouseDown && !this.mouseDownLastFrame;
 
             // Pause Settings Interaction
             if (this.showPauseSettings) {
@@ -718,7 +747,7 @@ export class Game {
         }
 
         // Turret Aiming
-        const mouse = this.input.getMousePos();
+        // mouse is already defined at top of update
         // Adjust for Zoom: World = (Screen / Zoom) + CameraPos
         const zoom = this.camera.zoom || 1;
         let worldMouseX = (mouse.x / zoom) + this.camera.x;
@@ -855,7 +884,7 @@ export class Game {
 
         // Shooting
         // Shooting
-        let isMouseDown = this.input.isMouseDown();
+        // isMouseDown is already defined at top of update
         if (this.input.joysticks && this.input.joysticks.right.active) {
             isMouseDown = true; // Auto-fire when aiming with stick
         }
@@ -2083,6 +2112,7 @@ export class Game {
         this.camera.follow({ x: this.x, y: this.y });
         this.camera.update(dt);
         this.mouseDownLastFrame = isMouseDown;
+        this.input.clearPressed();
     }
 
     draw() {
@@ -2136,6 +2166,24 @@ export class Game {
                     if (isCurrent) {
                         this.renderer.ctx.fillStyle = room.locked ? 'rgba(255, 0, 0, 0.15)' : 'rgba(0, 255, 0, 0.05)';
                         this.renderer.ctx.fillRect(room.x, room.y, room.width, room.height);
+                    }
+
+                    // Starting Floor Tutorial (World Space)
+                    if (this.floor === 1 && room.gridX === 0 && room.gridY === 0) {
+                        const ctx = this.renderer.ctx;
+                        ctx.save();
+                        ctx.textAlign = 'center';
+                        ctx.font = "bold 24px 'Press Start 2P'";
+                        ctx.fillStyle = 'rgba(0, 255, 255, 0.4)';
+
+                        const centerX = room.x + room.width / 2;
+                        const centerY = room.y + room.height / 2;
+
+                        // Draw instructions on the ground
+                        ctx.fillText("wasd: move", centerX, centerY - 150);
+                        ctx.fillText("l-click: shoot", centerX, centerY - 80);
+                        ctx.fillText("tab: hangar", centerX, centerY - 10);
+                        ctx.restore();
                     }
                 }
             }
@@ -2349,6 +2397,10 @@ export class Game {
             }
         });
 
+        // Present World (Applies Mosaic/Resolution Scale here)
+        // Everything drawn after this will be at native resolution and non-pixelated.
+        this.renderer.present();
+
         // UI
         if (!this.hangar.active && !this.shipBuilder.active && !this.isGameOver) {
             // Health Bar (Stylish)
@@ -2438,7 +2490,10 @@ export class Game {
 
             this.renderer.ctx.fillStyle = '#00ff00';
             this.renderer.ctx.font = "8px 'Press Start 2P'";
+            this.renderer.ctx.textAlign = 'left';
             this.renderer.ctx.fillText(`speed: ${Math.floor(speed)}`, 20, speedY + 16);
+
+            // Dash Cooldown Indicator
 
             // Dash Cooldown Indicator
             const boosterCount = this.playerShip.stats.boosterCount || 0;
@@ -2615,179 +2670,6 @@ export class Game {
             this.renderer.ctx.textAlign = 'left';
         }
 
-        // Pause Screen Overlay
-        if (this.paused && !this.hangar.active && !this.shipBuilder.active && !this.isGameOver) {
-            const ctx = this.renderer.ctx;
-            const centerX = this.renderer.width / 2;
-            const centerY = this.renderer.height / 2;
-
-            // Dark overlay
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-            ctx.fillRect(0, 0, this.renderer.width, this.renderer.height);
-
-            // Title
-            ctx.fillStyle = '#00ffff';
-            ctx.font = "bold 48px 'Press Start 2P'";
-            ctx.textAlign = 'center';
-            ctx.fillText("paused", centerX, centerY - 100);
-
-            // Define pause menu buttons
-            const buttonWidth = 300;
-            const buttonHeight = 50;
-            const buttonSpacing = 20;
-
-            this.pauseButtons = [
-                {
-                    label: "resume",
-                    x: centerX - buttonWidth / 2,
-                    y: centerY - 20,
-                    width: buttonWidth,
-                    height: buttonHeight,
-                    action: () => { this.paused = false; }
-                },
-                {
-                    label: "settings",
-                    x: centerX - buttonWidth / 2,
-                    y: centerY + buttonHeight + buttonSpacing - 20,
-                    width: buttonWidth,
-                    height: buttonHeight,
-                    action: () => { this.showPauseSettings = true; }
-                }
-            ];
-
-            // Check mouse hover
-            const mouse = this.input.getMousePos();
-
-            // Draw buttons
-            for (const btn of this.pauseButtons) {
-                const isHovered = mouse.x >= btn.x && mouse.x <= btn.x + btn.width &&
-                    mouse.y >= btn.y && mouse.y <= btn.y + btn.height;
-
-                // Button background
-                ctx.fillStyle = isHovered ? 'rgba(0, 255, 255, 0.2)' : 'rgba(0, 40, 60, 0.6)';
-                ctx.fillRect(btn.x, btn.y, btn.width, btn.height);
-
-                // Button border
-                ctx.strokeStyle = isHovered ? '#00ffff' : 'rgba(0, 255, 255, 0.4)';
-                ctx.lineWidth = isHovered ? 3 : 2;
-                ctx.strokeRect(btn.x, btn.y, btn.width, btn.height);
-
-                // Button text
-                ctx.fillStyle = isHovered ? '#ffffff' : '#00ffff';
-                ctx.font = "16px 'Press Start 2P'";
-                ctx.textAlign = 'center';
-                ctx.fillText(btn.label, btn.x + btn.width / 2, btn.y + btn.height / 2 + 6);
-            }
-
-            // Hint text
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-            ctx.font = "12px 'Press Start 2P'";
-            ctx.fillText("press esc to resume", centerX, centerY + 150);
-
-            ctx.textAlign = 'left';
-        }
-
-        // Pause Settings Overlay
-        if (this.showPauseSettings && this.paused) {
-            const ctx = this.renderer.ctx;
-            const centerX = this.renderer.width / 2;
-            const centerY = this.renderer.height / 2;
-
-            // Dark overlay
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
-            ctx.fillRect(0, 0, this.renderer.width, this.renderer.height);
-
-            // Title
-            ctx.fillStyle = '#00ffff';
-            ctx.font = "32px 'Press Start 2P'";
-            ctx.textAlign = 'center';
-            ctx.fillText("settings", centerX, centerY - 150);
-
-            // Volume sliders
-            const sliderWidth = 300;
-            const sliderHeight = 8;
-            const sliderSpacing = 80;
-            const startY = centerY - 60;
-
-            const masterVol = this.audio.masterGain.gain.value;
-            const musicVol = this.audio.musicGain.gain.value;
-            const sfxVol = this.audio.sfxGain.gain.value;
-
-            const sliders = [
-                { label: "master", value: masterVol, y: startY },
-                { label: "music", value: musicVol, y: startY + sliderSpacing },
-                { label: "sfx", value: sfxVol, y: startY + sliderSpacing * 2 }
-            ];
-
-            // Store sliders for interaction
-            this.pauseSettingsSliders = sliders.map((s, idx) => ({
-                ...s,
-                x: centerX - sliderWidth / 2,
-                width: sliderWidth,
-                height: sliderHeight,
-                type: idx === 0 ? 'master' : idx === 1 ? 'music' : 'sfx'
-            }));
-
-            // Draw sliders
-            for (const slider of sliders) {
-                const sliderX = centerX - sliderWidth / 2;
-
-                // Label
-                ctx.fillStyle = 'white';
-                ctx.font = "14px 'Press Start 2P'";
-                ctx.textAlign = 'left';
-                ctx.fillText(slider.label, sliderX, slider.y - 15);
-
-                // Value percentage
-                ctx.textAlign = 'right';
-                ctx.fillText(Math.round(slider.value * 100) + '%', sliderX + sliderWidth, slider.y - 15);
-
-                // Slider track
-                ctx.fillStyle = '#333';
-                ctx.fillRect(sliderX, slider.y, sliderWidth, sliderHeight);
-
-                // Slider fill
-                ctx.fillStyle = '#00ffff';
-                ctx.fillRect(sliderX, slider.y, sliderWidth * slider.value, sliderHeight);
-
-                // Slider handle
-                const handleX = sliderX + sliderWidth * slider.value;
-                ctx.fillStyle = '#ffffff';
-                ctx.fillRect(handleX - 3, slider.y - 4, 6, sliderHeight + 8);
-            }
-
-            // Back button
-            const backBtnWidth = 200;
-            const backBtnHeight = 50;
-            const backBtnX = centerX - backBtnWidth / 2;
-            const backBtnY = centerY + 120;
-
-            this.pauseSettingsBackButton = {
-                x: backBtnX,
-                y: backBtnY,
-                width: backBtnWidth,
-                height: backBtnHeight
-            };
-
-            const mouse = this.input.getMousePos();
-            const isBackHovered = mouse.x >= backBtnX && mouse.x <= backBtnX + backBtnWidth &&
-                mouse.y >= backBtnY && mouse.y <= backBtnY + backBtnHeight;
-
-            // Back button
-            ctx.fillStyle = isBackHovered ? 'rgba(0, 255, 255, 0.2)' : 'rgba(0, 40, 60, 0.6)';
-            ctx.fillRect(backBtnX, backBtnY, backBtnWidth, backBtnHeight);
-            ctx.strokeStyle = isBackHovered ? '#00ffff' : 'rgba(0, 255, 255, 0.4)';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(backBtnX, backBtnY, backBtnWidth, backBtnHeight);
-            ctx.fillStyle = isBackHovered ? '#ffffff' : '#00ffff';
-            ctx.font = "16px 'Press Start 2P'";
-            ctx.textAlign = 'center';
-            ctx.fillText("back", centerX, backBtnY + backBtnHeight / 2 + 6);
-
-            ctx.textAlign = 'left';
-        }
-
-
         // --- TOOLTIP LOGIC ---
         // Check for mouse hover over ItemPickups
         if (!this.hangar.active && !this.isGameOver) {
@@ -2922,10 +2804,194 @@ export class Game {
             ctx.fillStyle = '#aaaaaa';
             ctx.font = "8px 'Press Start 2P'";
             ctx.fillText('press enter to submit', this.renderer.width / 2, boxY + 90);
+            this.renderer.present();
         }
 
-        // Apply post-processing effects (resolution upscale, dither, chromatic aberration)
-        this.renderer.present();
+        // Draw Custom Cursor (Last layer)
+        this.drawCustomCursor();
+    }
+
+    drawCustomCursor() {
+        if (this.hangar.active || this.shipBuilder.active || this.paused) {
+            this.renderer.canvas.style.cursor = 'default';
+            return;
+        }
+
+        // Hide OS cursor in game
+        this.renderer.canvas.style.cursor = 'none';
+
+        const mouse = this.input.getMousePos();
+        const ctx = this.renderer.ctx;
+        const settings = this.cursorSettings;
+
+        ctx.save();
+        ctx.translate(mouse.x, mouse.y);
+        ctx.lineCap = 'square';
+
+        const drawShape = (color, thickness, offset = 0) => {
+            ctx.strokeStyle = color;
+            ctx.lineWidth = thickness;
+
+            const len = settings.length + offset;
+            const gap = settings.gap + offset;
+
+            switch (settings.shape) {
+                case 'dot':
+                    ctx.fillStyle = color;
+                    ctx.fillRect(-(thickness / 2 + offset), -(thickness / 2 + offset), thickness + offset * 2, thickness + offset * 2);
+                    break;
+                case 'circle':
+                    ctx.beginPath();
+                    ctx.arc(0, 0, (len + gap) / 2, 0, Math.PI * 2);
+                    ctx.stroke();
+                    break;
+                case '3-lines':
+                    for (let i = 0; i < 3; i++) {
+                        const angle = (i * Math.PI * 2 / 3) - Math.PI / 2;
+                        ctx.beginPath();
+                        ctx.moveTo(Math.cos(angle) * gap, Math.sin(angle) * gap);
+                        ctx.lineTo(Math.cos(angle) * (gap + len), Math.sin(angle) * (gap + len));
+                        ctx.stroke();
+                    }
+                    break;
+                case '4-lines':
+                default:
+                    ctx.beginPath(); // Top
+                    ctx.moveTo(0, -gap); ctx.lineTo(0, -(gap + len));
+                    ctx.stroke();
+                    ctx.beginPath(); // Bottom
+                    ctx.moveTo(0, gap); ctx.lineTo(0, gap + len);
+                    ctx.stroke();
+                    ctx.beginPath(); // Left
+                    ctx.moveTo(-gap, 0); ctx.lineTo(-(gap + len), 0);
+                    ctx.stroke();
+                    ctx.beginPath(); // Right
+                    ctx.moveTo(gap, 0); ctx.lineTo(gap + len, 0);
+                    ctx.stroke();
+                    break;
+            }
+        };
+
+        // Draw Outline First
+        if (settings.outline) {
+            drawShape('#000000', settings.thickness + 2, 1);
+        }
+
+        // Draw Primary
+        drawShape(settings.color, settings.thickness);
+
+        ctx.restore();
+    }
+
+    togglePause() {
+        if (this.isGameOver) return;
+        this.paused = !this.paused;
+        if (this.paused) {
+            this.showPauseMenu();
+        } else {
+            this.hidePauseMenu();
+        }
+    }
+
+    showPauseMenu() {
+        if (this.pauseOverlay) return;
+
+        this.pauseOverlay = document.createElement('div');
+        this.pauseOverlay.id = 'pause-menu';
+        this.pauseOverlay.style.cssText = `
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            font-family: 'Press Start 2P', cursive;
+            color: white;
+            transition: opacity 0.3s;
+        `;
+
+        document.body.appendChild(this.pauseOverlay);
+        this.renderPauseContent();
+
+        // Stop propagation
+        this.pauseOverlay.onmousedown = (e) => e.stopPropagation();
+        this.pauseOverlay.onclick = (e) => e.stopPropagation();
+    }
+
+    renderPauseContent() {
+        if (!this.pauseOverlay) return;
+
+        if (this.showPauseSettings) {
+            this.gameSettings.render(this.pauseOverlay, () => {
+                this.showPauseSettings = false;
+                this.renderPauseContent();
+            });
+            return;
+        }
+
+        this.pauseOverlay.innerHTML = `
+            <h2 style="color: #00ffff; margin-bottom: 50px; font-size: 32px; text-shadow: 0 0 10px #00ffff; text-transform: lowercase;">paused</h2>
+            
+            <div style="display: flex; flex-direction: column; gap: 20px; width: 300px;">
+                <button id="btn-resume" class="pause-btn">resume</button>
+                <button id="btn-pause-settings" class="pause-btn">settings</button>
+                <button id="btn-main-menu" class="pause-btn" style="margin-top: 20px; border-color: rgba(255,0,0,0.3);">main menu</button>
+            </div>
+
+            <style>
+                .pause-btn {
+                    padding: 15px;
+                    font-size: 14px;
+                    background: rgba(0, 40, 60, 0.6);
+                    border: 1px solid rgba(0, 255, 255, 0.2);
+                    color: #00ffff;
+                    cursor: pointer;
+                    font-family: 'Press Start 2P', cursive;
+                    text-transform: lowercase;
+                    transition: all 0.2s;
+                }
+                .pause-btn:hover {
+                    background: rgba(0, 255, 255, 0.2);
+                    border-color: #00ffff;
+                    color: white;
+                }
+                #btn-main-menu:hover {
+                    border-color: #ff3333;
+                    background: rgba(255, 0, 0, 0.1);
+                }
+            </style>
+        `;
+
+        setTimeout(() => {
+            const btnResume = document.getElementById('btn-resume');
+            const btnSettings = document.getElementById('btn-pause-settings');
+            const btnMenu = document.getElementById('btn-main-menu');
+
+            if (btnResume) btnResume.onclick = () => this.togglePause();
+            if (btnSettings) btnSettings.onclick = () => {
+                this.showPauseSettings = true;
+                this.renderPauseContent();
+            };
+            if (btnMenu) btnMenu.onclick = () => {
+                if (confirm('return to main menu? progress will be saved.')) {
+                    this.hidePauseMenu();
+                    this.paused = false;
+                    this.loop.stop();
+                    this.audio.stopMusic();
+                    this.mainMenu.show();
+                }
+            };
+        }, 0);
+    }
+
+    hidePauseMenu() {
+        if (this.pauseOverlay) {
+            this.pauseOverlay.remove();
+            this.pauseOverlay = null;
+            this.showPauseSettings = false;
+        }
     }
 
 

@@ -12,6 +12,9 @@ export class DevTools {
     constructor(game) {
         this.game = game;
         this.active = false;
+        this.keypadActive = false;
+        this.keypadEntry = "";
+        this.correctCode = "2519";
         this.spawnAmount = 1;
         this.pendingSpawnAction = null; // Function to execute on map click
         this.placementMode = false;
@@ -56,13 +59,11 @@ export class DevTools {
         header.style.paddingBottom = '5px';
         this.ui.appendChild(header);
 
-        // Buttons Container
+        // Buttons Container (Grid for side-by-side buttons)
         const container = document.createElement('div');
-        container.style.display = 'flex';
-        container.style.flexDirection = 'column';
+        container.style.display = 'grid';
+        container.style.gridTemplateColumns = '1fr 1fr';
         container.style.gap = '8px';
-        this.ui.appendChild(container);
-
         this.ui.appendChild(container);
 
         // --- GRAPHICS SETTINGS ---
@@ -72,6 +73,7 @@ export class DevTools {
         graphicsHeader.style.borderBottom = '1px solid #00ffff';
         graphicsHeader.style.marginBottom = '5px';
         graphicsHeader.style.marginTop = '10px';
+        graphicsHeader.style.gridColumn = 'span 2';
         container.appendChild(graphicsHeader);
 
         // Helper for Toggles
@@ -93,6 +95,7 @@ export class DevTools {
 
             row.appendChild(txt);
             row.appendChild(chk);
+            // row.style.gridColumn = 'span 2'; // Remove span
             container.appendChild(row);
         };
 
@@ -118,6 +121,7 @@ export class DevTools {
 
             div.appendChild(labelEl);
             div.appendChild(inp);
+            div.style.gridColumn = 'span 2';
             container.appendChild(div);
         };
 
@@ -127,15 +131,17 @@ export class DevTools {
         // 2. CSS Pixelation
         createToggle('css pixelation', () => this.game.renderer.pixelatedCSS !== false, (v) => this.game.renderer.setPixelation(v));
 
-        // 3. Scanlines
-        createToggle('scanlines', () => document.getElementById('scanlines').style.display === 'block', (v) => {
-            document.getElementById('scanlines').style.display = v ? 'block' : 'none';
-        });
+        // 3. Resolution Scale
+        createSlider('resolution scale', '0.1', '1.0', '0.05',
+            () => this.game.renderer.resolutionScale,
+            (v) => this.game.renderer.setResolutionScale(v)
+        );
 
-        // 4. Vignette
-        createToggle('vignette', () => document.getElementById('vignette').style.display === 'block', (v) => {
-            document.getElementById('vignette').style.display = v ? 'block' : 'none';
-        });
+        // 4. Pixel Size (Mosaic)
+        createSlider('pixel size', '1', '16', '1',
+            () => this.game.renderer.pixelSize,
+            (v) => this.game.renderer.setPixelSize(v)
+        );
 
         // 5. Grid Opacity
         createSlider('grid opacity', '0', '0.5', '0.05',
@@ -143,35 +149,7 @@ export class DevTools {
             (v) => this.game.graphics.gridOpacity = v
         );
 
-        // 6. Resolution Scale (Pixelation via lower render resolution)
-        createSlider('resolution scale', '0.25', '1', '0.05',
-            () => this.game.renderer.resolutionScale,
-            (v) => this.game.renderer.setResolutionScale(v)
-        );
-
-        // 7. CRT Effect (Scanlines + Barrel Distortion + Vignette)
-        createToggle('crt effect',
-            () => this.game.renderer.crtEffect,
-            (v) => this.game.renderer.setCRTEffect(v)
-        );
-
-        // 8. Dither Effect (Color Posterization)
-        createToggle('dither effect',
-            () => this.game.renderer.ditherEffect,
-            (v) => this.game.renderer.setDitherEffect(v)
-        );
-
-        // 9. Chromatic Aberration (RGB Offset)
-        createToggle('chromatic aberration',
-            () => this.game.renderer.chromaticAberration,
-            (v) => this.game.renderer.setChromaticAberration(v)
-        );
-
-        // 10. God Mode
-        createToggle('god mode',
-            () => this.game.playerShip && this.game.playerShip.godMode,
-            (v) => { if (this.game.playerShip) this.game.playerShip.godMode = v; }
-        );
+        // (God mode moved to button section)
 
         // --- SPAWNER HEADER ---
         const spawnHeader = document.createElement('div');
@@ -180,6 +158,7 @@ export class DevTools {
         spawnHeader.style.borderBottom = '1px solid #00ff00';
         spawnHeader.style.marginBottom = '5px';
         spawnHeader.style.marginTop = '10px';
+        spawnHeader.style.gridColumn = 'span 2';
         container.appendChild(spawnHeader);
 
 
@@ -206,9 +185,7 @@ export class DevTools {
 
         sliderContainer.appendChild(sliderLabel);
         sliderContainer.appendChild(slider);
-
-        sliderContainer.appendChild(sliderLabel);
-        sliderContainer.appendChild(slider);
+        sliderContainer.style.gridColumn = 'span 2';
         container.appendChild(sliderContainer);
 
 
@@ -222,8 +199,8 @@ export class DevTools {
             btn.style.padding = '8px';
             btn.style.cursor = 'pointer';
             btn.style.fontFamily = "'Press Start 2P', monospace";
-            btn.style.fontSize = '16px';
-            btn.style.textAlign = 'left';
+            btn.style.fontSize = '12px';
+            btn.style.textAlign = 'center';
 
             btn.onmouseover = () => btn.style.background = `rgba(${parseInt(color.slice(1, 3), 16)}, ${parseInt(color.slice(3, 5), 16)}, ${parseInt(color.slice(5, 7), 16)}, 0.3)`;
             btn.onmouseout = () => btn.style.background = 'rgba(0, 50, 0, 0.5)';
@@ -233,10 +210,11 @@ export class DevTools {
                 if (requiresPlacement) {
                     this.startPlacement(action);
                 } else {
-                    action();
+                    action(btn); // Pass button ref to action for state-based buttons
                 }
             };
             container.appendChild(btn);
+            return btn;
         };
 
         // --- SPAWNERS (Click -> Placment Mode) ---
@@ -258,17 +236,54 @@ export class DevTools {
 
         // --- UTILITY ---
         createBtn('☢️ nuke room', () => this.nuke(), '#ff0000', false);
-        createBtn('🔓 unlock all parts', () => this.unlockAllParts(), '#00ffff', false);
+        createBtn('⏩ next floor', () => this.game.nextLevel(), '#aa00ff', false);
+
+        const godBtn = createBtn('😇 god mode: off', (btn) => {
+            if (!this.game.playerShip) return;
+            this.game.playerShip.godMode = !this.game.playerShip.godMode;
+            const active = this.game.playerShip.godMode;
+            btn.innerText = `😇 god mode: ${active ? 'on' : 'off'}`;
+            btn.style.background = active ? 'rgba(0, 255, 255, 0.3)' : 'rgba(0, 50, 0, 0.5)';
+            btn.style.borderColor = active ? '#00ffff' : '#00ff00';
+            btn.style.color = active ? '#00ffff' : '#00ff00';
+        }, '#00ff00', false);
+
+        createBtn('🔓 unlock parts', () => this.unlockAllParts(), '#00ffff', false);
 
         // --- EDITORS ---
         createBtn('🛠️ ship editor', () => this.openShipEditor(), '#00ffff', false);
-        createBtn('📐 part designer', () => this.openDesigner(), '#ff00ff', false);
+        createBtn('📐 designer', () => this.openDesigner(), '#ff00ff', false);
 
         document.body.appendChild(this.ui);
 
-        // Prevent events passing through
+        // Prevent events passing through main UI
         ['mousedown', 'mouseup', 'click', 'contextmenu', 'keydown', 'keyup'].forEach(evt => {
             this.ui.addEventListener(evt, (e) => e.stopPropagation());
+        });
+
+        // Create Keypad UI
+        this.keypadUI = document.createElement('div');
+        this.keypadUI.style.cssText = `
+            position: fixed;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 10, 0, 0.95);
+            border: 2px solid #00ff00;
+            padding: 30px;
+            color: #00ff00;
+            font-family: 'Press Start 2P', monospace;
+            z-index: 10001;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            box-shadow: 0 0 30px rgba(0, 255, 0, 0.3);
+            text-transform: lowercase;
+        `;
+        document.body.appendChild(this.keypadUI);
+
+        // Prevent events passing through keypad
+        ['mousedown', 'mouseup', 'click', 'contextmenu', 'keydown', 'keyup'].forEach(evt => {
+            this.keypadUI.addEventListener(evt, (e) => e.stopPropagation());
         });
 
         // Global Click Listener for Placement
@@ -276,14 +291,85 @@ export class DevTools {
     }
 
     toggle() {
-        this.active = !this.active;
-        this.ui.style.display = this.active ? 'block' : 'none';
+        if (this.active) {
+            this.active = false;
+            this.ui.style.display = 'none';
+        } else {
+            this.showKeypad();
+        }
 
         // Cancel placement if closing
-        if (!this.active) {
+        if (!this.active && !this.keypadActive) {
             this.placementMode = false;
             this.pendingSpawnAction = null;
             document.body.style.cursor = 'default';
+        }
+    }
+
+    showKeypad() {
+        if (this.keypadActive) return;
+        this.keypadActive = true;
+        this.keypadEntry = "";
+        this.renderKeypad();
+    }
+
+    hideKeypad() {
+        this.keypadActive = false;
+        this.keypadUI.style.display = 'none';
+    }
+
+    renderKeypad() {
+        this.keypadUI.style.display = 'flex';
+        this.keypadUI.innerHTML = `
+            <div style="margin-bottom: 20px; font-size: 14px; color: #00ff00;">terminal access locked</div>
+            <div style="background: #002200; border: 1px solid #00ff00; padding: 15px; width: 200px; text-align: center; font-size: 24px; margin-bottom: 25px; min-height: 24px;">
+                ${this.keypadEntry.split('').map(() => '*').join('')}${'_'.repeat(4 - this.keypadEntry.length)}
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+                ${['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', 'X'].map(key => `
+                    <button class="keypad-btn" style="
+                        background: rgba(0, 50, 0, 0.5);
+                        border: 1px solid #00ff00;
+                        color: #00ff00;
+                        padding: 15px;
+                        font-family: 'Press Start 2P';
+                        font-size: 14px;
+                        cursor: pointer;
+                        width: 60px;
+                        text-align: center;
+                    " onclick="window.game.devTools.handleKeypadInput('${key}')">${key}</button>
+                `).join('')}
+            </div>
+            <button style="margin-top: 30px; background: none; border: none; color: #888; font-family: 'Press Start 2P'; font-size: 8px; cursor: pointer;" onclick="window.game.devTools.hideKeypad()">[abort_connection]</button>
+        `;
+
+        // Tool injection for the global window.game ref
+        if (!window.game) window.game = this.game;
+    }
+
+    handleKeypadInput(key) {
+        if (key === 'C') {
+            this.keypadEntry = "";
+        } else if (key === 'X') {
+            this.hideKeypad();
+            return;
+        } else if (this.keypadEntry.length < 4) {
+            this.keypadEntry += key;
+        }
+
+        this.renderKeypad();
+
+        if (this.keypadEntry.length === 4) {
+            if (this.keypadEntry === this.correctCode) {
+                this.game.showNotification("access granted", "#00ff00");
+                this.hideKeypad();
+                this.active = true;
+                this.ui.style.display = 'block';
+            } else {
+                this.game.showNotification("access denied", "#ff0000");
+                this.keypadEntry = "";
+                setTimeout(() => this.renderKeypad(), 300);
+            }
         }
     }
 

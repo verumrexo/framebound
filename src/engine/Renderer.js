@@ -7,9 +7,8 @@ export class Renderer {
         this.smoothingEnabled = false;
         this.pixelatedCSS = true;
         this.resolutionScale = 1.0; // 0.25 to 1.0
-        this.crtEffect = false;
-        this.ditherEffect = false;
-        this.chromaticAberration = false;
+        this.pixelSize = 1; // Default back to 1 per user request
+        this.needsResize = false;
 
         // Offscreen buffer for resolution scaling
         this.offscreenCanvas = document.createElement('canvas');
@@ -59,53 +58,11 @@ export class Renderer {
 
     setResolutionScale(scale) {
         this.resolutionScale = Math.max(0.1, Math.min(1.0, scale));
-        this.resize();
+        this.needsResize = true; // Defer resize to next frame to avoid breaking current draw
     }
 
-    setCRTEffect(enabled) {
-        this.crtEffect = enabled;
-        const scanlines = document.getElementById('scanlines');
-        const crtOverlay = document.getElementById('crt-overlay');
-
-        if (enabled) {
-            // Enable scanlines
-            if (scanlines) scanlines.style.display = 'block';
-
-            // Create CRT overlay if it doesn't exist
-            if (!crtOverlay) {
-                const overlay = document.createElement('div');
-                overlay.id = 'crt-overlay';
-                overlay.style.cssText = `
-                    position: fixed;
-                    top: 0; left: 0; right: 0; bottom: 0;
-                    pointer-events: none;
-                    z-index: 9998;
-                    background: radial-gradient(ellipse at center, transparent 0%, rgba(0,0,0,0.3) 100%);
-                    mix-blend-mode: multiply;
-                `;
-                document.body.appendChild(overlay);
-            } else {
-                crtOverlay.style.display = 'block';
-            }
-
-            // Add slight barrel distortion via CSS
-            this.canvas.style.transform = 'perspective(1000px) rotateX(1deg)';
-            this.canvas.style.borderRadius = '8px';
-        } else {
-            if (crtOverlay) crtOverlay.style.display = 'none';
-            this.canvas.style.transform = 'none';
-            this.canvas.style.borderRadius = '0';
-        }
-    }
-
-    setChromaticAberration(enabled) {
-        this.chromaticAberration = enabled;
-        // Applied during render if enabled
-    }
-
-    setDitherEffect(enabled) {
-        this.ditherEffect = enabled;
-        // Applied during render if enabled
+    setPixelSize(size) {
+        this.pixelSize = Math.max(1, Math.min(16, Math.floor(size)));
     }
 
     // Get the active drawing context (offscreen if scaling, main otherwise)
@@ -126,6 +83,11 @@ export class Renderer {
     }
 
     clear(color = '#000') {
+        if (this.needsResize) {
+            this.resize();
+            this.needsResize = false;
+        }
+
         if (this.resolutionScale < 1.0) {
             // Clear offscreen
             this.offscreenCtx.setTransform(1, 0, 0, 1, 0, 0);
@@ -150,51 +112,25 @@ export class Renderer {
             );
         }
 
-        // Apply dither effect (simple posterization)
-        if (this.ditherEffect) {
-            this.applyDither();
-        }
-
-        // Apply chromatic aberration
-        if (this.chromaticAberration) {
-            this.applyChromaticAberration();
+        // Apply mosaic pixelation effect
+        if (this.pixelSize > 1) {
+            this.applyMosaic();
         }
     }
 
-    applyDither() {
-        const imageData = this.ctx.getImageData(0, 0, this.width, this.height);
-        const data = imageData.data;
-        const levels = 8; // Color levels per channel (lower = more retro)
-        const factor = 255 / (levels - 1);
+    applyMosaic() {
+        const sw = Math.ceil(this.width / this.pixelSize);
+        const sh = Math.ceil(this.height / this.pixelSize);
 
-        for (let i = 0; i < data.length; i += 4) {
-            data[i] = Math.round(data[i] / factor) * factor;     // R
-            data[i + 1] = Math.round(data[i + 1] / factor) * factor; // G
-            data[i + 2] = Math.round(data[i + 2] / factor) * factor; // B
-        }
+        // Draw smaller version to offscreen then scale back (Nearest Neighbor)
+        this.offscreenCanvas.width = sw;
+        this.offscreenCanvas.height = sh;
+        this.offscreenCtx.imageSmoothingEnabled = false;
+        this.offscreenCtx.drawImage(this.canvas, 0, 0, this.width, this.height, 0, 0, sw, sh);
 
-        this.ctx.putImageData(imageData, 0, 0);
-    }
-
-    applyChromaticAberration() {
-        // Simple RGB offset effect
-        const offset = 2;
-        const imageData = this.ctx.getImageData(0, 0, this.width, this.height);
-        const data = imageData.data;
-        const copy = new Uint8ClampedArray(data);
-
-        for (let y = 0; y < this.height; y++) {
-            for (let x = offset; x < this.width - offset; x++) {
-                const i = (y * this.width + x) * 4;
-                const iLeft = (y * this.width + (x - offset)) * 4;
-                const iRight = (y * this.width + (x + offset)) * 4;
-
-                data[i] = copy[iLeft];       // R from left
-                data[i + 2] = copy[iRight + 2]; // B from right
-            }
-        }
-
-        this.ctx.putImageData(imageData, 0, 0);
+        this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+        this.ctx.imageSmoothingEnabled = false;
+        this.ctx.drawImage(this.offscreenCanvas, 0, 0, sw, sh, 0, 0, this.width, this.height);
     }
 
     withCamera(camera, drawOperation) {

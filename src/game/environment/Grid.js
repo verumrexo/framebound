@@ -1,11 +1,11 @@
 export class Grid {
     constructor(cellSize = 100) {
         this.cellSize = cellSize;
-        this.color = 'rgba(255, 255, 255, 0.05)'; // Very dim white
     }
 
-    draw(renderer, camera) {
-        const ctx = renderer.ctx;
+    draw(renderer, camera, alpha = 0.05) {
+        const ctx = renderer.getDrawContext();
+        this.color = `rgba(0, 255, 255, ${alpha})`;
         // Visible world range depends on zoom
         const zoom = camera.zoom || 1;
         const worldW = renderer.width / zoom;

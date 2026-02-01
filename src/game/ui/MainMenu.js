@@ -2,6 +2,7 @@
 import { HighScoreManager } from '../systems/HighScoreManager.js';
 import { SaveManager } from '../systems/SaveManager.js';
 import { CHANGELOG } from '../../version.js';
+import { Settings } from '../systems/Settings.js';
 
 export class MainMenu {
     constructor(game) {
@@ -161,167 +162,7 @@ export class MainMenu {
 
     renderSettings() {
         if (!this.overlay) return;
-
-        const masterVol = Math.round(this.game.audio.masterGain.gain.value * 100);
-        const musicVol = Math.round(this.game.audio.musicGain.gain.value * 100);
-        const sfxVol = Math.round(this.game.audio.sfxGain.gain.value * 100);
-
-        this.overlay.innerHTML = `
-            <h2 style="color: #00ffff; margin-bottom: 40px; font-size: 32px; text-shadow: 0 0 10px #00ffff;">settings</h2>
-            
-            <div style="width: 400px; display: flex; flex-direction: column; gap: 30px;">
-                <!-- Master Volume -->
-                <div>
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 10px; color: white; font-size: 16px;">
-                        <span>master volume</span>
-                        <span id="val-master">${masterVol}%</span>
-                    </div>
-                    <div class="slider-container">
-                        <div class="slider-track"></div>
-                        <div class="slider-fill" id="fill-master" style="width: ${masterVol}%"></div>
-                        <div class="slider-thumb" id="thumb-master" style="left: ${masterVol}%"></div>
-                        <input type="range" id="rng-master" min="0" max="100" value="${masterVol}" class="slider-input">
-                    </div>
-                </div>
-
-                <!-- Music Volume -->
-                <div>
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 10px; color: white; font-size: 16px;">
-                        <span>music</span>
-                        <span id="val-music">${musicVol}%</span>
-                    </div>
-                    <div class="slider-container">
-                        <div class="slider-track"></div>
-                        <div class="slider-fill" id="fill-music" style="width: ${musicVol}%"></div>
-                        <div class="slider-thumb" id="thumb-music" style="left: ${musicVol}%"></div>
-                        <input type="range" id="rng-music" min="0" max="100" value="${musicVol}" class="slider-input">
-                    </div>
-                </div>
-
-                <!-- SFX Volume -->
-                <div>
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 10px; color: white; font-size: 16px;">
-                        <span>sfx</span>
-                        <span id="val-sfx">${sfxVol}%</span>
-                    </div>
-                    <div class="slider-container">
-                        <div class="slider-track"></div>
-                        <div class="slider-fill" id="fill-sfx" style="width: ${sfxVol}%"></div>
-                        <div class="slider-thumb" id="thumb-sfx" style="left: ${sfxVol}%"></div>
-                        <input type="range" id="rng-sfx" min="0" max="100" value="${sfxVol}" class="slider-input">
-                    </div>
-                </div>
-            </div>
-
-            <button id="btn-back" class="menu-btn" style="background: rgba(0, 40, 60, 0.6); color: #00ffff; border: 2px solid rgba(0, 255, 255, 0.4); width: 200px; margin-top: 40px; font-family: 'Press Start 2P', cursive; font-size: 16px;">back</button>
-
-            <style>
-                #btn-back:hover {
-                    background: rgba(0, 255, 255, 0.2) !important;
-                    border-color: #00ffff !important;
-                    color: #ffffff !important;
-                }
-                .slider-container {
-                    position: relative;
-                    width: 100%;
-                    height: 20px;
-                    display: flex;
-                    align-items: center;
-                }
-                .slider-track {
-                    position: absolute;
-                    width: 100%;
-                    height: 8px;
-                    background: #333;
-                    border-radius: 0;
-                }
-                .slider-fill {
-                    position: absolute;
-                    height: 8px;
-                    background: #00ffff;
-                    border-radius: 0;
-                }
-                .slider-thumb {
-                    position: absolute;
-                    width: 6px;
-                    height: 16px;
-                    background: #ffffff;
-                    border-radius: 0;
-                    margin-left: -3px; /* Center thumb (half of width) */
-                    pointer-events: none;
-                }
-                .slider-input {
-                    position: absolute;
-                    width: 100%;
-                    height: 100%;
-                    opacity: 0;
-                    cursor: pointer;
-                    margin: 0;
-                    z-index: 2;
-                }
-            </style>
-        `;
-
-        // Animation Loop for Smooth Visuals
-        const updateVisuals = () => {
-            if (!document.getElementById('rng-master')) return; // Exit if menu closed
-
-            const mVol = this.game.audio.masterGain.gain.value * 100;
-            const muVol = this.game.audio.musicGain.gain.value * 100;
-            const sVol = this.game.audio.sfxGain.gain.value * 100;
-
-            document.getElementById('fill-master').style.width = `${mVol}%`;
-            document.getElementById('thumb-master').style.left = `${mVol}%`;
-            document.getElementById('val-master').innerText = Math.round(mVol) + '%';
-
-            document.getElementById('fill-music').style.width = `${muVol}%`;
-            document.getElementById('thumb-music').style.left = `${muVol}%`;
-            document.getElementById('val-music').innerText = Math.round(muVol) + '%';
-
-            document.getElementById('fill-sfx').style.width = `${sVol}%`;
-            document.getElementById('thumb-sfx').style.left = `${sVol}%`;
-            document.getElementById('val-sfx').innerText = Math.round(sVol) + '%';
-
-            requestAnimationFrame(updateVisuals);
-        };
-
-        // Attach Listeners
-        setTimeout(() => {
-            const rngMaster = document.getElementById('rng-master');
-            const rngMusic = document.getElementById('rng-music');
-            const rngSfx = document.getElementById('rng-sfx');
-            const btnBack = document.getElementById('btn-back');
-
-            const stopProp = (e) => e.stopPropagation();
-
-            [rngMaster, rngMusic, rngSfx].forEach(rng => {
-                rng.addEventListener('mousedown', stopProp);
-                rng.addEventListener('touchstart', stopProp);
-                rng.addEventListener('click', stopProp);
-            });
-
-            // Start animation loop
-            requestAnimationFrame(updateVisuals);
-
-            rngMaster.oninput = (e) => {
-                const v = parseInt(e.target.value);
-                this.game.audio.setMasterVolume(v / 100);
-            };
-
-            rngMusic.oninput = (e) => {
-                const v = parseInt(e.target.value);
-                this.game.audio.setMusicVolume(v / 100);
-            };
-
-            rngSfx.oninput = (e) => {
-                const v = parseInt(e.target.value);
-                this.game.audio.setSfxVolume(v / 100);
-            };
-
-            btnBack.onclick = () => {
-                this.renderMenu();
-            };
-        }, 0);
+        this.game.gameSettings.render(this.overlay, () => this.renderMenu());
     }
 
 
@@ -345,11 +186,11 @@ export class MainMenu {
         changes.forEach(c => {
             html += `
                 <div style="margin-bottom: 30px;">
-                    <div style="display: flex; justify-content: space-between; color: #00ffff; margin-bottom: 10px; border-bottom: 1px solid #333;">
-                        <span>${c.ver}</span>
-                        <span>${c.date}</span>
+                    <div style="display: flex; justify-content: space-between; color: #00ffff; margin-bottom: 10px; border-bottom: 1px solid #333; align-items: baseline;">
+                        <span style="font-size: 16px;">${c.ver}${c.name ? ' // ' + c.name : ''}</span>
+                        <span style="font-size: 10px; color: #666;">${c.date}</span>
                     </div>
-                    <ul style="color: #aaa; list-style-type: square; padding-left: 20px;">
+                    <ul style="color: #aaa; list-style-type: square; padding-left: 20px; font-size: 12px; line-height: 1.4;">
                         ${c.items.map(i => `<li style="margin-bottom: 5px;">${i}</li>`).join('')}
                     </ul>
                 </div>
