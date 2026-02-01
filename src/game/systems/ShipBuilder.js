@@ -525,21 +525,19 @@ export class ShipBuilder {
                 const drawX = (partRef.x + (w - 1) / 2) * CELL_STRIDE;
                 const drawY = (partRef.y + (h - 1) / 2) * CELL_STRIDE;
 
-                if (def.type === 'weapon') {
-                    if (def.baseSprite) {
-                        def.baseSprite.draw(renderer.ctx, drawX, drawY, (partRef.rotation || 0) * (Math.PI / 2));
-                    } else if ((w === 1 && h === 2) || (w === 2 && h === 1)) {
-                        Assets.LongHull.draw(renderer.ctx, drawX, drawY, (partRef.rotation || 0) * (Math.PI / 2));
-                    } else {
-                        Assets.PlayerBase.draw(renderer.ctx, drawX, drawY, 0);
-                    }
+                if (def.baseSprite) {
+                    def.baseSprite.draw(renderer.ctx, drawX, drawY, (partRef.rotation || 0) * (Math.PI / 2), 0.5, 0.5);
+                } else if ((w === 1 && h === 2) || (w === 2 && h === 1)) {
+                    Assets.LongHull.draw(renderer.ctx, drawX, drawY, (partRef.rotation || 0) * (Math.PI / 2), 0.5, 0.5);
+                } else {
+                    Assets.PlayerBase.draw(renderer.ctx, drawX, drawY, 0, 0.5, 0.5);
                 }
 
                 const angle = (partRef.rotation || 0) * (Math.PI / 2);
                 const offset = def.turretDrawOffset || 0;
                 const turretX = drawX + Math.cos(angle) * offset;
                 const turretY = drawY + Math.sin(angle) * offset;
-                def.sprite.draw(renderer.ctx, turretX, turretY, angle + (def.rotationOffset || 0));
+                def.sprite.draw(renderer.ctx, turretX, turretY, angle + (def.rotationOffset || 0), null, null);
             }
         }
 
@@ -570,17 +568,17 @@ export class ShipBuilder {
 
             if (partDef.type === 'weapon') {
                 if (partDef.baseSprite) {
-                    partDef.baseSprite.draw(renderer.ctx, ghostX, ghostY, this.rotation * (Math.PI / 2));
+                    partDef.baseSprite.draw(renderer.ctx, ghostX, ghostY, this.rotation * (Math.PI / 2), 0.5, 0.5);
                 } else if ((w === 1 && h === 2) || (w === 2 && h === 1)) {
-                    Assets.LongHull.draw(renderer.ctx, ghostX, ghostY, this.rotation * (Math.PI / 2));
+                    Assets.LongHull.draw(renderer.ctx, ghostX, ghostY, this.rotation * (Math.PI / 2), 0.5, 0.5);
                 } else {
-                    Assets.PlayerBase.draw(renderer.ctx, ghostX, ghostY, 0);
+                    Assets.PlayerBase.draw(renderer.ctx, ghostX, ghostY, 0, 0.5, 0.5);
                 }
             }
 
             const angle = this.rotation * (Math.PI / 2);
             const offset = partDef.turretDrawOffset || 0;
-            partDef.sprite.draw(renderer.ctx, ghostX + Math.cos(angle) * offset, ghostY + Math.sin(angle) * offset, angle + (partDef.rotationOffset || 0));
+            partDef.sprite.draw(renderer.ctx, ghostX + Math.cos(angle) * offset, ghostY + Math.sin(angle) * offset, angle + (partDef.rotationOffset || 0), null, null);
 
             if (!isValid) {
                 const halfW = (w * CELL_STRIDE) / 2;

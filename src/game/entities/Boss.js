@@ -24,6 +24,9 @@ export class Boss {
         // HP
         this.hp = this.stats.totalHp * 2; // Bosses have 2x HP of their parts sum
         this.maxHp = this.hp;
+        this.freezeMeter = 0;
+        this.frozenTimer = 0;
+        this.lastFreezeTick = 0;
 
         this.radius = Math.sqrt(this.parts.size) * TILE_SIZE; // Approximate collision radius
     }
@@ -136,6 +139,17 @@ export class Boss {
     update(dt, playerX, playerY, projectiles) {
         if (this.isDead) return;
 
+        // Frozen Logic
+        if (this.frozenTimer > 0) {
+            this.frozenTimer -= dt;
+            return;
+        }
+
+        if (this.freezeMeter > 0) {
+            this.freezeMeter -= dt * 0.4; // Bosses shake off the cold slightly faster
+            if (this.freezeMeter < 0) this.freezeMeter = 0;
+        }
+
         // Visual wobble
         this.angle = Math.sin(Date.now() * 0.001) * 0.1;
 
@@ -210,8 +224,23 @@ export class Boss {
         }
     }
 
-    takeDamage(amount) {
+    takeDamage(amount, sourceProjectileType = null) {
         this.hp -= amount;
+
+        if (sourceProjectileType === 'beam_freeze') {
+            const now = Date.now();
+            if (this.lastFreezeTick > 0) {
+                const elapsed = Math.min(now - this.lastFreezeTick, 200);
+                this.freezeMeter += (elapsed / 714);
+            }
+            this.lastFreezeTick = now;
+
+            if (this.freezeMeter >= 3.0) {
+                this.frozenTimer = 1.5; // Boss stays frozen for short time
+                this.freezeMeter = 0;
+            }
+        }
+
         if (this.hp <= 0) {
             this.hp = 0;
             this.isDead = true;
@@ -231,6 +260,14 @@ export class Boss {
         const cos = Math.cos(this.angle);
         const sin = Math.sin(this.angle);
 
+        if (this.frozenTimer > 0 || this.freezeMeter > 0) {
+            const intensity = this.frozenTimer > 0 ? 1.0 : (this.freezeMeter / 3.0);
+            ctx.save();
+            ctx.globalAlpha = 0.5 + intensity * 0.3;
+            ctx.shadowBlur = 10 + intensity * 20;
+            ctx.shadowColor = '#00ffff';
+        }
+
         for (const part of uniqueParts) {
             const def = PartsLibrary[part.partId];
 
@@ -243,20 +280,51 @@ export class Boss {
             const wy = this.y + (rx * sin + ry * cos);
 
             // Draw Base
+            const tint = (this.frozenTimer > 0) ? '#00ffff' : '#cc0000';
             if (def.type === 'weapon') {
                 if (def.baseSprite) {
-                    def.baseSprite.draw(ctx, wx, wy, this.angle, 0.5, 0.5, null, '#cc0000');
+                    def.baseSprite.draw(ctx, wx, wy, this.angle, 0.5, 0.5, null, tint);
                 } else if ((def.width === 1 && def.height === 2) || (def.width === 2 && def.height === 1)) {
                     // Placeholder
                 }
 
+                // Turret Position Calculation (with vector offset)
+                let tx = wx;
+                let ty = wy;
+
+                // Base rotation of the part relative to ship/boss
+                const partRotation = 0; // Bosses have static part rotations for now?
+                // Actually they don't have rotation data in this simplified loop logic yet, 
+                // but if they did, we'd add it here.
+
+                // Mount angle = Boss Angle (since parts are static on boss? or aimed?)
+                // Assuming parts are static relative to boss body:
+                const mountAngle = this.angle;
+
+                if (def.turretDrawOffset) {
+                    let offsetX = 0;
+                    let offsetY = 0;
+                    if (typeof def.turretDrawOffset === 'object') {
+                        const ox = def.turretDrawOffset.x || 0;
+                        const oy = def.turretDrawOffset.y || 0;
+                        offsetX = Math.cos(mountAngle) * ox - Math.sin(mountAngle) * oy;
+                        offsetY = Math.sin(mountAngle) * ox + Math.cos(mountAngle) * oy;
+                    } else {
+                        // Scalar offset along mount angle (forward)
+                        offsetX = Math.cos(mountAngle) * def.turretDrawOffset;
+                        offsetY = Math.sin(mountAngle) * def.turretDrawOffset;
+                    }
+                    tx += offsetX;
+                    ty += offsetY;
+                }
+
                 const aimAngle = part.aimAngle || this.angle;
                 if (def.sprite) {
-                    def.sprite.draw(ctx, wx, wy, aimAngle, 0.5, 0.5, null, '#ff0033');
+                    def.sprite.draw(ctx, tx, ty, aimAngle, null, null, null, (this.frozenTimer > 0) ? '#00ffff' : '#ff0033');
                 }
             } else {
                 if (def.sprite) {
-                    def.sprite.draw(ctx, wx, wy, this.angle, 0.5, 0.5, null, '#cc0000');
+                    def.sprite.draw(ctx, wx, wy, this.angle, 0.5, 0.5, null, tint);
                 }
             }
         }
@@ -269,5 +337,8 @@ export class Boss {
         ctx.fillRect(this.x - barW / 2, this.y - 60, barW, barH);
         ctx.fillStyle = '#ff00ff'; // Boss Purple
         ctx.fillRect(this.x - barW / 2, this.y - 60, barW * hpPct, barH);
+        if (this.frozenTimer > 0 || this.freezeMeter > 0) {
+            ctx.restore();
+        }
     }
 }

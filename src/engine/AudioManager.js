@@ -17,6 +17,19 @@ export class AudioManager {
         this.sfxGain = this.context.createGain();
         this.sfxGain.connect(this.masterGain);
         this.sfxGain.gain.value = 1.0;
+
+        // Load saved settings
+        this.loadSettings();
+    }
+
+    loadSettings() {
+        const savedMaster = localStorage.getItem('settings_volume_master');
+        const savedMusic = localStorage.getItem('settings_volume_music');
+        const savedSfx = localStorage.getItem('settings_volume_sfx');
+
+        if (savedMaster !== null) this.masterGain.gain.value = parseFloat(savedMaster);
+        if (savedMusic !== null) this.musicGain.gain.value = parseFloat(savedMusic);
+        if (savedSfx !== null) this.sfxGain.gain.value = parseFloat(savedSfx);
     }
 
     async load(name, url) {
@@ -99,15 +112,18 @@ export class AudioManager {
         // Clamp between 0 and 1
         const v = Math.max(0, Math.min(1, value));
         this.masterGain.gain.setTargetAtTime(v, this.context.currentTime, 0.1);
+        localStorage.setItem('settings_volume_master', v);
     }
 
     setMusicVolume(value) {
         const v = Math.max(0, Math.min(1, value));
         this.musicGain.gain.setTargetAtTime(v, this.context.currentTime, 0.1);
+        localStorage.setItem('settings_volume_music', v);
     }
 
     setSfxVolume(value) {
         const v = Math.max(0, Math.min(1, value));
         this.sfxGain.gain.setTargetAtTime(v, this.context.currentTime, 0.1);
+        localStorage.setItem('settings_volume_sfx', v);
     }
 }

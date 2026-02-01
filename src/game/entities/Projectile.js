@@ -6,32 +6,32 @@ export class Projectile {
         this.owner = owner;
         this.damage = damage;
 
-        const projSpeed = type === 'laser' ? 1500 : (type === 'small_laser' ? 1800 : (type === 'railgun' || type === 'saber' ? 0 : (type === 'pellet' ? 700 + Math.random() * 200 : speed)));
+        const projSpeed = type === 'laser' ? 1500 : (type === 'small_laser' ? 1800 : (type === 'railgun' || type === 'saber' || type === 'beam_freeze' ? 0 : (type === 'pellet' ? 700 + Math.random() * 200 : (type === 'cluster_grenade' ? 350 : speed))));
         this.vx = Math.cos(angle) * projSpeed;
         this.vy = Math.sin(angle) * projSpeed;
         this.angle = angle;
 
         this.radius = (type === 'laser' || type === 'small_laser' || type === 'pellet') ? 2 : (type === 'mini_bullet' ? 1.5 : (type === 'railgun' ? 6 : (type === 'saber' ? 3 : 4)));
-        this.life = lifetime !== null ? lifetime : ((type === 'railgun') ? 2.4 : ((type === 'saber') ? 1.6 : 60.0));
+        this.life = lifetime !== null ? lifetime : ((type === 'railgun') ? 2.4 : ((type === 'saber') ? 1.6 : (type === 'beam_freeze') ? 0.1 : (type === 'rocket' || type === 'guided_rocket') ? 3.0 : (type === 'cluster_grenade') ? 1.8 : (type === 'mini_grenade') ? 1.0 : 60.0));
         this.maxLife = this.life;
         this.railStayTime = (type === 'railgun') ? 1.1 : ((type === 'saber') ? 0.6 : 0);
         this.isDead = false;
         this.delay = 0;
 
         // Beam properties
-        if (this.type === 'railgun' || this.type === 'saber') {
+        if (this.type === 'railgun' || this.type === 'saber' || this.type === 'beam_freeze') {
             this.isBeam = true;
-            this.beamLength = 3000;
+            this.beamLength = (this.type === 'saber') ? 120 : ((this.type === 'beam_freeze') ? 600 : 3000); // Shorter for Saber/Freeze
             this.targetHits = new Map(); // Track target -> lastHitTime for multi-hit beams
         }
 
         // Custom variables for erratic movement
-        if (this.type === 'rocket' || this.type === 'guided_rocket' || this.type === 'ggbm') {
+        if (this.type === 'rocket' || this.type === 'guided_rocket' || this.type === 'ggbm' || this.type === 'cluster_grenade') {
             this.wavyTime = Math.random() * 100;
             this.wavySpeed = 4 + Math.random() * 2;
-            this.wavyAmp = this.type === 'rocket' ? (0.2 + Math.random() * 0.15) : 0.08; // Guided is less wobbly
+            this.wavyAmp = this.type === 'rocket' ? (0.2 + Math.random() * 0.15) : (this.type === 'cluster_grenade' ? 0.15 : 0.08);
             this.baseAngle = angle;
-            this.speed = projSpeed * (this.type === 'ggbm' ? 0.7 : 1.0); // GGBM is slower
+            this.speed = projSpeed * (this.type === 'ggbm' ? 0.7 : (this.type === 'cluster_grenade' ? 0.6 : 1.0));
             // Add a permanent random "drift" to each rocket's base trajectory
             this.driftDirection = (Math.random() - 0.5) * 0.4; // Radians per second drift
             this.secondaryWavySpeed = 6 + Math.random() * 4;
@@ -39,6 +39,12 @@ export class Projectile {
 
             if (this.type === 'guided_rocket' || this.type === 'ggbm') {
                 this.homingStrength = this.type === 'ggbm' ? 4.0 : 2.5; // Turn rate in rad/s
+            }
+
+            // Cluster grenade spin
+            if (this.type === 'cluster_grenade') {
+                this.spinAngle = 0;
+                this.clusterCount = 6; // Number of child grenades
             }
         }
     }
@@ -49,7 +55,7 @@ export class Projectile {
             return;
         }
 
-        if (this.type === 'rocket' || this.type === 'guided_rocket' || this.type === 'ggbm') {
+        if (this.type === 'rocket' || this.type === 'guided_rocket' || this.type === 'ggbm' || this.type === 'cluster_grenade') {
             if ((this.type === 'guided_rocket' || this.type === 'ggbm') && game && this.owner === 'player') {
                 // Find nearest enemy or boss
                 let nearest = null;
@@ -100,9 +106,15 @@ export class Projectile {
         this.x += this.vx * dt;
         this.y += this.vy * dt;
         this.life -= dt;
+
+        // Spin for cluster grenades
+        if (this.type === 'cluster_grenade') {
+            this.spinAngle += dt * 10; // Spin fast
+        }
+
         if (this.life <= 0) {
             this.isDead = true;
-            if (this.type === 'rocket') this.shouldExplode = true;
+            if (this.type === 'rocket' || this.type === 'cluster_grenade' || this.type === 'mini_grenade') this.shouldExplode = true;
         }
     }
 
@@ -110,40 +122,51 @@ export class Projectile {
         if (this.delay > 0) return;
         const color = this.owner === 'enemy' ? '#ff4444' : '#26d426';
 
-        if (this.type === 'laser' || this.type === 'small_laser' || this.type === 'railgun' || this.type === 'saber') {
+        if (this.type === 'laser' || this.type === 'small_laser' || this.type === 'railgun' || this.type === 'saber' || this.type === 'beam_freeze') {
             // Long thin beam
             renderer.ctx.save();
             renderer.ctx.translate(this.x, this.y);
             renderer.ctx.rotate(this.angle);
 
-            if (this.type === 'railgun' || this.type === 'saber') {
+            if (this.type === 'railgun' || this.type === 'saber' || this.type === 'beam_freeze') {
                 // Thicker, brighter white/cyan beam for railgun (thinner for saber)
                 let lifePct = 1.0;
                 let sizeScale = 1.0;
-                const elapsed = this.maxLife - this.life;
 
-                if (elapsed < this.railStayTime) {
-                    // Growth / Jitter phase
-                    const growPct = Math.min(1.0, elapsed / 0.2);
-                    sizeScale = growPct * (1.0 + Math.random() * 0.2); // Jitter
-                    renderer.ctx.globalAlpha = 0.8 + Math.random() * 0.2; // Flicker
+                // Continuous beam (Freeze Ray)
+                if (this.type === 'beam_freeze') {
+                    // Constant heavy beam if active
+                    sizeScale = 1.0 + Math.random() * 0.1; // Slight flicker
+                    renderer.ctx.globalAlpha = 0.7 + Math.random() * 0.3;
                 } else {
-                    // Non-linear fade
-                    const fadeTime = this.maxLife - this.railStayTime;
-                    const fadeElapsed = elapsed - this.railStayTime;
-                    const normalized = 1.0 - (fadeElapsed / fadeTime); // 1.0 to 0.0
-                    lifePct = Math.pow(Math.max(0, normalized), 0.4);
+                    // Pulse beam (Railgun/Saber)
+                    const elapsed = this.maxLife - this.life;
 
-                    if (lifePct < 0.01) lifePct = 0;
-                    sizeScale = lifePct;
-                    renderer.ctx.globalAlpha = lifePct;
+                    if (elapsed < this.railStayTime) {
+                        // Growth / Jitter phase
+                        const growPct = Math.min(1.0, elapsed / 0.2);
+                        sizeScale = growPct * (1.0 + Math.random() * 0.2); // Jitter
+                        renderer.ctx.globalAlpha = 0.8 + Math.random() * 0.2; // Flicker
+                    } else {
+                        // Non-linear fade
+                        const fadeTime = this.maxLife - this.railStayTime;
+                        const fadeElapsed = elapsed - this.railStayTime;
+                        const normalized = 1.0 - (fadeElapsed / fadeTime); // 1.0 to 0.0
+                        lifePct = Math.pow(Math.max(0, normalized), 0.4);
+
+                        if (lifePct < 0.01) lifePct = 0;
+                        sizeScale = lifePct;
+                        renderer.ctx.globalAlpha = lifePct;
+                    }
                 }
 
                 const isSaber = this.type === 'saber';
-                const mainColor = isSaber ? '#88ffff' : '#00ffff';
+                const isFreeze = this.type === 'beam_freeze';
+
+                const mainColor = isSaber ? '#88ffff' : (isFreeze ? '#00ccff' : '#00ffff');
                 const coreColor = '#ffffff';
-                const glowWidth = (isSaber ? 4 : 12) * sizeScale;
-                const coreWidth = (isSaber ? 1.5 : 4) * sizeScale;
+                const glowWidth = (isSaber ? 4 : (isFreeze ? 10 : 12)) * sizeScale;
+                const coreWidth = (isSaber ? 1.5 : (isFreeze ? 3 : 4)) * sizeScale;
 
                 renderer.drawRect(0, -glowWidth / 2, this.beamLength, glowWidth, mainColor);
                 renderer.drawRect(0, -coreWidth / 2, this.beamLength, coreWidth, coreColor);
@@ -182,6 +205,31 @@ export class Projectile {
             // Thrust
             const flameSize = 6 + Math.sin(Date.now() * 0.1) * 3;
             renderer.drawRect(-14, -3, flameSize, 6, '#ff00ff');
+
+            renderer.ctx.restore();
+        } else if (this.type === 'mini_grenade') {
+            // Mini Grenade Visual - small spinning pellet
+            renderer.ctx.save();
+            renderer.ctx.translate(this.x, this.y);
+            renderer.ctx.rotate(Date.now() * 0.015); // Fast spin based on time
+
+            const color = this.owner === 'enemy' ? '#ff4444' : '#44ff44';
+            renderer.drawRect(-4, -4, 8, 8, color);
+            renderer.drawRect(-2, -2, 4, 4, '#ffffff');
+
+            renderer.ctx.restore();
+        } else if (this.type === 'cluster_grenade') {
+            // Cluster Grenade Visual - spinning canister
+            renderer.ctx.save();
+            renderer.ctx.translate(this.x, this.y);
+            renderer.ctx.rotate(this.spinAngle || 0);
+
+            const color = this.owner === 'enemy' ? '#ff4444' : '#26d426';
+            // Main body (hexagonal-ish)
+            renderer.drawRect(-8, -6, 16, 12, color);
+            renderer.drawRect(-6, -8, 12, 16, color);
+            // Inner core
+            renderer.drawRect(-4, -4, 8, 8, '#ffffff');
 
             renderer.ctx.restore();
         } else {

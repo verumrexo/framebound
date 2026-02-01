@@ -1,10 +1,12 @@
 export class Sprite {
-    constructor(data, width, height, scale = 1, colorMap = { 1: '#4fec4f', 2: '#333' }) {
+    constructor(data, width, height, scale = 1, colorMap = { 1: '#4fec4f', 2: '#333' }, anchorX = 0.5, anchorY = 0.5) {
         this.data = data;
         this.width = width;
         this.height = height;
         this.scale = scale;
         this.colorMap = colorMap;
+        this.anchorX = anchorX;
+        this.anchorY = anchorY;
 
         this.ctx = document.createElement('canvas').getContext('2d');
         this.ctx.canvas.width = width * scale;
@@ -66,15 +68,18 @@ export class Sprite {
     update(newData) {
         this.generate(newData);
     }
-    draw(ctx, x, y, rotation = 0, anchorX = 0.5, anchorY = 0.5, strokeStyle = null, overrideColor = null) {
+    draw(ctx, x, y, rotation = 0, anchorX = null, anchorY = null, strokeStyle = null, overrideColor = null) {
         ctx.save();
         ctx.translate(x, y);
         ctx.rotate(rotation);
 
+        const ax = (anchorX !== null && anchorX !== undefined) ? anchorX : this.anchorX;
+        const ay = (anchorY !== null && anchorY !== undefined) ? anchorY : this.anchorY;
+
         const dw = this.width * this.scale;
         const dh = this.height * this.scale;
-        const dx = -dw * anchorX;
-        const dy = -dh * anchorY;
+        const dx = -dw * ax;
+        const dy = -dh * ay;
 
         // Pixel-Perfect Outline (Cached Method - Edge Performance Fix)
         if (strokeStyle && this.outlineCtx) {

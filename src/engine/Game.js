@@ -19,6 +19,7 @@ import { TrainingDummy } from '../game/entities/TrainingDummy.js';
 import { Boss } from '../game/entities/Boss.js';
 import { Portal } from '../game/entities/Portal.js';
 import { GoldOrb } from '../game/entities/GoldOrb.js';
+import { HPOrb } from '../game/entities/HPOrb.js';
 import { Asteroid } from '../game/entities/Asteroid.js';
 import { LootCrate } from '../game/entities/LootCrate.js';
 import { ItemPickup } from '../game/entities/ItemPickup.js';
@@ -29,6 +30,7 @@ import { AudioManager } from './AudioManager.js';
 import { MainMenu } from '../game/ui/MainMenu.js';
 import { HighScoreManager } from '../game/systems/HighScoreManager.js';
 import { DevTools } from '../game/systems/DevTools.js';
+import { VERSION, VERSION_NAME } from '../version.js';
 
 export class Game {
     constructor(canvas) {
@@ -54,6 +56,7 @@ export class Game {
         this.xpOrbs = [];
         this.xpOrbs = [];
         this.goldOrbs = [];
+        this.hpOrbs = [];
         this.itemPickups = [];
         this.shipwrecks = [];
         this.asteroids = [];
@@ -67,8 +70,8 @@ export class Game {
         this.xpToNext = 100;
         this.xpToNext = 100;
         this.enemySpawnTimer = 0;
-        this.version = 'v0.4.0';
-        this.versionName = 'enemy update';
+        this.version = VERSION;
+        this.versionName = VERSION_NAME;
 
         this.starfield = new Starfield(400, 4000, 4000); // Many stars, large area
         this.grid = new Grid(200); // 200px cells
@@ -129,6 +132,11 @@ export class Game {
             (dt) => this.update(dt),
             () => this.draw()
         );
+
+        // FPS Counter
+        this.lastFpsTime = 0;
+        this.frameCount = 0;
+        this.fps = 0;
 
         // Listen to resize for camera
         window.addEventListener('resize', () => {
@@ -331,6 +339,13 @@ export class Game {
                 const ox = crate.x + (Math.random() - 0.5) * 20;
                 const oy = crate.y + (Math.random() - 0.5) * 20;
                 this.goldOrbs.push(new GoldOrb(ox, oy, 1));
+            }
+        } else if (crate.variant === 2) {
+            // Variant 2 (Green) = HP
+            for (let k = 0; k < count; k++) {
+                const ox = crate.x + (Math.random() - 0.5) * 20;
+                const oy = crate.y + (Math.random() - 0.5) * 20;
+                this.hpOrbs.push(new HPOrb(ox, oy, 10));
             }
         }
         this.audio.play('crate_break', { volume: 0.5, randomizePitch: 0.2 });
@@ -899,7 +914,13 @@ export class Game {
             if (def.stats.weaponGroup === 'laser') {
                 currentFireRateMul *= accelerantBonus;
             }
-            const adjCooldown = (def.stats.cooldown || 0.15) / rampFactor / currentFireRateMul;
+            if (def.stats.weaponGroup === 'laser') {
+                currentFireRateMul *= accelerantBonus;
+            }
+            let baseCooldown = def.stats.cooldown || 0.15;
+            // Lower safety clamp to allow for very fast beams (e.g. 60fps+)
+            if (baseCooldown <= 0.001) baseCooldown = 0.016; // Clamp to ~60fps floor if effectively 0
+            const adjCooldown = baseCooldown / rampFactor / currentFireRateMul;
 
             // Always update existing cooldowns
             if (!partRef.cooldown) partRef.cooldown = 0;
@@ -1001,13 +1022,54 @@ export class Game {
                         const localCY = (partRef.y + (h - 1) / 2) * CELL_STRIDE;
                         const cos = Math.cos(this.rotation);
                         const sin = Math.sin(this.rotation);
-                        const finalX = this.x + (localCX * cos - localCY * sin);
-                        const finalY = this.y + (localCX * sin + localCY * cos);
+                        let finalX = this.x + (localCX * cos - localCY * sin);
+                        let finalY = this.y + (localCX * sin + localCY * cos);
+
+                        const baseAngle = this.rotation + (partRef.rotation || 0) * (Math.PI / 2);
+
+                        // Base Pivot Mount Offset (Fire Calc)
+                        if (def.baseSprite && (def.baseSprite.anchorX !== 0.5 || def.baseSprite.anchorY !== 0.5)) {
+                            const bpx = (def.baseSprite.anchorX - 0.5) * def.baseSprite.width * def.baseSprite.scale;
+                            const bpy = (def.baseSprite.anchorY - 0.5) * def.baseSprite.height * def.baseSprite.scale;
+                            finalX += Math.cos(baseAngle) * bpx - Math.sin(baseAngle) * bpy;
+                            finalY += Math.sin(baseAngle) * bpx + Math.cos(baseAngle) * bpy;
+                        }
+
                         const angle = Math.atan2(worldMouseY - finalY, worldMouseX - finalX);
-                        let barrelLen = (h > 1.5) ? CELL_STRIDE * 1.3 : CELL_STRIDE * 0.6;
-                        barrelLen += (def.turretDrawOffset || 0);
-                        const fireX = finalX + Math.cos(angle) * barrelLen;
-                        const fireY = finalY + Math.sin(angle) * barrelLen;
+
+                        // Calculate Turret Pivot Position (same as rendering)
+                        let turretX = finalX;
+                        let turretY = finalY;
+
+                        if (def.turretDrawOffset) {
+                            if (typeof def.turretDrawOffset === 'object') {
+                                const ox = def.turretDrawOffset.x || 0;
+                                const oy = def.turretDrawOffset.y || 0;
+                                turretX += Math.cos(baseAngle) * ox - Math.sin(baseAngle) * oy;
+                                turretY += Math.sin(baseAngle) * ox + Math.cos(baseAngle) * oy;
+                            } else {
+                                turretX += Math.cos(angle) * def.turretDrawOffset;
+                                turretY += Math.sin(angle) * def.turretDrawOffset;
+                            }
+                        }
+
+                        // Calculate firing origin
+                        let fireX = turretX;
+                        let fireY = turretY;
+
+                        // Apply barrelPosition (custom muzzle offset relative to pivot)
+                        if (def.stats.barrelPosition) {
+                            const bx = def.stats.barrelPosition.x || 0;
+                            const by = def.stats.barrelPosition.y || 0;
+                            // Rotate by aim angle (turret follows mouse)
+                            fireX += Math.cos(angle) * bx - Math.sin(angle) * by;
+                            fireY += Math.sin(angle) * bx + Math.cos(angle) * by;
+                        } else {
+                            // Default barrel length logic
+                            let barrelLen = (h > 1.5) ? CELL_STRIDE * 1.3 : CELL_STRIDE * 0.6;
+                            fireX += Math.cos(angle) * barrelLen;
+                            fireY += Math.sin(angle) * barrelLen;
+                        }
 
                         let bCount = def.stats.burstCount || 0;
                         if (def.stats.weaponGroup === 'rocket') {
@@ -1039,7 +1101,7 @@ export class Game {
                                     pY += perpY * offset;
                                 }
                                 const p = new Projectile(pX, pY, finalAngle, def.stats.projectileType || 'bullet', def.stats.projectileSpeed || 600, 'player', def.stats.damage || 10);
-                                if (def.stats.projectileType === 'railgun') p.isBeam = true; // Safety
+                                if (def.stats.projectileType === 'railgun' || def.stats.projectileType === 'beam_freeze') p.isBeam = true; // Safety
                                 // Randomize interval between 0.01 and 0.03 (50%-150% of 0.02 base)
                                 p.delay = i * pInterval * (0.5 + Math.random());
                                 this.projectiles.push(p);
@@ -1064,13 +1126,18 @@ export class Game {
                                 'custom_1768397007593': 'rail_shot',
                                 'custom_1768857172136': 'shoot_sniper',
                                 'custom_1769204337665': 'shoot_dart', // Burst
+                                'custom_1769336961268': 'shoot_lsr', // Freeze Ray
                                 'railgun': 'rail_shot'
                             };
                             if (weaponSounds[def.id]) snd = weaponSounds[def.id];
 
+                            // Adjust pitch for Freeze Ray to sound different
+                            let pitch = def.stats.soundPitch;
+                            if (def.id === 'custom_1769336961268') pitch = 0.5; // Deep beam sound
+
                             this.audio.play(snd, {
                                 volume: def.stats.soundVolume ?? 0.6,
-                                pitch: def.stats.soundPitch,
+                                pitch: pitch,
                                 randomizePitch: 0.15
                             });
                         }
@@ -1117,15 +1184,39 @@ export class Game {
                         const localCY = (partRef.y + (ph - 1) / 2) * CELL_STRIDE;
                         const cos = Math.cos(this.rotation);
                         const sin = Math.sin(this.rotation);
-                        const finalX = this.x + (localCX * cos - localCY * sin);
-                        const finalY = this.y + (localCX * sin + localCY * cos);
+                        let finalX = this.x + (localCX * cos - localCY * sin);
+                        let finalY = this.y + (localCX * sin + localCY * cos);
+
+                        // Base Pivot Mount Offset (Burst Calc)
+                        if (def.baseSprite && (def.baseSprite.anchorX !== 0.5 || def.baseSprite.anchorY !== 0.5)) {
+                            const baseAngle = this.rotation + (partRef.rotation || 0) * (Math.PI / 2);
+                            const bpx = (def.baseSprite.anchorX - 0.5) * def.baseSprite.width * def.baseSprite.scale;
+                            const bpy = (def.baseSprite.anchorY - 0.5) * def.baseSprite.height * def.baseSprite.scale;
+                            finalX += Math.cos(baseAngle) * bpx - Math.sin(baseAngle) * bpy;
+                            finalY += Math.sin(baseAngle) * bpx + Math.cos(baseAngle) * bpy;
+                        }
 
                         // Use mouse position for burst aiming (updated each shot)
                         const angle = Math.atan2(worldMouseY - finalY, worldMouseX - finalX);
-                        let barrelLen = (ph > 1.5) ? CELL_STRIDE * 1.3 : CELL_STRIDE * 0.6;
-                        barrelLen += (def.turretDrawOffset || 0);
-                        const fireX = finalX + Math.cos(angle) * barrelLen;
-                        const fireY = finalY + Math.sin(angle) * barrelLen;
+                        // Calculate firing origin
+                        // Burst mode uses finalX/finalY as the pivot point
+                        let fireX = finalX;
+                        let fireY = finalY;
+
+                        if (def.stats.barrelPosition) {
+                            const bx = def.stats.barrelPosition.x || 0;
+                            const by = def.stats.barrelPosition.y || 0;
+                            fireX += Math.cos(angle) * bx - Math.sin(angle) * by;
+                            fireY += Math.sin(angle) * bx + Math.cos(angle) * by;
+                        } else {
+                            let barrelLen = (ph > 1.5) ? CELL_STRIDE * 1.3 : CELL_STRIDE * 0.6;
+                            // Add turretDrawOffset if it's a number (legacy scalar support)
+                            if (typeof def.turretDrawOffset === 'number') {
+                                barrelLen += def.turretDrawOffset;
+                            }
+                            fireX += Math.cos(angle) * barrelLen;
+                            fireY += Math.sin(angle) * barrelLen;
+                        }
 
                         const pCount = def.stats.pelletCount || 1;
                         const pSpread = def.stats.spread || 0;
@@ -1196,59 +1287,31 @@ export class Game {
             p.update(dt, this);
 
             if (p.owner === 'player') {
+                // Enemy Collision
                 for (const enemy of this.enemies) {
                     if (enemy.isDead) continue;
-
                     if (p.isBeam) {
-                        // Beam Collision (Hitscan)
-                        // Translate and rotate enemy into beam space
                         const tdx = enemy.x - p.x;
                         const tdy = enemy.y - p.y;
                         const bx = tdx * Math.cos(-p.angle) - tdy * Math.sin(-p.angle);
                         const by = tdx * Math.sin(-p.angle) + tdy * Math.cos(-p.angle);
-
                         const hitRange = (p.radius || 10) + (enemy.radius || 20);
                         if (bx > 0 && bx < p.beamLength && Math.abs(by) < hitRange) {
                             const now = Date.now();
                             const lastHit = p.targetHits.get(enemy) || 0;
-                            if (now - lastHit > 150) { // Damage tick every 150ms
-                                enemy.takeDamage(p.damage);
+                            if (now - lastHit > 150) {
+                                enemy.takeDamage(p.damage, p.type);
                                 p.targetHits.set(enemy, now);
                                 this.audio.play('hit', { volume: 0.3, pitch: 1.3, randomizePitch: 0.1 });
                             }
                         }
-                    } else if (this.bosses.length > 0 && p.owner === 'player') {
-                        // Beam vs Boss
-                        for (const boss of this.bosses) {
-                            if (boss.isDead) continue;
-
-                            // Transform boss relative to beam start
-                            const tdx = boss.x - p.x;
-                            const tdy = boss.y - p.y;
-
-                            // Rotate by -angle to align with X axis
-                            const bx = tdx * Math.cos(-p.angle) - tdy * Math.sin(-p.angle);
-                            const by = tdx * Math.sin(-p.angle) + tdy * Math.cos(-p.angle);
-
-                            const hitRange = (p.radius || 10) + (boss.radius || 60);
-                            if (bx > 0 && bx < p.beamLength && Math.abs(by) < hitRange) {
-                                const now = Date.now();
-                                const lastHit = p.targetHits.get(boss) || 0;
-                                if (now - lastHit > 150) {
-                                    boss.takeDamage(p.damage);
-                                    p.targetHits.set(boss, now);
-                                    this.audio.play('hit', { volume: 0.4, pitch: 0.7 });
-                                }
-                            }
-                        }
                     } else {
-                        // Standard Projectile Collision
                         const dx = p.x - enemy.x;
                         const dy = p.y - enemy.y;
                         const distSq = dx * dx + dy * dy;
                         const minDist = (p.radius || 4) + (enemy.radius || 20);
                         if (distSq < minDist * minDist) {
-                            enemy.takeDamage(p.damage);
+                            enemy.takeDamage(p.damage, p.type);
                             this.audio.play('hit', { volume: 0.5, pitch: 1.3, randomizePitch: 0.1 });
                             p.isDead = true;
                             if (p.type === 'rocket') p.shouldExplode = true;
@@ -1257,121 +1320,87 @@ export class Game {
                 }
 
                 // Boss Collision
-                if (this.bosses.length > 0) {
-                    for (const boss of this.bosses) {
-                        if (boss.isDead) continue;
-                        if (p.isBeam) {
-                            // Beam Logic
-                            const tdx = boss.x - p.x;
-                            const tdy = boss.y - p.y;
-                            const bx = tdx * Math.cos(-p.angle) - tdy * Math.sin(-p.angle);
-                            const by = tdx * Math.sin(-p.angle) + tdy * Math.cos(-p.angle);
-
-                            const hitRange = (p.radius || 10) + (boss.radius || 60);
-                            if (bx > 0 && bx < p.beamLength && Math.abs(by) < hitRange) {
-                                const now = Date.now();
-                                const lastHit = p.targetHits.get(boss) || 0;
-                                if (now - lastHit > 150) {
-                                    boss.takeDamage(p.damage);
-                                    p.targetHits.set(boss, now);
-                                    this.audio.play('hit', { volume: 0.4, pitch: 0.7 });
-                                }
+                for (const boss of this.bosses) {
+                    if (boss.isDead) continue;
+                    if (p.isBeam) {
+                        const tdx = boss.x - p.x;
+                        const tdy = boss.y - p.y;
+                        const bx = tdx * Math.cos(-p.angle) - tdy * Math.sin(-p.angle);
+                        const by = tdx * Math.sin(-p.angle) + tdy * Math.cos(-p.angle);
+                        const hitRange = (p.radius || 10) + (boss.radius || 60);
+                        if (bx > 0 && bx < p.beamLength && Math.abs(by) < hitRange) {
+                            const now = Date.now();
+                            const lastHit = p.targetHits.get(boss) || 0;
+                            if (now - lastHit > 150) {
+                                boss.takeDamage(p.damage, p.type);
+                                p.targetHits.set(boss, now);
+                                this.audio.play('hit', { volume: 0.4, pitch: 0.7 });
                             }
-                        } else {
-                            // Standard Logic
-                            // Check rough radius first
-                            const dx = p.x - boss.x;
-                            const dy = p.y - boss.y;
-                            if (Math.hypot(dx, dy) < boss.radius + p.radius) {
-                                boss.takeDamage(p.damage);
-                                this.audio.play('hit', { volume: 0.8, pitch: 0.8 });
-                                p.isDead = true;
-                                if (p.type === 'rocket') p.shouldExplode = true;
-                            }
+                        }
+                    } else {
+                        const dx = p.x - boss.x;
+                        const dy = p.y - boss.y;
+                        if (Math.hypot(dx, dy) < boss.radius + p.radius) {
+                            boss.takeDamage(p.damage, p.type);
+                            this.audio.play('hit', { volume: 0.8, pitch: 0.8 });
+                            p.isDead = true;
+                            if (p.type === 'rocket') p.shouldExplode = true;
                         }
                     }
                 }
 
                 // Shipwreck Collision
-                for (let i = this.shipwrecks.length - 1; i >= 0; i--) {
-                    const wreck = this.shipwrecks[i];
+                for (let j = this.shipwrecks.length - 1; j >= 0; j--) {
+                    const wreck = this.shipwrecks[j];
                     if (wreck.isDead) continue;
-
-                    // Simple distance check first
                     const dx = p.x - wreck.x;
                     const dy = p.y - wreck.y;
-                    // Approximate radius for optimization (wreck is composed of parts)
-                    // Let's say 200px max?
                     if (dx * dx + dy * dy > 400 * 400) continue;
 
                     if (p.isBeam) {
                         // TODO: Beam vs Wreck parts
-                        // For now skip or implement simplified
                     } else {
-                        // Check collision with wreck parts
                         const hitResult = wreck.takeDamage(p.damage, p.x, p.y);
-                        if (hitResult) {
-                            // Hit something (maybe empty space though?)
-                            // takeDamage returns { destroyed: bool, partId... } if it hit a part
-
-                            // If hitResult is object and has property destroyed
-                            if (hitResult.destroyed !== undefined) {
-                                // Real hit
-                                p.isDead = true;
-                                if (p.type === 'rocket') p.shouldExplode = true;
-                                this.audio.play('hit', { volume: 0.4, pitch: 0.8 });
-
-                                if (hitResult.destroyed && hitResult.shouldDrop) {
-                                    // Drop Item
-                                    this.itemPickups.push(new ItemPickup(hitResult.x, hitResult.y, hitResult.partId));
-                                    this.audio.play('explosion', { volume: 0.4, pitch: 1.2 });
-                                } else if (hitResult.destroyed) {
-                                    // Just sound if destroyed but no drop
-                                    this.audio.play('explosion', { volume: 0.3, pitch: 1.5 });
-                                }
+                        if (hitResult && hitResult.destroyed !== undefined) {
+                            p.isDead = true;
+                            if (p.type === 'rocket') p.shouldExplode = true;
+                            this.audio.play('hit', { volume: 0.4, pitch: 0.8 });
+                            if (hitResult.destroyed && hitResult.shouldDrop) {
+                                this.itemPickups.push(new ItemPickup(hitResult.x, hitResult.y, hitResult.partId));
+                                this.audio.play('explosion', { volume: 0.4, pitch: 1.2 });
+                            } else if (hitResult.destroyed) {
+                                this.audio.play('explosion', { volume: 0.3, pitch: 1.5 });
                             }
                         }
                     }
-
-                    if (wreck.isDead) {
-                        this.shipwrecks.splice(i, 1);
-                    }
+                    if (wreck.isDead) this.shipwrecks.splice(j, 1);
                 }
 
                 // Asteroid Collision
                 for (const asteroid of this.asteroids) {
                     if (asteroid.isDead || asteroid.isBroken) continue;
-
                     if (p.isBeam) {
-                        // Beam Logic vs Asteroid
                         const tdx = asteroid.x - p.x;
                         const tdy = asteroid.y - p.y;
                         const bx = tdx * Math.cos(-p.angle) - tdy * Math.sin(-p.angle);
                         const by = tdx * Math.sin(-p.angle) + tdy * Math.cos(-p.angle);
                         const hitRange = (p.radius || 10) + asteroid.radius;
-
                         if (bx > 0 && bx < p.beamLength && Math.abs(by) < hitRange) {
                             const now = Date.now();
                             const lastHit = p.targetHits.get(asteroid) || 0;
                             if (now - lastHit > 150) {
-                                if (asteroid.takeDamage(p.damage)) {
-                                    this.spawnAsteroidLoot(asteroid);
-                                }
+                                if (asteroid.takeDamage(p.damage)) this.spawnAsteroidLoot(asteroid);
                                 p.targetHits.set(asteroid, now);
-                                this.audio.play('hit', { volume: 0.3, pitch: 0.5 }); // Lower pitch for rock
+                                this.audio.play('hit', { volume: 0.3, pitch: 0.5 });
                             }
                         }
                     } else {
-                        // Standard Projectile
                         const dx = asteroid.x - p.x;
                         const dy = p.y - asteroid.y;
                         const distSq = dx * dx + dy * dy;
                         const minDist = (p.radius || 4) + asteroid.radius;
-
                         if (distSq < minDist * minDist) {
-                            if (asteroid.takeDamage(p.damage)) {
-                                this.spawnAsteroidLoot(asteroid);
-                            }
+                            if (asteroid.takeDamage(p.damage)) this.spawnAsteroidLoot(asteroid);
                             p.isDead = true;
                             if (p.type === 'rocket') p.shouldExplode = true;
                             this.audio.play('hit', { volume: 0.4, pitch: 0.5 });
@@ -1379,27 +1408,22 @@ export class Game {
                     }
                 }
 
-                // Loot Crate Collision (Projectile)
+                // Loot Crate Collision
                 for (const crate of this.lootCrates) {
-                    if (crate.isOpened) continue; // Ignore opened crates for projectiles
-
+                    if (crate.isOpened) continue;
                     if (p.isBeam) {
                         const tdx = crate.x - p.x;
                         const tdy = crate.y - p.y;
                         const bx = tdx * Math.cos(-p.angle) - tdy * Math.sin(-p.angle);
                         const by = tdx * Math.sin(-p.angle) + tdy * Math.cos(-p.angle);
                         const hitRange = (p.radius || 10) + crate.radius;
-
                         if (bx > 0 && bx < p.beamLength && Math.abs(by) < hitRange) {
                             const now = Date.now();
                             const lastHit = p.targetHits.get(crate) || 0;
                             if (now - lastHit > 150) {
-                                if (crate.takeDamage(p.damage)) {
-                                    // Opened!
-                                    this.spawnCrateLoot(crate);
-                                }
+                                if (crate.takeDamage(p.damage)) this.spawnCrateLoot(crate);
                                 p.targetHits.set(crate, now);
-                                this.audio.play('hit', { volume: 0.3, pitch: 1.2 }); // Metal hit
+                                this.audio.play('hit', { volume: 0.3, pitch: 1.2 });
                             }
                         }
                     } else {
@@ -1407,15 +1431,9 @@ export class Game {
                         const dy = crate.y - p.y;
                         const distSq = dx * dx + dy * dy;
                         const minDist = (p.radius || 4) + crate.radius;
-
                         if (distSq < minDist * minDist) {
-                            if (crate.takeDamage(p.damage)) {
-                                // Opened!
-                                this.spawnCrateLoot(crate);
-                            } else {
-                                // Hit Spin
-                                crate.rotSpeed += (Math.random() - 0.5) * 3;
-                            }
+                            if (crate.takeDamage(p.damage)) this.spawnCrateLoot(crate);
+                            else crate.rotSpeed += (Math.random() - 0.5) * 3;
                             p.isDead = true;
                             if (p.type === 'rocket') p.shouldExplode = true;
                             this.audio.play('hit', { volume: 0.3, pitch: 1.2 });
@@ -1576,7 +1594,7 @@ export class Game {
                     const dy = p.y - enemy.y;
                     const distSq = dx * dx + dy * dy;
                     if (distSq < (aoe + (enemy.radius || 20)) ** 2) {
-                        enemy.takeDamage(20);
+                        enemy.takeDamage(20, p.type);
                     }
                 }
 
@@ -1586,7 +1604,7 @@ export class Game {
                     const dx = boss.x - p.x;
                     const dy = boss.y - p.y;
                     if (dx * dx + dy * dy < (boss.radius + 10) * (boss.radius + 10)) {
-                        boss.takeDamage(p.damage);
+                        boss.takeDamage(p.damage, p.type);
                         p.isDead = true;
                         if (!boss.isDead) { // Flash only if still alive
                             boss.flash = 5;
@@ -1627,10 +1645,23 @@ export class Game {
 
             if (p.isDead) {
                 if (p.shouldExplode) {
-                    const radius = p.type === 'ggbm' ? 60 : 40;
+                    const radius = p.type === 'ggbm' ? 60 : (p.type === 'cluster_grenade' ? 50 : (p.type === 'mini_grenade' ? 25 : 40));
                     const life = p.type === 'ggbm' ? 0.6 : 0.4;
-                    this.spawnExplosion(p.x, p.y, radius, life, '#ffaa00');
+                    const color = (p.type === 'cluster_grenade' || p.type === 'mini_grenade') ? '#44ff44' : '#ffaa00';
+                    this.spawnExplosion(p.x, p.y, radius, life, color);
                     this.audio.play('explosion', { volume: 0.3, pitch: 1.2 });
+
+                    // Cluster Grenade: Spawn child grenades
+                    if (p.type === 'cluster_grenade') {
+                        const childCount = p.clusterCount || 6;
+                        for (let c = 0; c < childCount; c++) {
+                            const childAngle = (c / childCount) * Math.PI * 2 + (Math.random() - 0.5) * 0.3;
+                            const childProj = new Projectile(p.x, p.y, childAngle, 'mini_grenade', 250, p.owner, p.damage * 0.5);
+                            childProj.life = 0.8 + Math.random() * 0.4; // Short fuse
+                            this.projectiles.push(childProj);
+                        }
+                        this.audio.play('explosion', { volume: 0.5, pitch: 0.8 });
+                    }
                 }
                 this.projectiles.splice(i, 1);
             }
@@ -1755,10 +1786,25 @@ export class Game {
             }
         }
 
+        // Update HP Orbs
+        for (let i = this.hpOrbs.length - 1; i >= 0; i--) {
+            const orb = this.hpOrbs[i];
+            if (isRoomCleared) orb.forced = true; // Auto-magnetize when room cleared
+            const collected = orb.update(dt, this.x, this.y);
+            if (collected) {
+                const healAmount = orb.value;
+                this.playerShip.hp = Math.min(this.playerShip.hp + healAmount, this.playerShip.maxHp);
+                this.showNotification(`+${healAmount} hp`, '#44ff44');
+                this.audio.play('gold_pickup', { volume: 0.5, pitch: 1.2, randomizePitch: 0.15 });
+                this.hpOrbs.splice(i, 1);
+            }
+        }
+
         // (Death check moved to start of update() method)
         if (!this.playerShip.isDead) {
-            // Apply Regeneration
-            if (this.playerShip.hp < this.playerShip.maxHp) {
+            // Apply Regeneration - only during combat (enemies/bosses alive)
+            const hasActiveEnemies = this.enemies.length > 0 || this.bosses.some(b => !b.isDead);
+            if (this.playerShip.hp < this.playerShip.maxHp && hasActiveEnemies) {
                 this.playerShip.hp += (this.playerShip.stats.regen || 0) * levelBonus * dt;
                 if (this.playerShip.hp > this.playerShip.maxHp) {
                     this.playerShip.hp = this.playerShip.maxHp;
@@ -2130,6 +2176,7 @@ export class Game {
             // Draw XP Orbs
             this.xpOrbs.forEach(o => o.draw(this.renderer));
             this.goldOrbs.forEach(o => o.draw(this.renderer));
+            this.hpOrbs.forEach(o => o.draw(this.renderer));
             this.itemPickups.forEach(i => i.draw(this.renderer));
 
             // Draw Shop Items
@@ -2194,22 +2241,53 @@ export class Game {
                     if (def.type === 'weapon') {
                         // Draw base
                         if (def.baseSprite) {
-                            def.baseSprite.draw(this.renderer.ctx, worldPartX, worldPartY, this.rotation + (partRef.rotation || 0) * (Math.PI / 2));
+                            def.baseSprite.draw(this.renderer.ctx, worldPartX, worldPartY, this.rotation + (partRef.rotation || 0) * (Math.PI / 2), 0.5, 0.5);
                         } else if ((w === 1 && h === 2) || (w === 2 && h === 1)) {
-                            Assets.LongHull.draw(this.renderer.ctx, worldPartX, worldPartY, this.rotation + (partRef.rotation || 0) * (Math.PI / 2));
+                            Assets.LongHull.draw(this.renderer.ctx, worldPartX, worldPartY, this.rotation + (partRef.rotation || 0) * (Math.PI / 2), 0.5, 0.5);
                         } else {
-                            Assets.PlayerBase.draw(this.renderer.ctx, worldPartX, worldPartY, this.rotation);
+                            Assets.PlayerBase.draw(this.renderer.ctx, worldPartX, worldPartY, this.rotation, 0.5, 0.5);
                         }
 
                         // Draw turret (aimed)
                         const angle = Math.atan2(worldMouseY - worldPartY, worldMouseX - worldPartX);
-                        let drawOffset = def.turretDrawOffset || 0;
-                        if (partRef.recoil) drawOffset -= partRef.recoil;
+                        const baseAngle = this.rotation + (partRef.rotation || 0) * (Math.PI / 2);
 
-                        const drawX = worldPartX + Math.cos(angle) * drawOffset;
-                        const drawY = worldPartY + Math.sin(angle) * drawOffset;
+                        let offsetX = 0;
+                        let offsetY = 0;
 
-                        def.sprite.draw(this.renderer.ctx, drawX, drawY, angle + (def.rotationOffset || 0), 0.5, 0.5, 'rgba(255,255,255,0.4)');
+                        // Calculate Turret Pivot Offset
+                        if (def.turretDrawOffset) {
+                            if (typeof def.turretDrawOffset === 'object') {
+                                // Vector Offset (Fixed to Hull)
+                                const ox = def.turretDrawOffset.x || 0;
+                                const oy = def.turretDrawOffset.y || 0;
+                                offsetX = Math.cos(baseAngle) * ox - Math.sin(baseAngle) * oy;
+                                offsetY = Math.sin(baseAngle) * ox + Math.cos(baseAngle) * oy;
+                            } else {
+                                // Scalar Offset (Along Aim Vector - Legacy/recoil-like)
+                                offsetX = Math.cos(angle) * def.turretDrawOffset;
+                                offsetY = Math.sin(angle) * def.turretDrawOffset;
+                            }
+                        }
+
+                        // Apply Recoil (always against aim)
+                        if (partRef.recoil) {
+                            offsetX -= Math.cos(angle) * partRef.recoil;
+                            offsetY -= Math.sin(angle) * partRef.recoil;
+                        }
+
+                        // Base Pivot Mount Offset (where turret attaches on base)
+                        if (def.baseSprite && (def.baseSprite.anchorX !== 0.5 || def.baseSprite.anchorY !== 0.5)) {
+                            const bpx = (def.baseSprite.anchorX - 0.5) * def.baseSprite.width * def.baseSprite.scale;
+                            const bpy = (def.baseSprite.anchorY - 0.5) * def.baseSprite.height * def.baseSprite.scale;
+                            offsetX += Math.cos(baseAngle) * bpx - Math.sin(baseAngle) * bpy;
+                            offsetY += Math.sin(baseAngle) * bpx + Math.cos(baseAngle) * bpy;
+                        }
+
+                        const drawX = worldPartX + offsetX;
+                        const drawY = worldPartY + offsetY;
+
+                        def.sprite.draw(this.renderer.ctx, drawX, drawY, angle + (def.rotationOffset || 0), null, null, 'rgba(255,255,255,0.4)');
 
                         // Railgun & Saber Charge Effect
                         if ((partRef.chargeLeft > 0 || partRef.chargeReady) && (def.stats.projectileType === 'railgun' || def.stats.projectileType === 'saber')) {
@@ -2231,7 +2309,7 @@ export class Game {
                         }
                     } else {
                         // Draw static part
-                        def.sprite.draw(this.renderer.ctx, worldPartX, worldPartY, this.rotation + (partRef.rotation || 0) * (Math.PI / 2));
+                        def.sprite.draw(this.renderer.ctx, worldPartX, worldPartY, this.rotation + (partRef.rotation || 0) * (Math.PI / 2), 0.5, 0.5);
 
                         // Shield Visual
                         if (def.type === 'shield' && (!partRef.shieldCooldown || partRef.shieldCooldown <= 0)) {
@@ -2392,6 +2470,20 @@ export class Game {
             this.renderer.ctx.textAlign = 'right';
             this.renderer.ctx.fillText(`score: ${this.score}`, this.renderer.width - 20, 220);
             this.renderer.ctx.textAlign = 'left'; // Reset
+
+            // FPS Counter
+            const now = performance.now();
+            this.frameCount++;
+            if (now - this.lastFpsTime >= 500) {
+                this.fps = Math.round((this.frameCount * 1000) / (now - this.lastFpsTime));
+                this.frameCount = 0;
+                this.lastFpsTime = now;
+            }
+            this.renderer.ctx.fillStyle = '#00ff00';
+            this.renderer.ctx.font = "8px 'Press Start 2P'";
+            this.renderer.ctx.textAlign = 'right';
+            this.renderer.ctx.fillText(`fps: ${this.fps}`, this.renderer.width - 20, this.renderer.height - 20);
+            this.renderer.ctx.textAlign = 'left';
 
             // Version & Seed (Bottom Left)
             this.renderer.ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
@@ -2831,6 +2923,9 @@ export class Game {
             ctx.font = "8px 'Press Start 2P'";
             ctx.fillText('press enter to submit', this.renderer.width / 2, boxY + 90);
         }
+
+        // Apply post-processing effects (resolution upscale, dither, chromatic aberration)
+        this.renderer.present();
     }
 
 
@@ -2847,6 +2942,7 @@ export class Game {
         this.explosions = [];
         this.xpOrbs = [];
         this.goldOrbs = [];
+        this.hpOrbs = [];
 
         // Regenerate
         this.goldOrbs = [];

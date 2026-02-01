@@ -29,7 +29,7 @@ export class Ship {
     }
 
     takeDamage(amount) {
-        if (this.isDead) return;
+        if (this.isDead || this.godMode) return;
         this.hp -= amount;
         if (this.hp <= 0) {
             this.hp = 0;

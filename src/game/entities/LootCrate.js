@@ -29,14 +29,20 @@ export class LootCrate {
         this.hp = this.maxHp;
 
         // Visual Variance
-        this.variant = Math.floor(Math.random() * 2); // 0 or 1
+        this.variant = Math.floor(Math.random() * 3); // 0, 1, or 2
         // Colors:
         // Variant 0: Military Grey/Cyan (XP)
         // Variant 1: Industrial Brown/Orange (Gold)
-        this.baseColor = this.variant === 0 ? '#506070' : '#706050';
-        this.detailColor = this.variant === 0 ? '#304050' : '#504030';
-        // Force distinct light colors: Cyan for XP, Gold for Money
-        this.lightColor = this.variant === 0 ? '#00ffff' : '#ffd700';
+        // Variant 2: Medical Green (HP)
+        const variantColors = [
+            { base: '#506070', detail: '#304050', light: '#00ffff' },  // XP
+            { base: '#706050', detail: '#504030', light: '#ffd700' },  // Gold
+            { base: '#507050', detail: '#305030', light: '#44ff44' }   // HP
+        ];
+        const colors = variantColors[this.variant];
+        this.baseColor = colors.base;
+        this.detailColor = colors.detail;
+        this.lightColor = colors.light;
     }
 
     takeDamage(amount) {

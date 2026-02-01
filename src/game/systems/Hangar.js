@@ -184,21 +184,6 @@ export class Hangar {
         const utility = this.ui.querySelector('#utility-btns');
         utility.innerHTML = '';
 
-        const designBtn = document.createElement('button');
-        designBtn.innerText = "+ create new part";
-        designBtn.style.width = '100%';
-        designBtn.style.padding = '8px';
-        designBtn.style.background = '#44f';
-        designBtn.style.color = 'white';
-        designBtn.style.border = 'none';
-        designBtn.style.cursor = 'pointer';
-        designBtn.style.fontFamily = "'Press Start 2P', monospace";
-        designBtn.style.fontSize = "16px";
-        designBtn.onclick = (e) => {
-            e.stopPropagation();
-            this.game.designer.open(null);
-        };
-        utility.appendChild(designBtn);
         this.updateStatsUI();
     }
 
@@ -352,11 +337,11 @@ export class Hangar {
                 // Draw base block for weapons
                 if (def.type === 'weapon') {
                     if (def.baseSprite) {
-                        def.baseSprite.draw(renderer.ctx, drawX, drawY, (partRef.rotation || 0) * (Math.PI / 2));
+                        def.baseSprite.draw(renderer.ctx, drawX, drawY, (partRef.rotation || 0) * (Math.PI / 2), 0.5, 0.5);
                     } else if ((w === 1 && h === 2) || (w === 2 && h === 1)) {
-                        Assets.LongHull.draw(renderer.ctx, drawX, drawY, (partRef.rotation || 0) * (Math.PI / 2));
+                        Assets.LongHull.draw(renderer.ctx, drawX, drawY, (partRef.rotation || 0) * (Math.PI / 2), 0.5, 0.5);
                     } else {
-                        Assets.PlayerBase.draw(renderer.ctx, drawX, drawY, 0);
+                        Assets.PlayerBase.draw(renderer.ctx, drawX, drawY, 0, 0.5, 0.5);
                     }
                 }
 
@@ -366,7 +351,7 @@ export class Hangar {
                 const turretX = drawX + Math.cos(angle) * offset;
                 const turretY = drawY + Math.sin(angle) * offset;
 
-                def.sprite.draw(renderer.ctx, turretX, turretY, angle + (def.rotationOffset || 0));
+                def.sprite.draw(renderer.ctx, turretX, turretY, angle + (def.rotationOffset || 0), null, null);
             }
         }
 
@@ -406,11 +391,11 @@ export class Hangar {
             // Draw base block for weapon ghost
             if (partDef.type === 'weapon') {
                 if (partDef.baseSprite) {
-                    partDef.baseSprite.draw(renderer.ctx, ghostX, ghostY, this.rotation * (Math.PI / 2));
+                    partDef.baseSprite.draw(renderer.ctx, ghostX, ghostY, this.rotation * (Math.PI / 2), 0.5, 0.5);
                 } else if ((w === 1 && h === 2) || (w === 2 && h === 1)) {
-                    Assets.LongHull.draw(renderer.ctx, ghostX, ghostY, this.rotation * (Math.PI / 2));
+                    Assets.LongHull.draw(renderer.ctx, ghostX, ghostY, this.rotation * (Math.PI / 2), 0.5, 0.5);
                 } else {
-                    Assets.PlayerBase.draw(renderer.ctx, ghostX, ghostY, 0);
+                    Assets.PlayerBase.draw(renderer.ctx, ghostX, ghostY, 0, 0.5, 0.5);
                 }
             }
 
@@ -419,7 +404,7 @@ export class Hangar {
             const turretX = ghostX + Math.cos(angle) * offset;
             const turretY = ghostY + Math.sin(angle) * offset;
 
-            partDef.sprite.draw(renderer.ctx, turretX, turretY, angle + (partDef.rotationOffset || 0));
+            partDef.sprite.draw(renderer.ctx, turretX, turretY, angle + (partDef.rotationOffset || 0), null, null);
 
             if (!isValid) {
                 renderer.ctx.fillStyle = 'rgba(255, 0, 0, 0.3)';

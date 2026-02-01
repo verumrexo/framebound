@@ -143,6 +143,36 @@ export class DevTools {
             (v) => this.game.graphics.gridOpacity = v
         );
 
+        // 6. Resolution Scale (Pixelation via lower render resolution)
+        createSlider('resolution scale', '0.25', '1', '0.05',
+            () => this.game.renderer.resolutionScale,
+            (v) => this.game.renderer.setResolutionScale(v)
+        );
+
+        // 7. CRT Effect (Scanlines + Barrel Distortion + Vignette)
+        createToggle('crt effect',
+            () => this.game.renderer.crtEffect,
+            (v) => this.game.renderer.setCRTEffect(v)
+        );
+
+        // 8. Dither Effect (Color Posterization)
+        createToggle('dither effect',
+            () => this.game.renderer.ditherEffect,
+            (v) => this.game.renderer.setDitherEffect(v)
+        );
+
+        // 9. Chromatic Aberration (RGB Offset)
+        createToggle('chromatic aberration',
+            () => this.game.renderer.chromaticAberration,
+            (v) => this.game.renderer.setChromaticAberration(v)
+        );
+
+        // 10. God Mode
+        createToggle('god mode',
+            () => this.game.playerShip && this.game.playerShip.godMode,
+            (v) => { if (this.game.playerShip) this.game.playerShip.godMode = v; }
+        );
+
         // --- SPAWNER HEADER ---
         const spawnHeader = document.createElement('div');
         spawnHeader.innerText = 'spawners';
@@ -216,7 +246,14 @@ export class DevTools {
         createBtn('📦 spawn loot crate', (x, y) => this.spawnCrate(x, y), '#88aaff');
         createBtn('🎁 spawn chest', (x, y) => this.spawnChest(x, y), '#ffaa44');
         createBtn('🎯 spawn dummy', (x, y) => this.spawnDummy(x, y), '#ffaa00');
-        createBtn('👾 spawn enemy', (x, y) => this.spawnEnemy(x, y), '#ff4444');
+
+        // Enemy Types
+        createBtn('👾 enemy: basic', (x, y) => this.spawnEnemy(x, y, 'basic'), '#ff4444');
+        createBtn('⚡ enemy: striker', (x, y) => this.spawnEnemy(x, y, 'striker'), '#ff6666');
+        createBtn('🚀 enemy: rocketeer', (x, y) => this.spawnEnemy(x, y, 'rocketeer'), '#ff8844');
+        createBtn('🎯 enemy: sniper', (x, y) => this.spawnEnemy(x, y, 'sniper'), '#ffaa44');
+        createBtn('🌀 enemy: circler', (x, y) => this.spawnEnemy(x, y, 'circler'), '#ff44ff');
+
         createBtn('👹 spawn boss', (x, y) => this.spawnBoss(x, y), '#ff00ff');
 
         // --- UTILITY ---
@@ -341,9 +378,9 @@ export class DevTools {
         this.game.showNotification("spawned training dummy", "#ffaa00");
     }
 
-    spawnEnemy(x, y) {
-        this.game.enemies.push(new Enemy(x, y, 'basic')); // Default to basic
-        this.game.showNotification("spawned enemy", "#ff4444");
+    spawnEnemy(x, y, type = 'basic') {
+        this.game.enemies.push(new Enemy(x, y, type));
+        this.game.showNotification(`spawned ${type} enemy`, "#ff4444");
     }
 
     spawnBoss(x, y) {

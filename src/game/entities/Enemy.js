@@ -4,14 +4,18 @@ import { TILE_SIZE } from '../parts/PartDefinitions.js';
 import { PartsLibrary } from '../parts/Part.js';
 
 export class Enemy {
-    constructor(x, y, type = 'basic') {
+    constructor(x, y, type = 'basic', floorLevel = 1) {
         this.x = x;
         this.y = y;
         this.type = type;
+        this.floorLevel = floorLevel;
         this.isDead = false;
         this.rotation = 0;
         this.rotationOffset = 0; // Default no offset
         this.spotted = false;
+        this.freezeMeter = 0;
+        this.frozenTimer = 0;
+        this.lastFreezeTick = 0;
 
         if (type === 'striker') {
             // Striker uses user-designed ship with weapon turrets
@@ -93,15 +97,15 @@ export class Enemy {
             this.sprite = null;
             this.shootRate = 0;
             this.projectileType = null;
-        } else if (type === 'sniperer') {
-            // Sniperer - Long-range sniper, stationary until player gets close
+        } else if (type === 'sniper') {
+            // Sniper - Long-range sniper, stationary until player gets close
             this.rotationOffset = 0;
             this.maxHp = 100;
             this.hp = this.maxHp;
             this.radius = TILE_SIZE * 1.8;
             this.speed = 60; // Very slow, prefers to stay still
             this.turnRate = 1.5; // Slow turn
-            this.engagementDist = 150; // Very close engagement - only moves when player is too close
+            this.engagementDist = 900; // Increased from 150 to 900 for long-range combat
             this.detectionDist = 1500; // Can see very far
             this.damageMultiplier = 0.6; // 60% damage
 
@@ -216,11 +220,34 @@ export class Enemy {
         }
 
         this.shootCooldown = Math.random() * (this.shootRate || 2);
+
+        // Floor-based scaling: 2x HP and damage per floor
+        const floorMultiplier = Math.pow(2, this.floorLevel - 1);
+        this.maxHp *= floorMultiplier;
+        this.hp = this.maxHp;
+        this.damageMultiplier = (this.damageMultiplier || 1) * floorMultiplier;
     }
 
-    takeDamage(amount) {
+    takeDamage(amount, sourceProjectileType = null) {
         if (this.isDead) return;
         this.hp -= amount;
+
+        // Status Effects
+        if (sourceProjectileType === 'beam_freeze') {
+            const now = Date.now();
+            if (this.lastFreezeTick > 0) {
+                const elapsed = Math.min(now - this.lastFreezeTick, 200);
+                this.freezeMeter += (elapsed / 666); // 1.5 per second (0.5 decay = 1.0 net)
+            }
+            this.lastFreezeTick = now;
+
+            if (this.freezeMeter >= 3.0) {
+                const freezeDuration = (this.type === 'striker') ? 3.0 : 5.0;
+                this.frozenTimer = freezeDuration;
+                this.freezeMeter = 0;
+            }
+        }
+
         if (this.hp <= 0) {
             this.hp = 0;
             this.isDead = true;
@@ -230,6 +257,17 @@ export class Enemy {
     update(dt, playerX, playerY, projectiles, asteroids = [], lootCrates = []) {
         if (this.isDead) return;
 
+        // Frozen Logic
+        if (this.frozenTimer > 0) {
+            this.frozenTimer -= dt;
+            return;
+        }
+
+        if (this.freezeMeter > 0) {
+            this.freezeMeter -= dt * 0.5; // Decays
+            if (this.freezeMeter < 0) this.freezeMeter = 0;
+        }
+
         // Calculate vector to player
         const dx = playerX - this.x;
         const dy = playerY - this.y;
@@ -237,58 +275,100 @@ export class Enemy {
         const dist = Math.sqrt(distSq);
 
         if (this.spotted || dist < this.detectionDist) {
-            // Once spotted, stay aggressive (optional: reset if player leaves room, but Room.update handles this)
             this.spotted = true;
 
-            // Aim at player (Smooth Turning)
-            const targetRotation = Math.atan2(dy, dx);
+            // --- MOVEMENT LOGIC ---
+            let moveX = 0;
+            let moveY = 0;
+            let applyMovement = false;
 
-            let diff = targetRotation - this.rotation;
-            while (diff < -Math.PI) diff += Math.PI * 2;
-            while (diff > Math.PI) diff -= Math.PI * 2;
+            if (this.type === 'circler') {
+                // CIRCLER LOGIC
+                const orbitRange = this.engagementDist * 1.5;
+                const isOrbiting = dist <= orbitRange;
 
-            const maxStep = this.turnRate * dt;
-            if (Math.abs(diff) > maxStep) {
-                this.rotation += Math.sign(diff) * maxStep;
+                if (isOrbiting) {
+                    // ORBIT
+                    // 1. Current Angle
+                    const currentAngle = Math.atan2(this.y - playerY, this.x - playerX);
+
+                    // 2. Direction (CCW for Starboard/Right weapons)
+                    const direction = 1;
+
+                    // 3. Next Angle (Slower speed)
+                    const orbitSpeed = 0.64; // Reduced for smoother look
+                    const nextAngle = currentAngle + orbitSpeed * direction * dt;
+
+                    // 4. Radius (Smooth snap)
+                    const desiredRadius = this.engagementDist * 1.2;
+                    const nextRadius = dist + (desiredRadius - dist) * 2.0 * dt;
+
+                    // 5. Set Pos directly (Orbit ignores obstacle avoidance for smoothness)
+                    this.x = playerX + Math.cos(nextAngle) * nextRadius;
+                    this.y = playerY + Math.sin(nextAngle) * nextRadius;
+
+                    // 6. Rotation (Face Tangent) with Smoothing
+                    const targetRotation = nextAngle + (Math.PI / 2);
+
+                    let diff = targetRotation - this.rotation;
+                    while (diff < -Math.PI) diff += Math.PI * 2;
+                    while (diff > Math.PI) diff -= Math.PI * 2;
+
+                    const maxStep = this.turnRate * dt;
+                    if (Math.abs(diff) > maxStep) {
+                        this.rotation += Math.sign(diff) * maxStep;
+                    } else {
+                        this.rotation = targetRotation;
+                    }
+
+                    applyMovement = false; // We set x/y directly
+                } else {
+                    // APPROACH
+                    const targetRotation = Math.atan2(dy, dx);
+
+                    let diff = targetRotation - this.rotation;
+                    while (diff < -Math.PI) diff += Math.PI * 2;
+                    while (diff > Math.PI) diff -= Math.PI * 2;
+
+                    const maxStep = this.turnRate * dt;
+                    if (Math.abs(diff) > maxStep) {
+                        this.rotation += Math.sign(diff) * maxStep;
+                    } else {
+                        this.rotation = targetRotation;
+                    }
+
+                    moveX = Math.cos(this.rotation) * this.speed * dt;
+                    moveY = Math.sin(this.rotation) * this.speed * dt;
+                    applyMovement = true;
+                }
             } else {
-                this.rotation = targetRotation;
+                // STANDARD ENEMY LOGIC
+                const targetRotation = Math.atan2(dy, dx);
+                let diff = targetRotation - this.rotation;
+                while (diff < -Math.PI) diff += Math.PI * 2;
+                while (diff > Math.PI) diff -= Math.PI * 2;
+
+                const maxStep = this.turnRate * dt;
+                if (Math.abs(diff) > maxStep) {
+                    this.rotation += Math.sign(diff) * maxStep;
+                } else {
+                    this.rotation = targetRotation;
+                }
+
+                if (dist > this.engagementDist) {
+                    moveX = Math.cos(this.rotation) * this.speed * dt;
+                    moveY = Math.sin(this.rotation) * this.speed * dt;
+                    applyMovement = true;
+                }
             }
 
-            // Move if too far, but stop if close enough (engagement)
-            // Special case: Circler orbits the player when close
-            if (this.type === 'circler' && dist <= this.engagementDist) {
-                // Orbital motion around player
-                const orbitRadius = this.engagementDist * 0.8; // Maintain distance
-                const orbitSpeed = 2.5; // Radians per second
+            // --- OBSTACLE AVOIDANCE (Only if applying movement) ---
+            if (applyMovement) {
+                const avoidRadius = this.radius + 60;
+                let avoidX = 0;
+                let avoidY = 0;
 
-                // Update circle angle
-                this.circleAngle += orbitSpeed * dt * this.circleDirection;
-
-                // Calculate target position on orbit
-                const targetX = playerX + Math.cos(this.circleAngle) * orbitRadius;
-                const targetY = playerY + Math.sin(this.circleAngle) * orbitRadius;
-
-                // Move toward orbit position
-                const toTargetX = targetX - this.x;
-                const toTargetY = targetY - this.y;
-                const toTargetDist = Math.sqrt(toTargetX * toTargetX + toTargetY * toTargetY);
-
-                if (toTargetDist > 5) { // Small threshold to avoid jitter
-                    const moveX = (toTargetX / toTargetDist) * this.speed * dt;
-                    const moveY = (toTargetY / toTargetDist) * this.speed * dt;
-                    this.x += moveX;
-                    this.y += moveY;
-                }
-            } else if (dist > this.engagementDist) {
-                // Calculate desired move direction
-                let moveX = Math.cos(this.rotation) * this.speed * dt;
-                let moveY = Math.sin(this.rotation) * this.speed * dt;
-
-                // Obstacle avoidance steering
-                const avoidRadius = this.radius + 60; // Detection radius for obstacles
-                let avoidX = 0, avoidY = 0;
-
-                // Check asteroids
+                // Asteroids
                 for (const asteroid of asteroids) {
                     if (asteroid.isDead || asteroid.isBroken) continue;
                     const adx = this.x - asteroid.x;
@@ -296,14 +376,13 @@ export class Enemy {
                     const aDist = Math.sqrt(adx * adx + ady * ady);
                     const minDist = avoidRadius + asteroid.radius;
                     if (aDist < minDist && aDist > 0) {
-                        // Push away from obstacle
                         const strength = (minDist - aDist) / minDist;
                         avoidX += (adx / aDist) * strength * this.speed * dt * 2;
                         avoidY += (ady / aDist) * strength * this.speed * dt * 2;
                     }
                 }
 
-                // Check loot crates
+                // Loot Crates
                 for (const crate of lootCrates) {
                     if (crate.isOpened) continue;
                     const cdx = this.x - crate.x;
@@ -317,105 +396,100 @@ export class Enemy {
                     }
                 }
 
-                // Apply combined movement
                 this.x += moveX + avoidX;
                 this.y += moveY + avoidY;
             }
+        }
 
-            // Shoot from weapon parts (Striker) or basic shooting
-            if (this.weaponCooldowns && this.weaponCooldowns.length > 0) {
-                // Process active bursts
-                for (let i = this.activeBursts.length - 1; i >= 0; i--) {
-                    const burst = this.activeBursts[i];
-                    burst.timer -= dt;
-                    if (burst.timer <= 0) {
-                        // Fire shot
-                        const partAngle = (burst.part.rotation || 0) * (Math.PI / 2);
-                        const isRotated = ((burst.part.rotation || 0) % 2 !== 0);
-                        const w = isRotated ? burst.def.height : burst.def.width;
-                        const h = isRotated ? burst.def.width : burst.def.height;
-                        const localX = (burst.part.x + (w - 1) / 2) * TILE_SIZE;
-                        const localY = (burst.part.y + (h - 1) / 2) * TILE_SIZE;
+        // --- SHOOTING LOGIC ---
+        if (this.weaponCooldowns && this.weaponCooldowns.length > 0) {
+            // Process active bursts
+            for (let i = this.activeBursts.length - 1; i >= 0; i--) {
+                const burst = this.activeBursts[i];
+                burst.timer -= dt;
+                if (burst.timer <= 0) {
+                    const partAngle = (burst.part.rotation || 0) * (Math.PI / 2);
+                    const isRotated = ((burst.part.rotation || 0) % 2 !== 0);
+                    const w = isRotated ? burst.def.height : burst.def.width;
+                    const h = isRotated ? burst.def.width : burst.def.height;
+                    const localX = (burst.part.x + (w - 1) / 2) * TILE_SIZE;
+                    const localY = (burst.part.y + (h - 1) / 2) * TILE_SIZE;
+
+                    const cos = Math.cos(this.rotation);
+                    const sin = Math.sin(this.rotation);
+                    const worldX = this.x + (localX * cos - localY * sin);
+                    const worldY = this.y + (localX * sin + localY * cos);
+
+                    const dx = playerX - worldX;
+                    const dy = playerY - worldY;
+                    const angleToPlayer = Math.atan2(dy, dx);
+
+                    const spread = (Math.random() - 0.5) * (burst.def.stats.spread || 0);
+                    const pType = burst.def.stats.projectileType || 'bullet';
+                    const pSpeed = burst.def.stats.projectileSpeed || (pType === 'laser' || pType === 'small_laser' ? 800 : 400);
+                    const baseDamage = burst.def.stats.damage || 5;
+                    const finalDamage = baseDamage * (this.damageMultiplier || 1);
+
+                    projectiles.push(new Projectile(worldX, worldY, angleToPlayer + spread, pType, pSpeed, 'enemy', finalDamage));
+
+                    burst.count--;
+                    if (burst.count <= 0) {
+                        this.activeBursts.splice(i, 1);
+                    } else {
+                        burst.timer = burst.def.stats.burstInterval || 0.1;
+                    }
+                }
+            }
+
+            // Check cooldowns
+            for (const wep of this.weaponCooldowns) {
+                wep.cooldown -= dt;
+                if (wep.cooldown <= 0) {
+                    const burstCount = wep.def.stats.burstCount || 1;
+                    if (burstCount > 1) {
+                        this.activeBursts.push({
+                            part: wep.part,
+                            def: wep.def,
+                            count: burstCount,
+                            timer: 0
+                        });
+                        wep.cooldown = wep.def.stats.cooldown || 2;
+                    } else {
+                        // Single shot
+                        const partAngle = (wep.part.rotation || 0) * (Math.PI / 2);
+                        const isRotated = ((wep.part.rotation || 0) % 2 !== 0);
+                        const w = isRotated ? wep.def.height : wep.def.width;
+                        const h = isRotated ? wep.def.width : wep.def.height;
+                        const localX = (wep.part.x + (w - 1) / 2) * TILE_SIZE;
+                        const localY = (wep.part.y + (h - 1) / 2) * TILE_SIZE;
 
                         const cos = Math.cos(this.rotation);
                         const sin = Math.sin(this.rotation);
                         const worldX = this.x + (localX * cos - localY * sin);
                         const worldY = this.y + (localX * sin + localY * cos);
 
-                        // Aim at player
                         const dx = playerX - worldX;
                         const dy = playerY - worldY;
                         const angleToPlayer = Math.atan2(dy, dx);
 
-                        // Add spread
-                        const spread = (Math.random() - 0.5) * (burst.def.stats.spread || 0);
-                        const pType = burst.def.stats.projectileType || 'bullet';
-                        const pSpeed = burst.def.stats.projectileSpeed || (pType === 'laser' || pType === 'small_laser' ? 800 : 400);
-                        const baseDamage = burst.def.stats.damage || 5;
+                        const spread = (Math.random() - 0.5) * (wep.def.stats.spread || 0);
+                        const pType = wep.def.stats.projectileType || 'bullet';
+                        const pSpeed = wep.def.stats.projectileSpeed || (pType === 'laser' || pType === 'small_laser' ? 800 : 400);
+                        const baseDamage = wep.def.stats.damage || 5;
                         const finalDamage = baseDamage * (this.damageMultiplier || 1);
 
                         projectiles.push(new Projectile(worldX, worldY, angleToPlayer + spread, pType, pSpeed, 'enemy', finalDamage));
-
-                        burst.count--;
-                        if (burst.count <= 0) {
-                            this.activeBursts.splice(i, 1);
-                        } else {
-                            burst.timer = burst.def.stats.burstInterval || 0.1;
-                        }
+                        wep.cooldown = wep.def.stats.cooldown || 2;
                     }
                 }
-
-                // Check cooldowns
-                for (const wep of this.weaponCooldowns) {
-                    wep.cooldown -= dt;
-                    if (wep.cooldown <= 0) {
-                        // Start burst
-                        const burstCount = wep.def.stats.burstCount || 1;
-                        if (burstCount > 1) {
-                            this.activeBursts.push({
-                                part: wep.part,
-                                def: wep.def,
-                                count: burstCount,
-                                timer: 0
-                            });
-                            wep.cooldown = wep.def.stats.cooldown || 2;
-                        } else {
-                            // Single shot logic (same coordinates calculation)
-                            const partAngle = (wep.part.rotation || 0) * (Math.PI / 2);
-                            const isRotated = ((wep.part.rotation || 0) % 2 !== 0);
-                            const w = isRotated ? wep.def.height : wep.def.width;
-                            const h = isRotated ? wep.def.width : wep.def.height;
-                            const localX = (wep.part.x + (w - 1) / 2) * TILE_SIZE;
-                            const localY = (wep.part.y + (h - 1) / 2) * TILE_SIZE;
-
-                            const cos = Math.cos(this.rotation);
-                            const sin = Math.sin(this.rotation);
-                            const worldX = this.x + (localX * cos - localY * sin);
-                            const worldY = this.y + (localX * sin + localY * cos);
-
-                            const dx = playerX - worldX;
-                            const dy = playerY - worldY;
-                            const angleToPlayer = Math.atan2(dy, dx);
-
-                            const spread = (Math.random() - 0.5) * (wep.def.stats.spread || 0);
-                            const pType = wep.def.stats.projectileType || 'bullet';
-                            const pSpeed = wep.def.stats.projectileSpeed || (pType === 'laser' || pType === 'small_laser' ? 800 : 400);
-                            const baseDamage = wep.def.stats.damage || 5;
-                            const finalDamage = baseDamage * (this.damageMultiplier || 1);
-
-                            projectiles.push(new Projectile(worldX, worldY, angleToPlayer + spread, pType, pSpeed, 'enemy', finalDamage));
-                            wep.cooldown = wep.def.stats.cooldown || 2;
-                        }
-                    }
-                }
-            } else {
-                // Basic enemy shooting
-                this.shootCooldown -= dt;
-                if (this.shootCooldown <= 0) {
-                    const pSpeed = this.projectileType === 'laser' ? 800 : 400;
-                    projectiles.push(new Projectile(this.x, this.y, this.rotation, this.projectileType, pSpeed, 'enemy'));
-                    this.shootCooldown = this.shootRate;
-                }
+            }
+        } else {
+            // Basic enemy shooting
+            this.shootCooldown -= dt;
+            if (this.shootCooldown <= 0) {
+                const pSpeed = this.projectileType === 'laser' ? 800 : 400;
+                projectiles.push(new Projectile(this.x, this.y, this.rotation, this.projectileType, pSpeed, 'enemy'));
+                this.shootCooldown = this.shootRate;
             }
         }
     }
@@ -430,6 +504,15 @@ export class Enemy {
             ctx.translate(this.x, this.y);
             ctx.rotate(this.rotation + this.rotationOffset);
 
+            if (this.frozenTimer > 0 || this.freezeMeter > 0) {
+                // Blue tint for frozen or freezing enemies
+                const intensity = this.frozenTimer > 0 ? 1.0 : (this.freezeMeter / 3.0);
+                ctx.shadowBlur = 5 + intensity * 10;
+                ctx.shadowColor = '#00ffff';
+                ctx.globalAlpha = 0.8;
+                // We'll also apply a blue tint to the sprites below if we can
+            }
+
             for (const partData of this.shipParts) {
                 const def = PartsLibrary[partData.partId];
                 if (!def) continue;
@@ -440,28 +523,37 @@ export class Enemy {
                 const drawX = (partData.x + (w - 1) / 2) * TILE_SIZE;
                 const drawY = (partData.y + (h - 1) / 2) * TILE_SIZE;
 
-                // Calculate Turret Rotation (Tracking)
-                let drawAngle = (partData.rotation || 0) * (Math.PI / 2);
+                const baseAngle = (partData.rotation || 0) * (Math.PI / 2);
+
+                let drawAngle = baseAngle;
+                let turretX = drawX;
+                let turretY = drawY;
 
                 // If it's a weapon, aim at player
                 if (def.type === 'weapon') {
-                    // Global position of part
-                    const localX = (partData.x + (w - 1) / 2) * TILE_SIZE;
-                    const localY = (partData.y + (h - 1) / 2) * TILE_SIZE;
-                    // Note: We are transforming relative to ship center
-                    // To aim at player, we typically need global coordinates
-                    // But we can transform the "Target (Player)" into local space!
+                    // Offset Logic (Same as Player Ship)
+                    let offsetX = 0;
+                    let offsetY = 0;
 
-                    // Simple hack: since ship mostly faces player, local angle ~ global angle - ship rotation
-                    // But for precise tracking:
-                    // We need to calculate the angle that points to player in Local Space.
-                    // If we assume the ship context is rotated by `this.rotation`...
-                    // then we want `angleToPlayer - this.rotation`.
-                    // EXCEPT the enemy logic rotates the ship to face the player already.
-                    // So `angleToPlayer - this.rotation` should be ~0 (Right).
+                    if (def.turretDrawOffset) {
+                        if (typeof def.turretDrawOffset === 'object') {
+                            const ox = def.turretDrawOffset.x || 0;
+                            const oy = def.turretDrawOffset.y || 0;
+                            offsetX = Math.cos(baseAngle) * ox - Math.sin(baseAngle) * oy;
+                            offsetY = Math.sin(baseAngle) * ox + Math.cos(baseAngle) * oy;
+                        } else {
+                            // Scalar (aim based) is tricky here because we haven't calculated aim angle yet.
+                            // But enemies aim at player.
+                            // For now, simplify scalar to just be forward offset? Or skip.
+                            // Most don't use scalar.
+                            // Simple approximation: Forward relative to mount
+                            offsetX = Math.cos(baseAngle) * def.turretDrawOffset;
+                            offsetY = Math.sin(baseAngle) * def.turretDrawOffset;
+                        }
+                    }
 
-                    // However, we want the turret to ALWAYS point at player, even if ship is turning.
-                    // So we do need strictly: `angleToPlayer - this.rotation`.
+                    turretX = drawX + offsetX;
+                    turretY = drawY + offsetY;
                     // But we don't have access to player pos in draw(). 
 
                     // Workaround: We'll assume the enemy AI keeps it facing roughly, 
@@ -479,7 +571,8 @@ export class Enemy {
                 }
 
                 // Red tint for enemy (using sprite override instead of CSS filter for Edge performance)
-                const enemyColor = '#ff6666'; // Red tint
+                let enemyColor = '#ff6666'; // Red tint
+                if (this.frozenTimer > 0) enemyColor = '#00ffff'; // Frozen Blue
 
                 // Draw base block for weapons (like player ship does)
                 if (def.type === 'weapon' && def.baseSprite) {
@@ -488,13 +581,18 @@ export class Enemy {
                 }
 
                 // Turret uses tracked rotation (Forward)
-                def.sprite.draw(ctx, drawX, drawY, drawAngle + (def.rotationOffset || 0), 0.5, 0.5, null, enemyColor);
+                def.sprite.draw(ctx, turretX, turretY, drawAngle + (def.rotationOffset || 0), null, null, null, enemyColor);
             }
 
+            if (this.frozenTimer > 0 || this.freezeMeter > 0) {
+                ctx.globalAlpha = 1.0;
+                ctx.shadowBlur = 0;
+            }
             ctx.restore();
         } else if (this.sprite) {
             // Fallback single sprite (basic enemy)
-            this.sprite.draw(renderer.ctx, this.x, this.y, this.rotation + this.rotationOffset);
+            const color = (this.frozenTimer > 0) ? '#00ffff' : undefined;
+            this.sprite.draw(renderer.ctx, this.x, this.y, this.rotation + this.rotationOffset, 0.5, 0.5, null, color);
         }
 
         // Health bar - position above the topmost part in world space

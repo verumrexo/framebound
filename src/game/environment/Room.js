@@ -204,6 +204,8 @@ export class Room {
         this.waveCount++;
         game.showNotification(`WAVE ${this.waveCount}/${this.maxWaves}`, '#ff8800');
 
+        const floor = game.floor || 1;
+
         // Spawn 3-5 enemies around the player
         const count = 3 + this.waveCount; // Harder each wave
         for (let i = 0; i < count; i++) {
@@ -216,10 +218,11 @@ export class Room {
             const roomX = Math.max(this.x + 50, Math.min(this.x + this.width - 50, ex));
             const roomY = Math.max(this.y + 50, Math.min(this.y + this.height - 50, ey));
 
-            const type = Math.random() > 0.6 ? 'striker' : 'drone';
-            const enemy = new Enemy(roomX, roomY, type);
-            // Buff enemies in vault?
-            enemy.hp *= 1.5;
+            const type = Math.random() > 0.6 ? 'striker' : 'basic';
+            const enemy = new Enemy(roomX, roomY, type, floor);
+            // Buff enemies in vault
+            enemy.maxHp *= 1.5;
+            enemy.hp = enemy.maxHp;
 
             this.enemies.push(enemy);
             game.enemies.push(enemy);
@@ -334,6 +337,8 @@ export class Room {
             return;
         }
 
+        const floor = game.floor || 1;
+
         // Density based on room size
         const count = 3 + Math.floor(Math.random() * 4) * (this.widthUnits * this.heightUnits);
         const is2x2Room = this.widthUnits === 2 && this.heightUnits === 2;
@@ -347,31 +352,35 @@ export class Room {
             let type = 'basic';
             const r = Math.random();
 
-            // 20% chance for Sniperer in any room
-            if (r < 0.2) {
-                type = 'sniperer';
-            } else if (r < 0.35) {
-                // 15% chance for Circler
+            // Floor-restricted spawns: sniper 3+, circler 2+, rocketeer 4+
+            if (r < 0.2 && floor >= 3) {
+                // 20% chance for Sniper (floor 3+)
+                type = 'sniper';
+            } else if (r < 0.35 && floor >= 2) {
+                // 15% chance for Circler (floor 2+)
                 type = 'circler';
-            } else if (is2x2Room) {
-                // Always spawn at least one Rocketeer in 2x2 rooms
+            } else if (is2x2Room && floor >= 4) {
+                // Rocketeer in 2x2 rooms (floor 4+)
                 if (i === 0) {
                     type = 'rocketeer';
                 } else {
                     // Mix of striker and basic for others
                     type = Math.random() < 0.3 ? 'striker' : 'basic';
                 }
+            } else if (is2x2Room) {
+                // Before floor 4, 2x2 rooms get strikers instead
+                type = Math.random() < 0.3 ? 'striker' : 'basic';
             } else {
-                // 10% chance for Rocketeer in smaller rooms
-                const r = Math.random();
-                if (r < 0.1) {
+                // Smaller rooms
+                const r2 = Math.random();
+                if (r2 < 0.1 && floor >= 4) {
                     type = 'rocketeer';
-                } else if (r < 0.4) {
+                } else if (r2 < 0.4) {
                     type = 'striker';
                 }
             }
 
-            const enemy = new Enemy(ex, ey, type);
+            const enemy = new Enemy(ex, ey, type, floor);
             game.enemies.push(enemy);
             this.enemies.push(enemy);
         }

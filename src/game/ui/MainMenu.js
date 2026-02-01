@@ -1,6 +1,7 @@
 
 import { HighScoreManager } from '../systems/HighScoreManager.js';
 import { SaveManager } from '../systems/SaveManager.js';
+import { CHANGELOG } from '../../version.js';
 
 export class MainMenu {
     constructor(game) {
@@ -21,7 +22,7 @@ export class MainMenu {
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            z-index: 2000;
+            z-index: 100000;
             font-family: 'Press Start 2P', cursive;
             color: white;
             transition: opacity 0.5s;
@@ -175,7 +176,12 @@ export class MainMenu {
                         <span>master volume</span>
                         <span id="val-master">${masterVol}%</span>
                     </div>
-                    <input type="range" id="rng-master" min="0" max="100" value="${masterVol}" style="width: 100%; cursor: pointer;">
+                    <div class="slider-container">
+                        <div class="slider-track"></div>
+                        <div class="slider-fill" id="fill-master" style="width: ${masterVol}%"></div>
+                        <div class="slider-thumb" id="thumb-master" style="left: ${masterVol}%"></div>
+                        <input type="range" id="rng-master" min="0" max="100" value="${masterVol}" class="slider-input">
+                    </div>
                 </div>
 
                 <!-- Music Volume -->
@@ -184,7 +190,12 @@ export class MainMenu {
                         <span>music</span>
                         <span id="val-music">${musicVol}%</span>
                     </div>
-                    <input type="range" id="rng-music" min="0" max="100" value="${musicVol}" style="width: 100%; cursor: pointer;">
+                    <div class="slider-container">
+                        <div class="slider-track"></div>
+                        <div class="slider-fill" id="fill-music" style="width: ${musicVol}%"></div>
+                        <div class="slider-thumb" id="thumb-music" style="left: ${musicVol}%"></div>
+                        <input type="range" id="rng-music" min="0" max="100" value="${musicVol}" class="slider-input">
+                    </div>
                 </div>
 
                 <!-- SFX Volume -->
@@ -193,65 +204,123 @@ export class MainMenu {
                         <span>sfx</span>
                         <span id="val-sfx">${sfxVol}%</span>
                     </div>
-                    <input type="range" id="rng-sfx" min="0" max="100" value="${sfxVol}" style="width: 100%; cursor: pointer;">
+                    <div class="slider-container">
+                        <div class="slider-track"></div>
+                        <div class="slider-fill" id="fill-sfx" style="width: ${sfxVol}%"></div>
+                        <div class="slider-thumb" id="thumb-sfx" style="left: ${sfxVol}%"></div>
+                        <input type="range" id="rng-sfx" min="0" max="100" value="${sfxVol}" class="slider-input">
+                    </div>
                 </div>
             </div>
 
-            <button id="btn-back" class="menu-btn" style="background: transparent; color: white; border: 1px solid #fff; width: 200px; margin-top: 40px;">back</button>
+            <button id="btn-back" class="menu-btn" style="background: rgba(0, 40, 60, 0.6); color: #00ffff; border: 2px solid rgba(0, 255, 255, 0.4); width: 200px; margin-top: 40px; font-family: 'Press Start 2P', cursive; font-size: 16px;">back</button>
 
             <style>
-                input[type=range] {
-                    -webkit-appearance: none;
-                    background: transparent;
+                #btn-back:hover {
+                    background: rgba(0, 255, 255, 0.2) !important;
+                    border-color: #00ffff !important;
+                    color: #ffffff !important;
                 }
-                input[type=range]::-webkit-slider-thumb {
-                    -webkit-appearance: none;
-                    height: 20px;
-                    width: 20px;
-                    background: #00ffff;
-                    cursor: pointer;
-                    margin-top: -8px;
-                    box-shadow: 0 0 10px #00ffff;
-                }
-                input[type=range]::-webkit-slider-runnable-track {
+                .slider-container {
+                    position: relative;
                     width: 100%;
-                    height: 4px;
+                    height: 20px;
+                    display: flex;
+                    align-items: center;
+                }
+                .slider-track {
+                    position: absolute;
+                    width: 100%;
+                    height: 8px;
+                    background: #333;
+                    border-radius: 0;
+                }
+                .slider-fill {
+                    position: absolute;
+                    height: 8px;
+                    background: #00ffff;
+                    border-radius: 0;
+                }
+                .slider-thumb {
+                    position: absolute;
+                    width: 6px;
+                    height: 16px;
+                    background: #ffffff;
+                    border-radius: 0;
+                    margin-left: -3px; /* Center thumb (half of width) */
+                    pointer-events: none;
+                }
+                .slider-input {
+                    position: absolute;
+                    width: 100%;
+                    height: 100%;
+                    opacity: 0;
                     cursor: pointer;
-                    background: #444;
+                    margin: 0;
+                    z-index: 2;
                 }
             </style>
         `;
+
+        // Animation Loop for Smooth Visuals
+        const updateVisuals = () => {
+            if (!document.getElementById('rng-master')) return; // Exit if menu closed
+
+            const mVol = this.game.audio.masterGain.gain.value * 100;
+            const muVol = this.game.audio.musicGain.gain.value * 100;
+            const sVol = this.game.audio.sfxGain.gain.value * 100;
+
+            document.getElementById('fill-master').style.width = `${mVol}%`;
+            document.getElementById('thumb-master').style.left = `${mVol}%`;
+            document.getElementById('val-master').innerText = Math.round(mVol) + '%';
+
+            document.getElementById('fill-music').style.width = `${muVol}%`;
+            document.getElementById('thumb-music').style.left = `${muVol}%`;
+            document.getElementById('val-music').innerText = Math.round(muVol) + '%';
+
+            document.getElementById('fill-sfx').style.width = `${sVol}%`;
+            document.getElementById('thumb-sfx').style.left = `${sVol}%`;
+            document.getElementById('val-sfx').innerText = Math.round(sVol) + '%';
+
+            requestAnimationFrame(updateVisuals);
+        };
 
         // Attach Listeners
         setTimeout(() => {
             const rngMaster = document.getElementById('rng-master');
             const rngMusic = document.getElementById('rng-music');
             const rngSfx = document.getElementById('rng-sfx');
+            const btnBack = document.getElementById('btn-back');
 
-            const valMaster = document.getElementById('val-master');
-            const valMusic = document.getElementById('val-music');
-            const valSfx = document.getElementById('val-sfx');
+            const stopProp = (e) => e.stopPropagation();
+
+            [rngMaster, rngMusic, rngSfx].forEach(rng => {
+                rng.addEventListener('mousedown', stopProp);
+                rng.addEventListener('touchstart', stopProp);
+                rng.addEventListener('click', stopProp);
+            });
+
+            // Start animation loop
+            requestAnimationFrame(updateVisuals);
 
             rngMaster.oninput = (e) => {
                 const v = parseInt(e.target.value);
-                valMaster.innerText = v + '%';
                 this.game.audio.setMasterVolume(v / 100);
             };
 
             rngMusic.oninput = (e) => {
                 const v = parseInt(e.target.value);
-                valMusic.innerText = v + '%';
                 this.game.audio.setMusicVolume(v / 100);
             };
 
             rngSfx.oninput = (e) => {
                 const v = parseInt(e.target.value);
-                valSfx.innerText = v + '%';
                 this.game.audio.setSfxVolume(v / 100);
-                // Play a test sound if we had a simple blip, but maybe just changing volume is fine
             };
 
-            document.getElementById('btn-back').onclick = () => this.renderMenu();
+            btnBack.onclick = () => {
+                this.renderMenu();
+            };
         }, 0);
     }
 
@@ -259,89 +328,7 @@ export class MainMenu {
     renderChangelog() {
         if (!this.overlay) return;
 
-        const changes = [
-            {
-                ver: "v0.4.0",
-                date: "2026-01-24",
-                items: [
-                    "- new: 'rocketeer' enemy (heavy 4x rockets, 2x2 rooms)",
-                    "- new: 'sniperer' enemy (long-range, stationary)",
-                    "- new: 'circler' enemy (fast approach + orbit)",
-                    "- improved: ship builder UI (repositioned panel)",
-                    "- improved: burst weapon damage (5.0 DPS)",
-                    "- improved: part designer (2x4 legendary parts)"
-                ]
-            },
-            {
-                ver: "v0.3.1",
-                date: "2026-01-23",
-                items: [
-                    "- hotfix: edge browser performance (outline caching)",
-                    "- hotfix: removed CSS filters from enemies (4x faster)",
-                    "- new: pause menu with settings access",
-                    "- new: in-game audio controls (esc menu)"
-                ]
-            },
-            {
-                ver: "v0.3.0",
-                date: "2026-01-21",
-                items: [
-                    "- new 'settings' menu (audio controls)",
-                    "- visual overhaul (glass UI & animations)",
-                    "- font update (press start 2p)",
-                    "- live text logo implementation"
-                ]
-            },
-            {
-                ver: "v0.2.2.3",
-                date: "2026-01-20",
-                items: [
-                    "- advanced dev tools (spawn, place, infinite)",
-                    "- physics lag fix (dt capping)",
-                    "- collision optimization",
-                    "- updated chest visuals",
-                    "- unified L-key menu"
-                ]
-            },
-            {
-                ver: "v0.2.2.1",
-                date: "2026-01-19",
-                items: [
-                    "- fixed vault reward logic (payment & fight required)",
-                    "- fixed vault ambush infinite wave crash",
-                    "- fixed chest sprite definition crash",
-                    "- updated chest visuals",
-                    "- added debug 'I' button for nukes"
-                ]
-            },
-            {
-                ver: "v0.2.2",
-                date: "2026-01-19",
-                items: [
-                    "- high score system with name entry",
-                    "- leaderboard in main menu",
-                    "- score display on HUD",
-                    "- points for kills and room clears",
-                    "- size-based rarity system (common/rare/epic)",
-                    "- rarity color coding in tooltips"
-                ]
-            },
-            {
-                ver: "v0.2.1",
-                date: "2026-01-18",
-                items: [
-                    "- mobile controls (virtual joysticks)",
-                    "- update starting ship",
-                    "- network host enabled"
-                ]
-            },
-            {
-                ver: "v0.2.0",
-                date: "2026-01-18", items: ["curséd vaults room", "audio system update", "ui visual overhaul", "deployment system"]
-            },
-            { ver: "v0.1.5", date: "2026-01-15", items: ["shop room added", "treasure room added"] },
-            { ver: "v0.1.0", date: "2026-01-10", items: ["core flight physics", "asteroid fields", "basic combat"] }
-        ];
+        const changes = CHANGELOG;
 
         let html = `
             <h2 style="color: #888; margin-bottom: 40px; font-size: 24px;">changelog</h2>
