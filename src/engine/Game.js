@@ -803,6 +803,7 @@ export class Game {
         // --- DEATH CHECK ---
         if (this.playerShip.isDead && !this.isGameOver) {
             console.log('[Death] Ship died! Setting up name entry');
+            SaveManager.clearSave(); // Prevent save scumming immediately
             this.isGameOver = true;
             this.paused = true;
             this.audio.play('frame_death', { volume: 0.7 });

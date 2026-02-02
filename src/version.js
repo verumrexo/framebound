@@ -1,10 +1,19 @@
 // Single source of truth for version info
 // UPDATE THIS FILE when making changes to the game
 
-export const VERSION = '0.6.19.1';
-export const VERSION_NAME = 'LOCKED_ON (HOTFIX)';
+export const VERSION = '0.6.19.2';
+export const VERSION_NAME = 'LOCKED_ON (HOTFIX 2)';
 
 export const CHANGELOG = [
+    {
+        ver: '0.6.19.2',
+        name: 'LOCKED_ON (HOTFIX 2)',
+        date: '2026-02-02',
+        items: [
+            'HOTFIX: Fixed save-scum exploit; save file is now deleted immediately upon death.',
+            'HOTFIX: Reduced audio volumes for hits (0.15).'
+        ]
+    },
     {
         ver: '0.6.19.1',
         name: 'LOCKED_ON (HOTFIX)',
