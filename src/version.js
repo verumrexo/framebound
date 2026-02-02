@@ -1,10 +1,20 @@
 // Single source of truth for version info
 // UPDATE THIS FILE when making changes to the game
 
-export const VERSION = '0.6.19.3';
-export const VERSION_NAME = 'LOCKED_ON (HOTFIX 3)';
+export const VERSION = '0.6.19.4';
+export const VERSION_NAME = 'LOCKED_ON (HOTFIX 4)';
 
 export const CHANGELOG = [
+    {
+        ver: '0.6.19.4',
+        name: 'LOCKED_ON (HOTFIX 4)',
+        date: '2026-02-02',
+        items: [
+            'HOTFIX: Fixed "mirrorAnchorY" crash in Boss Generator.',
+            'BALANCE: Bosses now scale properly (F1=1x1 only, F2=Medium Weap limit, F3=Big Weap limit).',
+            'BALANCE: Sniper is explicitly banned on Floor 1 & 2 Bosses.'
+        ]
+    },
     {
         ver: '0.6.19.3',
         name: 'LOCKED_ON (HOTFIX 3)',

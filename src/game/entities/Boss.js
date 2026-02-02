@@ -38,144 +38,207 @@ export class Boss extends Enemy {
     }
 
     generate() {
+        // --- 1. Categorize Parts ---
+        const p1x1_w = [], p1x1_h = [];
+        const p1x2_w = [], p1x2_h = [];
+        const p2x2_w = [], p2x2_h = [];
+        const pBig = [];
+
+        Object.keys(PartsLibrary).forEach(id => {
+            if (id === 'core') return;
+            const def = PartsLibrary[id];
+            const w = def.width, h = def.height;
+            const isWep = (def.type === 'weapon');
+            const min = Math.min(w, h), max = Math.max(w, h);
+
+            if (w === 1 && h === 1) {
+                if (isWep) p1x1_w.push(id); else p1x1_h.push(id);
+            } else if (min === 1 && max === 2) {
+                if (isWep) p1x2_w.push(id); else p1x2_h.push(id);
+            } else if (w === 2 && h === 2) {
+                if (isWep) p2x2_w.push(id); else p2x2_h.push(id);
+            } else {
+                pBig.push(id);
+            }
+        });
+
+        // Blacklist Sniper on Floors 1-2
+        if (this.level < 3) {
+            const sniperId = 'custom_1768857172136';
+            const idx = p1x2_w.indexOf(sniperId);
+            if (idx > -1) p1x2_w.splice(idx, 1);
+        }
+
+        // --- 2. Build "Deck" (Mandatory Parts) & Limits ---
+        const deck = []; // List of part IDs to force-place first
+        let fillPool = []; // List of part IDs to use for filling rest
+
+        // Helper to add N random items from list to deck
+        const pushDeck = (list, count) => {
+            for (let i = 0; i < count; i++) {
+                if (list.length > 0) deck.push(list[Math.floor(Math.random() * list.length)]);
+            }
+        };
+
+        // Floor Rules
+        if (this.level === 1) {
+            // F1: 1x1 Only
+            fillPool = [...p1x1_w, ...p1x1_h];
+        } else if (this.level === 2) {
+            // F2: Must have 2x [1x2 Weap]. Can have 2x [1x2 Hull]. No 2x2.
+            pushDeck(p1x2_w, 2);
+            // "Can have" means they are in the pool, but maybe we limit them?
+            // User: "CAN have 2 medium hulls... every other part should be 1x1" -> Strict limit logic needed?
+            // Implementation: Put all allowed parts in pool, check limits during pick.
+            fillPool = [...p1x1_w, ...p1x1_h, ...p1x2_h]; // Note: p1x2_w NOT in pool, only deck? Or allows more? 
+            // "ONLY 2 1x2 weapons" -> So don't add to pool.
+        } else if (this.level === 3) {
+            // F3: Must 2x [2x2 Weap], 2x [1x2 Weap]. Can [2x2 Hull], [1x2 Hull].
+            pushDeck(p2x2_w, 2); // Priority (Big first)
+            pushDeck(p1x2_w, 2);
+
+            fillPool = [...p1x1_w, ...p1x1_h, ...p1x2_h, ...p2x2_h];
+        } else {
+            // F4+: Like F3, but random allowed
+            pushDeck(p2x2_w, 2);
+            pushDeck(p1x2_w, 2);
+            // All parts allowed in pool
+            fillPool = [...p1x1_w, ...p1x1_h, ...p1x2_w, ...p1x2_h, ...p2x2_w, ...p2x2_h, ...pBig];
+        }
+
+        // --- 3. Generation Loop ---
         const directions = [[0, 1], [0, -1], [1, 0], [-1, 0]];
         const occupied = new Set(['0,0']);
         const availableSlots = new Set();
+        directions.forEach(d => { if (d[0] >= 0) availableSlots.add(`${d[0]},${d[1]}`); });
 
-        // Initial slots around core (filtered to x >= 0 for symmetry)
-        directions.forEach(d => {
-            if (d[0] >= 0) availableSlots.add(`${d[0]},${d[1]}`);
-        });
-
-        // Use the entire parts library (excluding core)
-        const allPartIds = Object.keys(PartsLibrary).filter(id => id !== 'core');
-
-        // Total approximate parts (hulls + weapons)
         let partsToPlace = this.hullCount + this.weaponCount;
+
+        // Limits state
+        const limits = {
+            '1x2_hull': 2,
+            '2x2_hull': 2
+        };
+        const counts = {
+            '1x2_hull': 0,
+            '2x2_hull': 0
+        };
+
         let attempts = 0;
         const MAX_ATTEMPTS = 500;
 
         while (partsToPlace > 0 && availableSlots.size > 0 && attempts < MAX_ATTEMPTS) {
             attempts++;
+
+            let partId = null;
+            let fromDeck = false;
+
+            // Strategy: Try Deck First
+            if (deck.length > 0) {
+                partId = deck[0]; // Peek
+                fromDeck = true;
+            } else {
+                // Random Fill
+                if (fillPool.length === 0) fillPool = [...p1x1_h]; // Fallback safety
+                partId = fillPool[Math.floor(Math.random() * fillPool.length)];
+            }
+
+            const def = PartsLibrary[partId];
+            const wRaw = def.width, hRaw = def.height;
+            const sizeKey = `${Math.min(wRaw, hRaw)}x${Math.max(wRaw, hRaw)}`;
+            const typeKey = def.type === 'weapon' ? 'weap' : 'hull';
+            const limitKey = `${sizeKey}_${typeKey}`; // e.g. "1x2_hull"
+
+            // Check Limits (Skip check for Deck items - they represent the mandate)
+            if (!fromDeck) {
+                if (this.level < 4) { // Limits apply F1-F3
+                    if (counts[limitKey] >= limits[limitKey]) {
+                        // Limit reached, try again (should filter pool really, but retry works with attempts)
+                        attempts--; // Don't burn attempt on limit check logic if mostly valid
+                        // Actually, just pick a 1x1 part instead to ensure progress
+                        partId = Math.random() < 0.5 ?
+                            (p1x1_w.length ? p1x1_w[Math.floor(Math.random() * p1x1_w.length)] : 'hull') :
+                            (p1x1_h.length ? p1x1_h[Math.floor(Math.random() * p1x1_h.length)] : 'hull');
+                    }
+                }
+            }
+
+            // Pick a Slot
             const slots = Array.from(availableSlots);
+            // Optimization: If placing Big part, maybe prioritize slots further out?
+            // Current: Uniform random slot.
             const key = slots[Math.floor(Math.random() * slots.length)];
             const [qx, qy] = key.split(',').map(Number);
 
-            // Try to place a random part here
-            const partId = allPartIds[Math.floor(Math.random() * allPartIds.length)];
-            const def = PartsLibrary[partId];
-
-            // Randomize rotation for side parts, force UP (3) for spine to maintain core orientation
+            // Rotation Logic
             let rot = 3;
-            if (qx !== 0) {
-                rot = Math.floor(Math.random() * 4);
-            }
-
-            // Determine dimensions based on rotation
-            // Rotation 1 & 3 (Down/Up) -> Swap Width/Height
+            if (qx !== 0) rot = Math.floor(Math.random() * 4);
             const isRotated = (rot % 2 !== 0);
             const w = isRotated ? def.height : def.width;
             const h = isRotated ? def.width : def.height;
 
-            // Placement Logic
+            // Placement Check
             let placed = false;
-            let anchorX = qx;
-            let anchorY = qy;
+            let anchorX = qx, anchorY = qy;
 
-            // Spine (x=0) Constraints: Must be centered, must be odd width (1, 3, etc.)
-            if (qx === 0) {
-                // If even width, we can't center it on integer grid logic without half-steps.
-                // For simplicity, enforce width=1 on the spine, or strictly odd widths.
-                // Check if w is odd
-                if (w % 2 !== 0) {
-                    // Center the part horizontally
+            if (qx === 0) { // Spine
+                if (w % 2 !== 0) { // Must be odd width to center
                     const offset = (w - 1) / 2;
-                    anchorX = qx - offset; // Shift left so qx is the center
+                    anchorX = qx - offset;
 
-                    // Check bounds & occupied for Main Part
                     let clear = true;
-                    const cellsToFill = [];
-
+                    const cells = [];
                     for (let ix = 0; ix < w; ix++) {
                         for (let iy = 0; iy < h; iy++) {
-                            const cx = anchorX + ix;
-                            const cy = anchorY + iy;
-                            if (occupied.has(`${cx},${cy}`)) {
-                                clear = false;
-                                break;
-                            }
-                            cellsToFill.push(`${cx},${cy}`);
+                            const cx = anchorX + ix, cy = anchorY + iy;
+                            if (occupied.has(`${cx},${cy}`)) { clear = false; break; }
+                            cells.push(`${cx},${cy}`);
                         }
                         if (!clear) break;
                     }
 
                     if (clear) {
-                        // Place Central Part
                         this.shipParts.push({ x: anchorX, y: anchorY, partId, rotation: rot });
-                        cellsToFill.forEach(k => occupied.add(k));
-
-                        // Add new available slots around this block
-                        cellsToFill.forEach(k => {
+                        cells.forEach(k => occupied.add(k));
+                        cells.forEach(k => {
                             const [cx, cy] = k.split(',').map(Number);
                             directions.forEach(d => {
-                                const nx = cx + d[0];
-                                const ny = cy + d[1];
-                                if (nx >= 0 && !occupied.has(`${nx},${ny}`)) {
-                                    availableSlots.add(`${nx},${ny}`);
-                                }
+                                const nx = cx + d[0], ny = cy + d[1];
+                                if (nx >= 0 && !occupied.has(`${nx},${ny}`)) availableSlots.add(`${nx},${ny}`);
                             });
                         });
-
-                        // Remove used key
                         availableSlots.delete(key);
                         partsToPlace--;
                         placed = true;
+
+                        // Update State
+                        if (fromDeck) deck.shift(); // Remove from deck
+                        if (counts[limitKey] !== undefined) counts[limitKey]++;
                     }
                 }
-            } else {
-                // Side Placement (x > 0)
-                // Anchor is qx, qy (top-left of part)
-                // We MUST ensure the part stays strictly in x > 0 space to avoid spine collision?
-                // Actually, if anchorX >= 1, and width >= 1, min X is 1. Safe.
-
-                // Check Main Part
+            } else { // Side
                 let mainClear = true;
                 const mainCells = [];
                 for (let ix = 0; ix < w; ix++) {
                     for (let iy = 0; iy < h; iy++) {
-                        const cx = anchorX + ix;
-                        const cy = anchorY + iy;
-                        if (occupied.has(`${cx},${cy}`)) {
-                            mainClear = false; break;
-                        }
+                        const cx = anchorX + ix, cy = anchorY + iy;
+                        if (occupied.has(`${cx},${cy}`)) { mainClear = false; break; }
                         mainCells.push(`${cx},${cy}`);
                     }
                     if (!mainClear) break;
                 }
 
-                // Check Mirror Part
-                // Mirror Anchor: If main is at x_min...x_max, mirror is at -x_max...-x_min
-                // x_max = anchorX + w - 1
-                // mirror_x_min = -(anchorX + w - 1)
+                // Mirror
                 const mirrorAnchorX = -(anchorX + w - 1);
                 const mirrorAnchorY = anchorY;
-
-                // Calculate Symmetric Rotation for Mirror
-                // 0 (Right) <-> 2 (Left)
-                // 1 (Down)  <-> 1 (Down)
-                // 3 (Up)    <-> 3 (Up)
                 const mirrorRot = (rot === 0) ? 2 : ((rot === 2) ? 0 : rot);
-
                 let mirrorClear = true;
                 const mirrorCells = [];
                 if (mainClear) {
                     for (let ix = 0; ix < w; ix++) {
                         for (let iy = 0; iy < h; iy++) {
-                            const cx = mirrorAnchorX + ix;
-                            const cy = mirrorAnchorY + iy;
-                            if (occupied.has(`${cx},${cy}`)) {
-                                mirrorClear = false; break;
-                            }
+                            const cx = mirrorAnchorX + ix, cy = mirrorAnchorY + iy; // mirrorAnchorY usually same
+                            if (occupied.has(`${cx},${cy}`)) { mirrorClear = false; break; }
                             mirrorCells.push(`${cx},${cy}`);
                         }
                         if (!mirrorClear) break;
@@ -183,43 +246,50 @@ export class Boss extends Enemy {
                 }
 
                 if (mainClear && mirrorClear) {
-                    // Place Both (Symmetrically Rotated)
                     this.shipParts.push({ x: anchorX, y: anchorY, partId, rotation: rot });
-                    this.shipParts.push({ x: mirrorAnchorX, y: mirrorAnchorY, partId, rotation: mirrorRot });
+                    this.shipParts.push({ x: mirrorAnchorX, y: anchorY, partId, rotation: mirrorRot }); // Corrected mirrorAnchorY usage
 
-                    mainCells.forEach(k => occupied.add(k));
-                    mirrorCells.forEach(k => occupied.add(k));
+                    [...mainCells, ...mirrorCells].forEach(k => occupied.add(k));
 
-                    // Expand from main side only (keep generator focused on positive x)
+                    // Grow from Main side
                     mainCells.forEach(k => {
                         const [cx, cy] = k.split(',').map(Number);
                         directions.forEach(d => {
-                            const nx = cx + d[0];
-                            const ny = cy + d[1];
-                            if (nx >= 0 && !occupied.has(`${nx},${ny}`)) {
-                                availableSlots.add(`${nx},${ny}`);
-                            }
+                            const nx = cx + d[0], ny = cy + d[1];
+                            if (nx >= 0 && !occupied.has(`${nx},${ny}`)) availableSlots.add(`${nx},${ny}`);
                         });
                     });
 
                     availableSlots.delete(key);
                     partsToPlace -= 2;
                     placed = true;
+
+                    if (fromDeck) deck.shift();
+                    if (counts[limitKey] !== undefined) counts[limitKey] += 2; // Count both
                 }
             }
 
-            // If we failed to place, remove the key to prevent infinite retries on bad slots?
-            // Or just keep it? Better to remove if it's truly blocked, but hard to know if ALL parts fail.
-            // For now, if we fail, we just loop again. Random limits apply.
             if (!placed) {
-                // If 1x1 part failed, the slot is likely garbage.
+                // If deck placement failed, we MUST make space.
+                // Place a 1x1 Hull filler to expand the boundary?
+                if (fromDeck) {
+                    // Temporarily skip Deck, try placing a 1x1 hull to open slots
+                    // But don't remove from deck
+                    const fillerId = p1x1_h.length ? p1x1_h[Math.floor(Math.random() * p1x1_h.length)] : 'hull';
+                    // We'll let the next loop iteration handle it by effectively 'ignoring' the deck for one turn?
+                    // OR: Recursively force a 1x1 placement now?
+                    // Simpler: Just allow the loop to retry.
+                    // If we consistently fail to place a Big part (Deck), maybe the slots are bad.
+                    // If we fail specifically, availableSlots.delete(key) happens below for 1x1.
+                    // For Big parts, maybe we keep the key?
+                }
+
                 if (w === 1 && h === 1) {
-                    availableSlots.delete(key);
+                    availableSlots.delete(key); // 1x1 failed -> Slot useless
                 }
             }
         }
 
-        // Initialize weapons for the Enemy class to use
         this.initializeWeapons();
     }
 

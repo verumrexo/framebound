@@ -710,6 +710,7 @@ export class Game {
                 }
 
                 if (hitResult) {
+                    console.warn(`[DEBUG] Player HIT by Projectile/Beam! Type: ${p.type} Damage: ${p.damage || 5} Owner: ${p.owner}`);
                     this.playerShip.takeDamage(p.damage || 5);
                     this.spawnDamageNumber(this.x, this.y, p.damage || 5, true);
                     this.audio.play('hit', { volume: 0.15, pitch: 0.7, randomizePitch: 0.1 });
@@ -762,6 +763,7 @@ export class Game {
                         const playerRad = 20; // Approx
                         if (distSq < (radius + playerRad) ** 2) {
                             const aoeDmg = Math.ceil((p.damage || 10) * 0.5);
+                            console.warn(`[DEBUG] Player HIT by AOE! Source: ${p.type} Damage: ${aoeDmg}`);
                             this.playerShip.takeDamage(aoeDmg);
                             this.spawnDamageNumber(this.x, this.y, aoeDmg, true);
                         }
