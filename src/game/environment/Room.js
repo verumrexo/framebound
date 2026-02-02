@@ -332,7 +332,7 @@ export class Room {
             // Center of room
             const bx = this.x + this.width / 2;
             const by = this.y + this.height / 2;
-            const boss = new Boss(bx, by, game.level);
+            const boss = new Boss(bx, by, game.floor || 1);
             boss.game = game;
             game.bosses.push(boss);
             game.showNotification("WARNING: BOSS DETECTED", '#ff0000');

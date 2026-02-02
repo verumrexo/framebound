@@ -14,6 +14,7 @@ export const CHANGELOG = [
             '30+ unique permanent upgrades across 6 rarity tiers',
             'hangar overhaul: unified part list and augmentation tracker',
             'combat telemetry: fixed fire rate and physics scaling bugs',
+            'fix: boss scaling now correctly uses floor level instead of player level',
             'core stability: resolved critical integrity bar desync',
             'dev tools update: localized mythic force-inject'
         ]

@@ -502,7 +502,7 @@ export class DevTools {
     }
 
     spawnBoss(x, y) {
-        const boss = new Boss(x, y, 1);
+        const boss = new Boss(x, y, this.game.floor || 1);
         boss.game = this.game;
         this.game.bosses.push(boss);
         this.game.showNotification("spawned boss", "#ff00ff");
