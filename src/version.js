@@ -1,10 +1,19 @@
 // Single source of truth for version info
 // UPDATE THIS FILE when making changes to the game
 
-export const VERSION = '0.6.19.2';
-export const VERSION_NAME = 'LOCKED_ON (HOTFIX 2)';
+export const VERSION = '0.6.19.3';
+export const VERSION_NAME = 'LOCKED_ON (HOTFIX 3)';
 
 export const CHANGELOG = [
+    {
+        ver: '0.6.19.3',
+        name: 'LOCKED_ON (HOTFIX 3)',
+        date: '2026-02-02',
+        items: [
+            'HOTFIX: Added robust save validation; save files with 0 HP are now automatically deleted on load.',
+            'HOTFIX: Fixed edge case where "death-refresh" exploit could allow loading a dead state.'
+        ]
+    },
     {
         ver: '0.6.19.2',
         name: 'LOCKED_ON (HOTFIX 2)',

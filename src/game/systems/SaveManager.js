@@ -73,6 +73,13 @@ export class SaveManager {
                 return null;
             }
 
+            // check for dead player
+            if (data.playerShip && data.playerShip.hp <= 0) {
+                console.warn('[Save] Player is dead in save file (Exploit Prevention). Clearing.');
+                SaveManager.clearSave();
+                return null;
+            }
+
             console.log('[Save] Save loaded successfully');
             return data;
         } catch (e) {
