@@ -1,10 +1,20 @@
 // Single source of truth for version info
 // UPDATE THIS FILE when making changes to the game
 
-export const VERSION = '0.6.19';
-export const VERSION_NAME = 'LOCKED_ON';
+export const VERSION = '0.6.19.1';
+export const VERSION_NAME = 'LOCKED_ON (HOTFIX)';
 
 export const CHANGELOG = [
+    {
+        ver: '0.6.19.1',
+        name: 'LOCKED_ON (HOTFIX)',
+        date: '2026-02-02',
+        items: [
+            'HOTFIX: Reduced player hit sound volume by 50% (was very loud).',
+            'HOTFIX: Reduced enemy hit sound volume significantly (0.5 -> 0.25).',
+            'HOTFIX: Reduced beam hit volumes to prevent ear fatigue.'
+        ]
+    },
     {
         ver: '0.6.19',
         name: 'LOCKED_ON',

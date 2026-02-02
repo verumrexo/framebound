@@ -476,7 +476,7 @@ export class Game {
                                     this.spawnDamageNumber(enemy.x, enemy.y, p.damage);
                                     p.targetHits.set(enemy, now);
                                     const isFreeze = p.type === 'beam_freeze';
-                                    const hitVol = isFreeze ? 0.05 : 0.3;
+                                    const hitVol = isFreeze ? 0.01 : 0.05;
                                     this.audio.play('hit', { volume: hitVol, pitch: 1.3, randomizePitch: 0.1, isSpammy: isFreeze });
                                 }
                             }
@@ -486,7 +486,7 @@ export class Game {
                             if (hitResult.hit) {
                                 enemy.takeDamage(p.damage, p.type);
                                 this.spawnDamageNumber(p.x, p.y, p.damage);
-                                this.audio.play('hit', { volume: 0.5, pitch: 1.3, randomizePitch: 0.1 });
+                                this.audio.play('hit', { volume: 0.15, pitch: 1.3, randomizePitch: 0.1 });
                                 p.isDead = true;
                                 if (p.type === 'rocket' || p.type === 'rocket_le' || p.type === 'rocket_he' || p.type === 'guided_rocket' || p.type === 'ggbm' || p.type === 'mini_grenade' || p.type === 'cluster_grenade') p.shouldExplode = true;
                             }
@@ -505,7 +505,7 @@ export class Game {
                                     this.spawnDamageNumber(boss.x, boss.y, p.damage);
                                     p.targetHits.set(boss, now);
                                     const isFreeze = p.type === 'beam_freeze';
-                                    const hitVol = isFreeze ? 0.08 : 0.4;
+                                    const hitVol = isFreeze ? 0.02 : 0.08;
                                     this.audio.play('hit', { volume: hitVol, pitch: 0.7, isSpammy: isFreeze });
                                 }
                             }
@@ -523,7 +523,7 @@ export class Game {
                             if (hitResult.hit) {
                                 boss.takeDamage(p.damage, p.type);
                                 this.spawnDamageNumber(p.x, p.y, p.damage);
-                                this.audio.play('hit', { volume: 0.8, pitch: 0.8 });
+                                this.audio.play('hit', { volume: 0.15, pitch: 0.8 });
                                 p.isDead = true;
                                 if (p.type === 'rocket' || p.type === 'rocket_le' || p.type === 'rocket_he' || p.type === 'guided_rocket' || p.type === 'ggbm') p.shouldExplode = true;
                                 break;
@@ -712,7 +712,7 @@ export class Game {
                 if (hitResult) {
                     this.playerShip.takeDamage(p.damage || 5);
                     this.spawnDamageNumber(this.x, this.y, p.damage || 5, true);
-                    this.audio.play('hit', { volume: 0.8, pitch: 0.7, randomizePitch: 0.1 });
+                    this.audio.play('hit', { volume: 0.15, pitch: 0.7, randomizePitch: 0.1 });
                     if (!p.isBeam) p.isDead = true;
                 }
             } // End else (enemy projectiles)
