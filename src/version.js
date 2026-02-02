@@ -1,10 +1,21 @@
 // Single source of truth for version info
 // UPDATE THIS FILE when making changes to the game
 
-export const VERSION = '0.6.18';
-export const VERSION_NAME = 'ACOUSTIC_CHAOS';
+export const VERSION = '0.6.19';
+export const VERSION_NAME = 'LOCKED_ON';
 
 export const CHANGELOG = [
+    {
+        ver: '0.6.19',
+        name: 'LOCKED_ON',
+        date: '2026-02-02',
+        items: [
+            'FIX: Bosses now telegraph heavy attacks (Railgun/Saber) with a charging laser sight.',
+            'FIX: Boss aiming locks halfway through charge, allowing players to dodge heavy hits.',
+            'NEW: Added numeric HP values to enemy health bars for better clarity.',
+            'NEW: Implemented random visual biomes (Neon, Rust, Ice, Toxic, Solar) for floors 2+.'
+        ]
+    },
     {
         ver: '0.6.18',
         name: 'ACOUSTIC_CHAOS',

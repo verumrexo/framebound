@@ -39,6 +39,7 @@ import { WeaponSystem } from '../game/systems/WeaponSystem.js';
 import { PhysicsSystem } from '../game/systems/PhysicsSystem.js';
 
 import { PlayerController } from '../game/systems/PlayerController.js';
+import { Biomes, getRandomBiome } from '../game/environment/Biomes.js';
 
 export class Game {
     constructor(canvas) {
@@ -80,6 +81,7 @@ export class Game {
         this.shopItems = [];
         this.treasureChests = [];
         this.vaultChests = [];
+        this.notifications = []; // {text, color, life, maxLife}
 
         this.version = VERSION;
         this.versionName = VERSION_NAME;
@@ -100,6 +102,9 @@ export class Game {
 
         this.starfield = new Starfield(400, 4000, 4000); // Many stars, large area
         this.grid = new Grid(200); // 200px cells
+
+        // Initial Biome
+        this.applyBiome(Biomes.DEFAULT);
 
         // Level Generation
         this.levelGen = new LevelGenerator();
@@ -197,7 +202,7 @@ export class Game {
         this.staggerTimer = 0;
         this.coreSpinAngle = 0;
         this.explosions = []; // {x, y, radius, life, maxLife}
-        this.notifications = []; // {text, color, life, maxLife}
+        this.explosions = []; // {x, y, radius, life, maxLife}
         this.dashPower = 4000;
 
         // Leveling Separation
@@ -371,6 +376,19 @@ export class Game {
             vy: -80 - Math.random() * 40,
             scale: 1.0
         });
+    }
+
+    applyBiome(biome) {
+        console.log(`[Biome] Applying: ${biome.name}`);
+        this.currentBiome = biome;
+
+        // Apply colors
+        this.renderer.setBackgroundColor(biome.colors.background);
+        this.grid.setColor(biome.colors.grid);
+        this.starfield.setColor(biome.colors.stars);
+
+        // Notify user
+        this.showNotification(`entering ${biome.name}`, biome.colors.grid);
     }
 
     autoSave() {
@@ -1410,6 +1428,7 @@ export class Game {
         let anyDead = false;
         for (const enemy of this.enemies) {
             if (!(this.devTools && this.devTools.freezeEnemies)) {
+                enemy.audio = this.audio; // Injext Audio
                 enemy.update(dt, this.x, this.y, this.projectiles, this.asteroids, this.lootCrates, this.enemies, this.currentRoom);
             }
             if (enemy.isDead) anyDead = true;
@@ -1439,6 +1458,7 @@ export class Game {
         // --- Bosses ---
         let bossDead = false;
         for (const boss of this.bosses) {
+            boss.audio = this.audio; // Injext Audio
             boss.update(dt, this.x, this.y, this.projectiles);
             if (boss.isDead) bossDead = true;
         }
@@ -2296,6 +2316,14 @@ export class Game {
 
     async nextLevel() {
         this.floor++;
+
+        // Change Biome
+        if (this.floor > 1) {
+            this.applyBiome(getRandomBiome());
+        } else {
+            this.applyBiome(Biomes.DEFAULT);
+        }
+
         this.showNotification(`WARPING TO FLOOR ${this.floor}...`, '#aa00ff');
 
         // Reset Logic

@@ -46,7 +46,9 @@ export class Enemy {
                     this.weaponCooldowns.push({
                         part: part,
                         def: def,
-                        cooldown: Math.random() * (def.stats.cooldown || 2)
+                        cooldown: Math.random() * (def.stats.cooldown || 2),
+                        chargeTimer: 0,
+                        lockedAngle: null
                     });
                 }
             }
@@ -89,7 +91,9 @@ export class Enemy {
                     this.weaponCooldowns.push({
                         part: part,
                         def: def,
-                        cooldown: Math.random() * (def.stats.cooldown || 2)
+                        cooldown: Math.random() * (def.stats.cooldown || 2),
+                        chargeTimer: 0,
+                        lockedAngle: null
                     });
                 }
             }
@@ -671,9 +675,82 @@ export class Enemy {
             }
 
             // Check cooldowns
+            // Check cooldowns
             for (const wep of this.weaponCooldowns) {
-                wep.cooldown -= dt;
-                if (wep.cooldown <= 0) {
+                // Ensure properties exist (for saved games / old enemies)
+                if (typeof wep.chargeTimer === 'undefined') wep.chargeTimer = 0;
+
+                // If on cooldown, reduce it
+                if (wep.cooldown > 0) {
+                    wep.cooldown -= dt;
+                    continue;
+                }
+
+                // Ready to fire (or start charging)
+                const chargeStats = wep.def.stats.chargeTime || 0;
+
+                if (chargeStats > 0) {
+                    // HAS CHARGE TIME
+                    wep.isCharging = true;
+                    wep.chargeTimer += dt;
+
+                    // Logic for Aiming vs Locking
+                    // Lock aim after 60% of charge
+                    const lockThreshold = chargeStats * 0.6;
+
+                    let aimAtAngle = 0;
+
+                    // Calculate current aim info
+                    // Local Part Pos
+                    const partAngle = (wep.part.rotation || 0) * (Math.PI / 2);
+                    const isRotated = ((wep.part.rotation || 0) % 2 !== 0);
+                    const w = isRotated ? wep.def.height : wep.def.width;
+                    const h = isRotated ? wep.def.width : wep.def.height;
+                    const localX = (wep.part.x + (w - 1) / 2) * TILE_SIZE;
+                    const localY = (wep.part.y + (h - 1) / 2) * TILE_SIZE;
+
+                    const shipAngle = this.rotation + (this.rotationOffset || 0);
+                    const cos = Math.cos(shipAngle);
+                    const sin = Math.sin(shipAngle);
+                    const worldX = this.x + (localX * cos - localY * sin);
+                    const worldY = this.y + (localX * sin + localY * cos);
+
+                    const dx = playerX - worldX;
+                    const dy = playerY - worldY;
+                    const currentAngleToPlayer = Math.atan2(dy, dx);
+
+                    if (wep.chargeTimer < lockThreshold) {
+                        // Track Player
+                        wep.lockedAngle = currentAngleToPlayer;
+                    }
+                    // Else: keep old wep.lockedAngle
+
+                    // Check if charge complete
+                    if (wep.chargeTimer >= chargeStats) {
+                        // FIRE!
+                        // Logic same as single shot, but use lockedAngle
+                        const spread = (Math.random() - 0.5) * (wep.def.stats.spread || 0);
+                        const pType = wep.def.stats.projectileType || 'bullet';
+                        const pSpeed = wep.def.stats.projectileSpeed || (pType === 'laser' || pType === 'small_laser' ? 800 : 400);
+                        const baseDamage = wep.def.stats.damage || 5;
+                        const finalDamage = baseDamage * (this.damageMultiplier || 1);
+
+                        // Use locked angle (or current if something failed)
+                        const fireAngle = (wep.lockedAngle !== null ? wep.lockedAngle : currentAngleToPlayer) + spread;
+
+                        projectiles.push(new Projectile(worldX, worldY, fireAngle, pType, pSpeed, 'enemy', finalDamage));
+
+                        // Reset
+                        wep.cooldown = wep.def.stats.cooldown || 2;
+                        wep.chargeTimer = 0;
+                        wep.isCharging = false;
+                        wep.lockedAngle = null;
+
+                        this.audio.play('shoot_' + (pType === 'railgun' ? 'rail_shot' : (pType === 'saber' ? 'lsr' : 'lps')), { volume: 0.6 });
+                    }
+
+                } else {
+                    // INSTANT FIRE (Previous Logic)
                     const burstCount = wep.def.stats.burstCount || 1;
                     if (burstCount > 1) {
                         this.activeBursts.push({
@@ -843,6 +920,78 @@ export class Enemy {
                 }
             }
 
+            // Draw Charge Telegraphs (After parts, on top)
+            if (this.weaponCooldowns) {
+                for (const wep of this.weaponCooldowns) {
+                    if (wep.isCharging && wep.chargeTimer > 0) {
+                        const chargeStats = wep.def.stats.chargeTime || 1;
+                        const lockThreshold = chargeStats * 0.6;
+                        const isLocked = wep.chargeTimer >= lockThreshold;
+
+                        // Calculate World Pos Again (Optimization: Store this in update?)
+                        const isRotated = ((wep.part.rotation || 0) % 2 !== 0);
+                        const w = isRotated ? wep.def.height : wep.def.width;
+                        const h = isRotated ? wep.def.width : wep.def.height;
+                        const localX = (wep.part.x + (w - 1) / 2) * TILE_SIZE;
+                        const localY = (wep.part.y + (h - 1) / 2) * TILE_SIZE;
+
+                        // Apply Rotation
+                        // Context is ALREADY translated and rotated to SHIP Space
+                        // So we can draw lines in local space if we un-rotate the aiming angle?
+                        // No, aiming angle is global (to player).
+                        // Easier to use global coords? But context is transformed.
+
+                        // Let's use local coordinates for start point
+
+                        // We need the aim angle relative to ship rotation to draw in local space
+                        // OR we save/restore and draw in world space?
+                        // Context is currently: ensure we are in Ship Space.
+
+                        // Telegraph Angle (Global)
+                        const aimAngle = wep.lockedAngle !== null ? wep.lockedAngle : (
+                            // Determine aimed angle if not locked (recalc or use stored)
+                            // We don't have player pos here easily.
+                            // But wep.lockedAngle should be set in update if tracking.
+                            // If it's tracking, we need the stored angle from update.
+                            wep.lockedAngle // Fallback (might be null if < threshold? No, we set it in update)
+                        );
+
+                        // If null (early frame?), skip
+                        if (aimAngle === null || aimAngle === undefined) continue;
+
+                        // Convert Global Aim Angle to Local Draw Angle
+                        // Local = Global - ShipRot
+                        const localDrawAngle = aimAngle - (this.rotation + this.rotationOffset);
+
+                        // Line Properties
+                        ctx.save();
+
+                        // Color
+                        if (isLocked) {
+                            ctx.strokeStyle = '#ffffff'; // Locked: White/Cyan
+                            ctx.shadowColor = '#00ffff';
+                            ctx.shadowBlur = 10;
+                            ctx.lineWidth = 1 + Math.random(); // Flicker
+                        } else {
+                            ctx.strokeStyle = '#ff0000'; // Tracking: Red
+                            ctx.shadowColor = '#ff0000';
+                            ctx.shadowBlur = 5;
+                            ctx.lineWidth = 0.5;
+                        }
+
+                        // Range
+                        const range = 2000;
+
+                        ctx.beginPath();
+                        ctx.moveTo(localX, localY);
+                        ctx.lineTo(localX + Math.cos(localDrawAngle) * range, localY + Math.sin(localDrawAngle) * range);
+                        ctx.stroke();
+
+                        ctx.restore();
+                    }
+                }
+            }
+
             if (this.frozenTimer > 0 || this.freezeMeter > 0) {
                 ctx.globalAlpha = 1.0;
                 ctx.shadowBlur = 0;
@@ -942,6 +1091,16 @@ export class Enemy {
             }
         }
 
+        // HP Text
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.font = '8px "Press Start 2P"'; // Smaller font for better bar visibility
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+
+        // Removed shadow to keep it clean
+        ctx.fillText(`${Math.ceil(this.hp)}/${Math.ceil(this.maxHp)}`, barCenterX, barY + barH / 2 + 1);
+
+        ctx.shadowBlur = 0; // Reset
         ctx.restore();
     }
 }

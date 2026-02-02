@@ -13,6 +13,10 @@ export class Starfield {
         }
     }
 
+    setColor(color) {
+        this.color = color;
+    }
+
     draw(renderer, cameraX, cameraY) {
         // Simple parallax or just static world-space stars?
         // Let's do world-space stars for now so they feel like part of the map.
@@ -26,7 +30,7 @@ export class Starfield {
         // Let's do a large field.
 
         const ctx = renderer.ctx;
-        ctx.fillStyle = '#fff';
+        ctx.fillStyle = this.color || '#fff';
 
         for (const star of this.stars) {
             // Simple tiling logic based on camera position to make it infinite

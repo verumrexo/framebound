@@ -243,7 +243,9 @@ export class Boss extends Enemy {
                 this.weaponCooldowns.push({
                     part: part,
                     def: def,
-                    cooldown: Math.random() * (def.stats.cooldown || 2)
+                    cooldown: Math.random() * (def.stats.cooldown || 2),
+                    chargeTimer: 0,
+                    lockedAngle: null
                 });
             }
         }

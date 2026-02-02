@@ -8,7 +8,7 @@ export class Projectile {
         this.life = 2.0; // Seconds
 
         if (this.owner === 'enemy') {
-            console.log('[DEBUG] Enemy Projectile:', type, 'at', x, y, 'speed', speed);
+            // console.log('[DEBUG] Enemy Projectile:', type, 'at', x, y, 'speed', speed);
         }
         const projSpeed = type === 'laser' ? 1500 : (type === 'small_laser' ? 1800 : (type === 'railgun' || type === 'saber' || type === 'beam_freeze' ? 0 : (type === 'pellet' ? 700 + Math.random() * 200 : (type === 'cluster_grenade' ? 350 : speed))));
         this.vx = Math.cos(angle) * projSpeed;

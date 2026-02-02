@@ -79,20 +79,28 @@ export class Renderer {
         return this.resolutionScale < 1.0 ? this.offscreenCanvas.height : this.height;
     }
 
+    setBackgroundColor(color) {
+        this.backgroundColor = color;
+        this.needsResize = true; // Force redraw
+    }
+
     clear(color = '#000') {
         if (this.needsResize) {
             this.resize();
             this.needsResize = false;
         }
 
+        // Use instance background color if set, otherwise fallback to argument or default
+        const clearColor = this.backgroundColor || color;
+
         if (this.resolutionScale < 1.0) {
             // Clear offscreen
             this.offscreenCtx.setTransform(1, 0, 0, 1, 0, 0);
-            this.offscreenCtx.fillStyle = color;
+            this.offscreenCtx.fillStyle = clearColor;
             this.offscreenCtx.fillRect(0, 0, this.offscreenCanvas.width, this.offscreenCanvas.height);
         } else {
             this.ctx.setTransform(1, 0, 0, 1, 0, 0);
-            this.ctx.fillStyle = color;
+            this.ctx.fillStyle = clearColor;
             this.ctx.fillRect(0, 0, this.width, this.height);
         }
     }
