@@ -1,10 +1,23 @@
 // Single source of truth for version info
 // UPDATE THIS FILE when making changes to the game
 
-export const VERSION = '0.6.19.4';
-export const VERSION_NAME = 'LOCKED_ON (HOTFIX 4)';
+export const VERSION = '0.7.0';
+export const VERSION_NAME = 'Core Evolution';
 
 export const CHANGELOG = [
+    {
+        ver: '0.7.0',
+        name: 'Core Evolution',
+        date: '2026-02-03',
+        changes: [
+            'level up system: choice-based ship augmentations',
+            '30+ unique permanent upgrades across 6 rarity tiers',
+            'hangar overhaul: unified part list and augmentation tracker',
+            'combat telemetry: fixed fire rate and physics scaling bugs',
+            'core stability: resolved critical integrity bar desync',
+            'dev tools update: localized mythic force-inject'
+        ]
+    },
     {
         ver: '0.6.19.4',
         name: 'LOCKED_ON (HOTFIX 4)',

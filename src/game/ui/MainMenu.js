@@ -191,7 +191,7 @@ export class MainMenu {
                         <span style="font-size: 10px; color: #666;">${c.date}</span>
                     </div>
                     <ul style="color: #aaa; list-style-type: square; padding-left: 20px; font-size: 12px; line-height: 1.4;">
-                        ${c.items.map(i => `<li style="margin-bottom: 5px;">${i}</li>`).join('')}
+                        ${(c.changes || c.items || []).map(i => `<li style="margin-bottom: 5px;">${i}</li>`).join('')}
                     </ul>
                 </div>
             `;

@@ -40,6 +40,7 @@ import { PhysicsSystem } from '../game/systems/PhysicsSystem.js';
 
 import { PlayerController } from '../game/systems/PlayerController.js';
 import { Biomes, getRandomBiome } from '../game/environment/Biomes.js';
+import { LevelUpManager } from '../game/systems/LevelUpManager.js';
 
 export class Game {
     constructor(canvas) {
@@ -158,6 +159,7 @@ export class Game {
         this.weaponSystem = new WeaponSystem();
         this.physicsSystem = new PhysicsSystem();
         this.playerController = new PlayerController();
+        this.levelUpManager = new LevelUpManager(this);
 
 
         this.pauseOverlay = null;
@@ -832,6 +834,14 @@ export class Game {
             return;
         }
 
+        // Level Up Manager (Input Handling)
+        if (this.levelUpManager.active) {
+            this.levelUpManager.update();
+            this.mouseDownLastFrame = isMouseDown;
+            this.input.clearPressed();
+            return;
+        }
+
         // Name Entry Input Handling
         if (this.nameEntryActive) {
             for (const key of this.input.keysPressed) {
@@ -1323,8 +1333,8 @@ export class Game {
                     this.level++;
                     this.xpToNext = Math.floor(this.xpToNext * 1.2 + 50);
 
-                    this.showNotification(`CORE UPGRADED: LEVEL ${this.level}`, '#00ffff');
-                    this.showNotification(`SYSTEM EFFICIENCY +1%`, '#44ff44');
+                    // Trigger Level Up Screen
+                    this.levelUpManager.triggerLevelUp();
                 }
             }
         }
@@ -1734,7 +1744,7 @@ export class Game {
             this.renderer.ctx.strokeRect(20, 20, 240, 24);
 
             // Fill
-            this.renderer.drawRect(20, 20, 240 * hpPct, 24, '#ff3333');
+            this.renderer.drawRect(20, 20, 240 * Math.min(1.0, Math.max(0, hpPct)), 24, '#ff3333');
 
             // Text Overlays
             this.renderer.ctx.fillStyle = 'white';
@@ -1969,6 +1979,10 @@ export class Game {
 
                 ctx.restore();
             }
+        }
+
+        if (this.levelUpManager.active) {
+            this.levelUpManager.draw(this.renderer);
         } else if (this.hangar.active) {
             this.hangar.draw(this.renderer);
         } else if (this.shipBuilder.active) {
@@ -1989,6 +2003,7 @@ export class Game {
             this.renderer.ctx.fillText("press r to restart", this.renderer.width / 2, this.renderer.height / 2 + 60);
             this.renderer.ctx.textAlign = 'left';
         }
+
 
         // --- TOOLTIP LOGIC ---
         // Check for mouse hover over ItemPickups
@@ -2133,7 +2148,7 @@ export class Game {
     }
 
     drawCustomCursor() {
-        if (this.hangar.active || this.shipBuilder.active || this.paused) {
+        if (this.hangar.active || this.shipBuilder.active || this.levelUpManager.active || this.paused) {
             this.renderer.canvas.style.cursor = 'default';
             return;
         }
@@ -2252,6 +2267,58 @@ export class Game {
             return;
         }
 
+        if (this.showExitConfirm) {
+            this.pauseOverlay.innerHTML = `
+                <h2 style="color: #ff4444; margin-bottom: 30px; font-size: 24px; text-transform: lowercase;">quit to menu?</h2>
+                <p style="color: #aaa; font-size: 12px; margin-bottom: 40px; text-transform: lowercase;">progress will be saved.</p>
+                
+                <div style="display: flex; gap: 20px;">
+                    <button id="btn-confirm-yes" class="pause-btn" style="border-color: #ff4444; color: #ff4444;">confirm</button>
+                    <button id="btn-confirm-no" class="pause-btn">cancel</button>
+                </div>
+
+                <style>
+                    .pause-btn {
+                        padding: 15px 30px;
+                        font-size: 14px;
+                        background: rgba(0, 40, 60, 0.6);
+                        border: 1px solid rgba(0, 255, 255, 0.2);
+                        color: #00ffff;
+                        cursor: pointer;
+                        font-family: 'Press Start 2P', cursive;
+                        text-transform: lowercase;
+                        transition: all 0.2s;
+                    }
+                    .pause-btn:hover {
+                        background: rgba(0, 255, 255, 0.2);
+                        border-color: #00ffff;
+                        color: white;
+                    }
+                    #btn-confirm-yes:hover {
+                         background: rgba(255, 0, 0, 0.2);
+                         border-color: #ff0000;
+                         color: white;
+                    }
+                </style>
+            `;
+
+            setTimeout(() => {
+                document.getElementById('btn-confirm-yes').onclick = () => {
+                    this.showExitConfirm = false;
+                    this.hidePauseMenu();
+                    this.paused = false;
+                    this.loop.stop();
+                    this.audio.stopMusic();
+                    this.mainMenu.show();
+                };
+                document.getElementById('btn-confirm-no').onclick = () => {
+                    this.showExitConfirm = false;
+                    this.renderPauseContent();
+                };
+            }, 0);
+            return;
+        }
+
         this.pauseOverlay.innerHTML = `
             <h2 style="color: #00ffff; margin-bottom: 50px; font-size: 32px; text-shadow: 0 0 10px #00ffff; text-transform: lowercase;">paused</h2>
             
@@ -2296,13 +2363,8 @@ export class Game {
                 this.renderPauseContent();
             };
             if (btnMenu) btnMenu.onclick = () => {
-                if (confirm('return to main menu? progress will be saved.')) {
-                    this.hidePauseMenu();
-                    this.paused = false;
-                    this.loop.stop();
-                    this.audio.stopMusic();
-                    this.mainMenu.show();
-                }
+                this.showExitConfirm = true;
+                this.renderPauseContent();
             };
         }, 0);
     }

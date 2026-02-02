@@ -253,6 +253,10 @@ export class DevTools {
         // --- UTILITY ---
         createBtn('☢️ nuke room', () => this.nuke(), '#ff0000', false);
         createBtn('⏩ next floor', () => this.game.nextLevel(), '#aa00ff', false);
+        createBtn('🔼 force level up', () => {
+            this.game.levelUpManager.triggerLevelUp('mythic');
+            this.toggle(); // Close menu to see screen
+        }, '#00ff88', false);
 
         const godBtn = createBtn('😇 god mode: off', (btn) => {
             if (!this.game.playerShip) return;

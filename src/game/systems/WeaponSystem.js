@@ -122,9 +122,15 @@ export class WeaponSystem {
             }
 
             // Calculate Cooldown
+            const perm = game.playerShip.permanentStats;
             const rampFactor = (def.stats.rampUp && partRef.rampLevel) ? (1 + partRef.rampLevel) : 1;
             let currentFireRateMul = levelBonus;
-            if (def.stats.weaponGroup === 'laser') currentFireRateMul *= accelerantBonus;
+
+            if (def.stats.weaponGroup === 'laser') {
+                currentFireRateMul *= (accelerantBonus + (perm.laserRateAdd || 0));
+            } else if (def.stats.weaponGroup === 'velocity') {
+                currentFireRateMul += (perm.velocityRateAdd || 0);
+            }
 
             let baseCooldown = def.stats.cooldown || 0.15;
             if (baseCooldown <= 0.001) baseCooldown = 0.016;
@@ -379,8 +385,15 @@ export class WeaponSystem {
                 pY += perpY * offset;
             }
 
+            // Calculate Speed
+            let speed = def.stats.projectileSpeed || 600;
+            if (def.stats.weaponGroup === 'rocket') {
+                const speedMul = game.playerShip.permanentStats.missileSpeedMul || 1.0;
+                speed *= speedMul;
+            }
+
             // Projectile(x, y, angle, type, speed, owner, damage, lifetime)
-            const p = new Projectile(pX, pY, finalAngle, def.stats.projectileType || 'bullet', def.stats.projectileSpeed || 600, 'player', def.stats.damage || 10, def.stats.lifetime);
+            const p = new Projectile(pX, pY, finalAngle, def.stats.projectileType || 'bullet', speed, 'player', def.stats.damage || 10, def.stats.lifetime);
 
             if (def.stats.projectileType === 'railgun' || def.stats.projectileType === 'beam_freeze') p.isBeam = true;
 

@@ -45,15 +45,13 @@ export class PlayerController {
         const levelBonus = 1.0 + ((game.level || 1) - 1) * 0.01;
 
         // Base Stats
-        // Fix: Allow 0 thrust to be valid. Default to 0 if undefined.
+        const perm = game.playerShip.permanentStats;
         const baseThrust = (game.playerShip.stats.thrust !== undefined) ? game.playerShip.stats.thrust : 0;
-        // Multiplier: 1 + (thrust * 0.05). e.g. 4 thrust -> 1.2x. 0 thrust -> 1.0x.
         const thrustMultiplier = 1 + (baseThrust * 0.05);
-        const currentAccel = 2500 * thrustMultiplier * levelBonus * combatBoost;
+        const currentAccel = 2500 * thrustMultiplier * levelBonus * combatBoost * (perm.speedMul || 1.0);
 
         // Max VELOCITY (Cap)
-        // Restored formula: Base(150) * Thrusters * Level * SafeRoomBoost
-        let maxSpeed = 150 * thrustMultiplier * levelBonus * combatBoost;
+        let maxSpeed = 150 * thrustMultiplier * levelBonus * combatBoost * (perm.speedMul || 1.0);
         // Increase Max Speed during dash
         if (this.dashActiveTimer > 0) {
             maxSpeed *= 2.5;
@@ -188,7 +186,8 @@ export class PlayerController {
             const baseTurnRate = 5.0;
             const currentMass = game.playerShip.stats.totalMass || 5;
             // Heavier = Slower turn. 
-            const turnRate = Math.max(0.5, baseTurnRate * (5 / currentMass)) + (game.playerShip.stats.turnSpeed || 0);
+            let turnRate = (Math.max(0.5, baseTurnRate * (5 / currentMass)) + (game.playerShip.stats.turnSpeed || 0));
+            turnRate *= (perm.turnMul || 1.0);
 
             const maxStep = turnRate * dt;
 

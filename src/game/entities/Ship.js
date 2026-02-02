@@ -18,6 +18,17 @@ export class Ship {
             boosterCount: 0
         };
 
+        // Permanent Upgrades (Level Up System)
+        this.permanentStats = {
+            hpMul: 1.0,
+            regenAdd: 0.0,
+            velocityRateAdd: 0.0,
+            laserRateAdd: 0.0,
+            speedMul: 1.0,
+            turnMul: 1.0,
+            missileSpeedMul: 1.0
+        };
+
         this.hp = 0;
         this.maxHp = 0;
         this.isDead = false;
@@ -28,6 +39,8 @@ export class Ship {
         this.addPart(0, 1, 'custom_1767997495375', 0); // Back (Down) - Rot 0
         this.addPart(-1, 0, 'gun_basic', 0); // Left - Rot 0
         this.addPart(1, 0, 'gun_basic', 0);  // Right - Rot 0
+
+        this.hp = this.maxHp;
     }
 
     draw(renderer, x, y, rotation, targetX, targetY) {
@@ -271,11 +284,6 @@ export class Ship {
         return this.parts.get(`${x},${y}`);
     }
 
-    getUniqueParts() {
-        // Returns an iterator of unique part instances
-        return new Set(this.parts.values());
-    }
-
     clone() {
         // Create new ship
         const newShip = new Ship();
@@ -293,66 +301,68 @@ export class Ship {
         newShip.isDead = this.isDead;
         newShip.godMode = this.godMode;
 
+        // Preserve Permanent Stats
+        newShip.permanentStats = { ...this.permanentStats };
+
+        // Ensure stats are consistent with cloned permanent stats
+        newShip.recalculateStats();
+
         return newShip;
     }
 
+    getUniqueParts() {
+        // Returns an iterator of unique part instances
+        return new Set(this.parts.values());
+    }
+
     recalculateStats() {
-        this.stats.totalHp = 0;
-        this.stats.totalMass = 0;
-        this.stats.thrust = 0;
-        this.stats.accelerantCount = 0;
-        this.stats.regen = 1.0; // Base regeneration
-        this.stats.laserCount = 0;
-        this.stats.rocketCount = 0;
-        this.stats.velocityCount = 0;
-        this.stats.rocketBayCount = 0;
-        this.stats.turnSpeed = 0; // Initialize turnSpeed
+        this.stats = {
+            totalHp: 0,
+            totalMass: 0,
+            thrust: 0,
+            accelerantCount: 0,
+            regen: 1.0, // Base regeneration
+            laserCount: 0,
+            rocketCount: 0,
+            velocityCount: 0,
+            rocketBayCount: 0,
+            turnSpeed: 0,
+            boosterCount: 0
+        };
 
         for (const part of this.getUniqueParts()) {
             const def = PartsLibrary[part.partId];
-            if (def) {
-                this.stats.totalHp += def.stats.hp || 0;
-                this.stats.totalMass += def.stats.mass || 0;
-                this.stats.turnSpeed += def.stats.turnSpeed || 0;
+            if (!def) continue;
 
-                // Explicit thrust stat (from any part type)
-                if (def.stats.thrust) {
-                    this.stats.thrust += def.stats.thrust;
-                }
-
-                // If it's a thruster, count each block (Legacy / Type-based)
-                if (def.type === 'thruster') {
-                    this.stats.thrust += (def.width * def.height);
-                }
-
-                if (def.type === 'accelerant') {
-                    this.stats.accelerantCount += (def.width * def.height);
-                }
-
-                if (def.type === 'rocket_bay') {
-                    this.stats.rocketBayCount += (def.width * def.height);
-                }
-
-                if (def.type === 'booster') {
-                    this.stats.boosterCount += 1;
-                }
-
-                if (def.stats.regen) {
-                    this.stats.regen += def.stats.regen;
-                }
-
-                if (def.type === 'weapon' && def.stats.weaponGroup) {
-                    const groupKey = `${def.stats.weaponGroup}Count`;
-                    this.stats[groupKey] += (def.width * def.height);
-                }
+            if (def.stats) {
+                if (def.stats.hp) this.stats.totalHp += def.stats.hp;
+                if (def.stats.mass) this.stats.totalMass += def.stats.mass;
+                if (def.stats.thrust) this.stats.thrust += def.stats.thrust;
+                if (def.stats.turnSpeed) this.stats.turnSpeed += def.stats.turnSpeed;
+                if (def.stats.regen) this.stats.regen += def.stats.regen;
             }
+            if (def.type === 'structure' && def.id === 'accelerant') this.stats.accelerantCount++;
+            if (def.type === 'weapon') {
+                if (def.stats.weaponGroup === 'laser') this.stats.laserCount++;
+                if (def.stats.weaponGroup === 'rocket') this.stats.rocketCount++;
+                if (def.stats.weaponGroup === 'velocity') this.stats.velocityCount++;
+            }
+            if (def.type === 'structure' && def.id === 'rocket_bay') this.stats.rocketBayCount++;
+            if (def.type === 'structure' && def.id === 'dash_booster') this.stats.boosterCount++;
         }
 
+        // Apply Permanent Upgrades
+        const perm = this.permanentStats;
+        this.stats.totalHp = Math.floor(this.stats.totalHp * perm.hpMul);
+        this.stats.regen += perm.regenAdd;
+        // thrust and turnSpeed multipliers are applied in PlayerController
+
+        // Finalize
         this.maxHp = this.stats.totalHp;
-        if (this.hp === 0 && !this.isDead) {
-            this.hp = this.maxHp;
-        }
+        // Clamp HP if needed, or leave it to regenerate
+        if (this.hp > this.maxHp) this.hp = this.maxHp;
     }
+
 
     /**
      * Checks if a point/circle/beam hits any part of the ship

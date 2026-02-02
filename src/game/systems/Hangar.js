@@ -231,20 +231,35 @@ export class Hangar {
         if (!statPanel || !this.draftShip) return;
 
         const stats = this.draftShip.stats;
+        const perm = this.draftShip.permanentStats;
         const levelBonus = 1 + (this.game.level - 1) * 0.01;
-        const totalFRBonus = Math.round(((1 + (stats.accelerantCount || 0) * 0.05) * levelBonus - 1) * 100);
+
+        // Fire Rate Bonuses
+        const velocityFR = Math.round((levelBonus + (perm.velocityRateAdd || 0) - 1) * 100);
+
+        const accelerantBonus = (1 + (stats.accelerantCount || 0) * 0.05);
+        const laserFR = Math.round(((levelBonus * (accelerantBonus + (perm.laserRateAdd || 0))) - 1) * 100);
+
+        // Turn Speed Calc (Matching PlayerController)
+        const baseTurnRate = 5.0;
+        const currentMass = (stats.totalMass || 5);
+        const turnSpeedVal = (Math.max(0.5, baseTurnRate * (5 / currentMass)) + (stats.turnSpeed || 0)) * (perm.turnMul || 1.0);
+
+        const missileSpeedBonus = Math.round(((this.draftShip.permanentStats.missileSpeedMul || 1.0) - 1) * 100);
 
         const rows = [
             { label: 'integrity', value: `${stats.totalHp} hp`, color: '#ff4444' },
-            { label: 'mass', value: `${stats.totalMass.toFixed(1)} t`, color: '#aaa' },
+            { label: 'mass / turn', value: `${stats.totalMass.toFixed(1)}t / ${turnSpeedVal.toFixed(1)}`, color: '#aaa' },
             { label: 'regen', value: `${((stats.regen || 0) * levelBonus).toFixed(1)} /s`, color: '#44ff44' },
-            { label: 'max speed', value: `${Math.floor(800 * (1 + (stats.thrust * 0.05)) * levelBonus)} km/h`, color: '#00ffff' },
-            { label: 'laser fire rate', value: `+${totalFRBonus}%`, color: '#ffaa44' },
-            { label: 'rockets count', value: stats.rocketCount, color: '#ffaa44' },
-            { label: 'rocket payload', value: `+${stats.rocketBayCount || 0}`, color: '#ffaa44' },
-            { label: 'dash boosters', value: stats.boosterCount || 0, color: '#00ffff' },
-            { label: 'velocity count', value: stats.velocityCount, color: '#ffaa44' }
+            { label: 'max speed', value: `${Math.floor(800 * (1 + (stats.thrust * 0.05)) * levelBonus * (perm.speedMul || 1.0))} km/h`, color: '#00ffff' },
+            { label: 'velocity rate', value: `+${velocityFR}%`, color: '#ffaa44' },
+            { label: 'laser rate', value: `+${laserFR}%`, color: '#ffaa44' },
+            { label: 'missile speed', value: `+${missileSpeedBonus}%`, color: '#ffaa44' }
         ];
+
+        if (stats.rocketBayCount > 0) {
+            rows.push({ label: 'extra rockets', value: `+${stats.rocketBayCount}`, color: '#ffaa44' });
+        }
 
         statPanel.innerHTML = rows.map(r => `
             <div style="display: flex; justify-content: space-between; border-bottom: 1px dotted rgba(255,255,255,0.1); padding: 2px 0;">
@@ -252,6 +267,29 @@ export class Hangar {
                 <span style="color: ${r.color}; text-align: right;">${r.value}</span>
             </div>
         `).join('');
+
+        // Permanent Upgrades List
+        const upgradeRows = [];
+
+        if (perm.hpMul > 1.0) upgradeRows.push({ label: 'hull Integrity', value: `+${Math.round((perm.hpMul - 1) * 100)}%` });
+        if (perm.regenAdd > 0) upgradeRows.push({ label: 'hull regen', value: `+${perm.regenAdd}/s` });
+        if (perm.velocityRateAdd > 0) upgradeRows.push({ label: 'velocity Rate', value: `+${Math.round(perm.velocityRateAdd * 100)}%` });
+        if (perm.laserRateAdd > 0) upgradeRows.push({ label: 'laser rate', value: `+${Math.round(perm.laserRateAdd * 100)}%` });
+        if (perm.speedMul > 1.0) upgradeRows.push({ label: 'flight speed', value: `+${Math.round((perm.speedMul - 1) * 100)}%` });
+        if (perm.turnMul > 1.0) upgradeRows.push({ label: 'turn speed', value: `+${Math.round((perm.turnMul - 1) * 100)}%` });
+        if (perm.missileSpeedMul > 1.0) upgradeRows.push({ label: 'missile speed', value: `+${Math.round((perm.missileSpeedMul - 1) * 100)}%` });
+
+        if (upgradeRows.length > 0) {
+            statPanel.innerHTML += `
+                <div style="margin-top: 15px; margin-bottom: 5px; color: #00ff00; border-bottom: 1px solid #00ff00;">augmentations</div>
+                ${upgradeRows.map(r => `
+                    <div style="display: flex; justify-content: space-between; padding: 2px 0;">
+                        <span style="color: #aaa;">${r.label}:</span>
+                        <span style="color: #00ff00; text-align: right;">${r.value}</span>
+                    </div>
+                `).join('')}
+            `;
+        }
     }
 
     toggle() {
