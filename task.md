@@ -21,7 +21,7 @@
 - [x] Fix Boss insta-kill (Add telegraphing)
 - [ ] Implement Boss Phases & attacks (symmetry/hitboxes done)
   - [x] nerf railgun aim (charge delay + telegraph)
-- [ ] level up system overhaul
+- [x] level up system overhaul
 - [ ] biome system - visual themes per level
 
 ## 🎨 Polish & Feel
