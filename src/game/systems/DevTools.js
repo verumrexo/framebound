@@ -127,6 +127,34 @@ export class DevTools {
             container.appendChild(div);
         };
 
+        // Helper to create buttons
+        const createBtn = (text, action, color = '#00ff00', requiresPlacement = true) => {
+            const btn = document.createElement('button');
+            btn.innerText = text;
+            btn.style.background = 'rgba(0, 50, 0, 0.5)';
+            btn.style.color = color;
+            btn.style.border = `1px solid ${color}`;
+            btn.style.padding = '8px';
+            btn.style.cursor = 'pointer';
+            btn.style.fontFamily = "'Press Start 2P', monospace";
+            btn.style.fontSize = '12px';
+            btn.style.textAlign = 'center';
+
+            btn.onmouseover = () => btn.style.background = `rgba(${parseInt(color.slice(1, 3), 16)}, ${parseInt(color.slice(3, 5), 16)}, ${parseInt(color.slice(5, 7), 16)}, 0.3)`;
+            btn.onmouseout = () => btn.style.background = 'rgba(0, 50, 0, 0.5)';
+
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                if (requiresPlacement) {
+                    this.startPlacement(action);
+                } else {
+                    action(btn); // Pass button ref to action for state-based buttons
+                }
+            };
+            container.appendChild(btn);
+            return btn;
+        };
+
         // 1. Anti-Aliasing (Smoothing)
         createToggle('anti-aliasing', () => this.game.renderer.smoothingEnabled, (v) => this.game.renderer.setSmoothing(v));
 
@@ -139,17 +167,29 @@ export class DevTools {
             (v) => this.game.renderer.setResolutionScale(v)
         );
 
-        // 4. Pixel Size (Mosaic)
-        createSlider('pixel size', '1', '16', '1',
-            () => this.game.renderer.pixelSize,
-            (v) => this.game.renderer.setPixelSize(v)
-        );
-
         // 5. Grid Opacity
         createSlider('grid opacity', '0', '0.5', '0.05',
             () => this.game.graphics.gridOpacity,
             (v) => this.game.graphics.gridOpacity = v
         );
+
+        // 6. Show Hitboxes (Debug)
+        this.showHitboxes = false;
+        createToggle('show hitboxes', () => this.showHitboxes, (v) => this.showHitboxes = v);
+
+        // 7. Freeze Enemies (Debug)
+        this.freezeEnemies = false;
+        createToggle('freeze enemies', () => this.freezeEnemies, (v) => this.freezeEnemies = v);
+
+        // 8. Damage Numbers
+        createToggle('show dmg numbers', () => this.game.showDamageNumbers, (v) => this.game.showDamageNumbers = v);
+
+        // 9. Damage Mode
+        const modeBtn = createBtn(`dmg mode: ${this.game.damageNumberMode}`, (btn) => {
+            const current = this.game.damageNumberMode;
+            this.game.damageNumberMode = (current === 'singular' ? 'additive' : 'singular');
+            btn.innerText = `dmg mode: ${this.game.damageNumberMode}`;
+        }, '#00ffff', false);
 
         // (God mode moved to button section)
 
@@ -191,33 +231,6 @@ export class DevTools {
         container.appendChild(sliderContainer);
 
 
-        // Helper to create buttons
-        const createBtn = (text, action, color = '#00ff00', requiresPlacement = true) => {
-            const btn = document.createElement('button');
-            btn.innerText = text;
-            btn.style.background = 'rgba(0, 50, 0, 0.5)';
-            btn.style.color = color;
-            btn.style.border = `1px solid ${color}`;
-            btn.style.padding = '8px';
-            btn.style.cursor = 'pointer';
-            btn.style.fontFamily = "'Press Start 2P', monospace";
-            btn.style.fontSize = '12px';
-            btn.style.textAlign = 'center';
-
-            btn.onmouseover = () => btn.style.background = `rgba(${parseInt(color.slice(1, 3), 16)}, ${parseInt(color.slice(3, 5), 16)}, ${parseInt(color.slice(5, 7), 16)}, 0.3)`;
-            btn.onmouseout = () => btn.style.background = 'rgba(0, 50, 0, 0.5)';
-
-            btn.onclick = (e) => {
-                e.stopPropagation();
-                if (requiresPlacement) {
-                    this.startPlacement(action);
-                } else {
-                    action(btn); // Pass button ref to action for state-based buttons
-                }
-            };
-            container.appendChild(btn);
-            return btn;
-        };
 
         // --- SPAWNERS (Click -> Placment Mode) ---
         createBtn('✨ spawn xp orb', (x, y) => this.spawnXP(x, y));
@@ -233,6 +246,7 @@ export class DevTools {
         createBtn('🚀 enemy: rocketeer', (x, y) => this.spawnEnemy(x, y, 'rocketeer'), '#ff8844');
         createBtn('🎯 enemy: sniper', (x, y) => this.spawnEnemy(x, y, 'sniper'), '#ffaa44');
         createBtn('🌀 enemy: circler', (x, y) => this.spawnEnemy(x, y, 'circler'), '#ff44ff');
+        createBtn('🐝 enemy: hive carrier', (x, y) => this.spawnEnemy(x, y, 'hive_carrier'), '#ff00ff');
 
         createBtn('👹 spawn boss', (x, y) => this.spawnBoss(x, y), '#ff00ff');
 
@@ -484,7 +498,9 @@ export class DevTools {
     }
 
     spawnBoss(x, y) {
-        this.game.bosses.push(new Boss(x, y, 1)); // Level 1 Boss
+        const boss = new Boss(x, y, 1);
+        boss.game = this.game;
+        this.game.bosses.push(boss);
         this.game.showNotification("spawned boss", "#ff00ff");
     }
 

@@ -1,12 +1,6 @@
 import { Room } from './Room.js';
+import { RoomType } from './RoomType.js';
 
-export const RoomType = {
-    NORMAL: 'normal',
-    BOSS: 'boss',
-    SHOP: 'shop',
-    TREASURE: 'treasure',
-    VAULT: 'vault'
-};
 
 // Simple seeded random number generator (mulberry32)
 function seededRandom(seed) {
@@ -218,7 +212,7 @@ export class LevelGenerator {
     isAreaFree(gx, gy, w, h) {
         for (let x = gx; x < gx + w; x++) {
             for (let y = gy; y < gy + h; y++) {
-                if (this.grid.has(`${x},${y} `)) return false;
+                if (this.grid.has(`${x},${y}`)) return false;
             }
         }
         return true;
@@ -232,20 +226,22 @@ export class LevelGenerator {
         // Mark grid cells
         for (let x = gx; x < gx + w; x++) {
             for (let y = gy; y < gy + h; y++) {
-                this.grid.set(`${x},${y} `, room);
+                this.grid.set(`${x},${y}`, room);
             }
         }
         return room;
     }
 
     getRoom(gx, gy) {
-        return this.grid.get(`${gx},${gy} `);
+        return this.grid.get(`${gx},${gy}`);
     }
 
     getRoomAtWorldPos(x, y) {
         const cellSize = 2000;
         const gx = Math.floor(x / cellSize);
         const gy = Math.floor(y / cellSize);
-        return this.grid.get(`${gx},${gy} `);
+        const room = this.grid.get(`${gx},${gy}`);
+        // console.log(`[LevelGen] Lookup World(${x.toFixed(0)}, ${y.toFixed(0)}) -> Grid(${gx}, ${gy}) -> Found: ${!!room}`);
+        return room;
     }
 }

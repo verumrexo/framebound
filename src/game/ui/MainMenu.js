@@ -162,7 +162,7 @@ export class MainMenu {
 
     renderSettings() {
         if (!this.overlay) return;
-        this.game.gameSettings.render(this.overlay, () => this.renderMenu());
+        this.game.settings.render(this.overlay, () => this.renderMenu());
     }
 
 

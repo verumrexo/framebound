@@ -1,4 +1,4 @@
-import { RoomType } from '../environment/LevelGenerator.js';
+import { RoomType } from '../environment/RoomType.js';
 
 export class Minimap {
     constructor(x, y, size, scale = 0.05) {
@@ -272,9 +272,83 @@ export class Minimap {
             }
         }
 
-        // 7. Draw Player (Always Center)
+        // 6c. Draw HP Orbs
+        for (const orb of game.hpOrbs) {
+            if (orb.isDead) continue;
+            const orbRoom = game.levelGen.getRoomAtWorldPos(orb.x, orb.y);
+            if (!orbRoom || !orbRoom.visited) continue;
+
+            const pos = worldToMap(orb.x, orb.y);
+            if (pos.x >= this.x && pos.x <= this.x + this.size &&
+                pos.y >= this.y && pos.y <= this.y + this.size) {
+                ctx.fillStyle = '#00ff00';
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y, 2.0, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // 6d. Draw Treasure & Vault Chests
+        for (const chest of [...game.treasureChests, ...game.vaultChests]) {
+            if (chest.opened) continue;
+            const room = game.levelGen.getRoomAtWorldPos(chest.x, chest.y);
+            if (!room || !room.visited) continue;
+
+            const pos = worldToMap(chest.x, chest.y);
+            if (pos.x >= this.x && pos.x <= this.x + this.size &&
+                pos.y >= this.y && pos.y <= this.y + this.size) {
+                ctx.fillStyle = (chest.costType === 'hp') ? '#ff4444' : '#ffd700';
+                ctx.fillRect(pos.x - 2, pos.y - 2, 4, 4);
+            }
+        }
+
+        // 7. Scavenge Radar (Crates & Asteroids) - Only when room is cleared
+        for (const crate of game.lootCrates) {
+            if (crate.isOpened) continue;
+            const room = game.levelGen.getRoomAtWorldPos(crate.x, crate.y);
+            if (!room || !room.cleared) continue;
+
+            const pos = worldToMap(crate.x, crate.y);
+            if (pos.x >= this.x && pos.x <= this.x + this.size &&
+                pos.y >= this.y && pos.y <= this.y + this.size) {
+                ctx.fillStyle = '#ffaa44';
+                ctx.fillRect(pos.x - 1.5, pos.y - 1.5, 3, 3);
+            }
+        }
+
+        for (const ast of game.asteroids) {
+            if (ast.isDead || ast.isBroken) continue;
+            if (ast.type === 'rock') continue; // Only show crystals (valuable)
+            const room = game.levelGen.getRoomAtWorldPos(ast.x, ast.y);
+            if (!room || !room.cleared) continue;
+
+            const pos = worldToMap(ast.x, ast.y);
+            if (pos.x >= this.x && pos.x <= this.x + this.size &&
+                pos.y >= this.y && pos.y <= this.y + this.size) {
+                // Color based on crystal type
+                ctx.fillStyle = ast.type === 'crystal_gold' ? '#ffd700' : '#00ffff';
+                ctx.beginPath();
+                ctx.arc(pos.x, pos.y, 1.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // 7b. Shipwrecks - Show when room is cleared
+        for (const wreck of game.shipwrecks) {
+            if (wreck.isDead) continue;
+            const room = game.levelGen.getRoomAtWorldPos(wreck.x, wreck.y);
+            if (!room || !room.cleared) continue;
+
+            const pos = worldToMap(wreck.x, wreck.y);
+            if (pos.x >= this.x && pos.x <= this.x + this.size &&
+                pos.y >= this.y && pos.y <= this.y + this.size) {
+                ctx.fillStyle = '#ff6666'; // Red tint for wrecks
+                ctx.fillRect(pos.x - 2, pos.y - 2, 4, 4);
+            }
+        }
+
+        // 8. Draw Player (Always Center)
         ctx.fillStyle = '#44ff44';
-        // ctx.shadowBlur = 15;
         ctx.shadowColor = '#44ff44';
         ctx.beginPath();
         ctx.arc(cx, cy, 3, 0, Math.PI * 2);

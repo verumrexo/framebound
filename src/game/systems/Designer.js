@@ -482,12 +482,12 @@ export class Designer {
             def.drawTurretInInventory = true;
             def.rotationOffset = rotOffset;
             if (this.barrelPos) {
-                // Convert barrel position to offset from turret center
-                const centerX = this.gridWidth / 2;
-                const centerY = this.gridHeight / 2;
+                // Convert barrel position to offset from turret pivot (or center)
+                const px = this.turretPivot ? this.turretPivot.x : this.gridWidth / 2;
+                const py = this.turretPivot ? this.turretPivot.y : this.gridHeight / 2;
                 def.stats.barrelPosition = {
-                    x: (this.barrelPos.x - centerX) * 4, // Scale by pixel size (4)
-                    y: (this.barrelPos.y - centerY) * 4
+                    x: (this.barrelPos.x - px) * 4, // Scale by pixel size (4)
+                    y: (this.barrelPos.y - py) * 4
                 };
                 def.turretDrawOffset = 0; // Don't shift sprite from pivot
             } else {
@@ -519,10 +519,10 @@ export class Designer {
             // Generate stats string with barrelPosition
             let statsStr = JSON.stringify(statsObj);
             if (this.barrelPos) {
-                const centerX = this.gridWidth / 2;
-                const centerY = this.gridHeight / 2;
-                const bx = ((this.barrelPos.x - centerX) * 4).toFixed(1);
-                const by = ((this.barrelPos.y - centerY) * 4).toFixed(1);
+                const px = this.turretPivot ? this.turretPivot.x : this.gridWidth / 2;
+                const py = this.turretPivot ? this.turretPivot.y : this.gridHeight / 2;
+                const bx = ((this.barrelPos.x - px) * 4).toFixed(1);
+                const by = ((this.barrelPos.y - py) * 4).toFixed(1);
                 statsStr = statsStr.slice(0, -1) + `, barrelPosition: { x: ${bx}, y: ${by} }}`;
             }
 

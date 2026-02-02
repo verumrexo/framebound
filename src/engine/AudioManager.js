@@ -64,17 +64,15 @@ export class AudioManager {
 
         let volumeMultiplier = 1.0;
 
-        // ONLY apply aggressive instance limiting to freeze ray laser or sounds marked as spammy (like freeze hits)
-        // This follows the "dont touch other sounds" request while still fixing the crash
-        if (name === 'shoot_lsr' || options.isSpammy) {
+        // Aggressive instance limiting for beam/charge sounds and spammy sounds
+        const isBeamSound = name === 'shoot_lsr' || name === 'rail' || name === 'rail_shot' || name === 'rail_charge';
+        if (isBeamSound || options.isSpammy) {
             if (recent.count > 1) {
-                // "more freeze rays > more quiet sounds" 
-                volumeMultiplier = 1 / Math.pow(recent.count, 0.5);
+                // More sounds = quieter each instance
+                volumeMultiplier = 1 / Math.pow(recent.count, 0.6);
             }
             // Hard limit on how quiet it can get
-            volumeMultiplier = Math.max(0.15, volumeMultiplier);
-
-            // Removed hard cap - keep playing
+            volumeMultiplier = Math.max(0.1, volumeMultiplier);
         } else {
             // For normal sounds, be much more permissive 
             if (recent.count > 5) {

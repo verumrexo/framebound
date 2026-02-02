@@ -141,6 +141,40 @@ export class Enemy {
             this.sprite = null;
             this.shootRate = 0;
             this.projectileType = null;
+        } else if (type === 'hive_carrier') {
+            // Hive Carrier - Cowardly drone spawner
+            this.rotationOffset = 0;
+            this.maxHp = 250;
+            this.hp = this.maxHp;
+            this.radius = TILE_SIZE * 4.0; // Large ship, needs bigger hitbox
+            this.speed = 120; // Moderate speed to run away
+            this.turnRate = 1.8;
+            this.engagementDist = 800; // Wants to stay far away
+            this.detectionDist = 1500;
+            this.damageMultiplier = 0.5;
+
+            // Parts layout provided by user
+            this.shipParts = [
+                { "x": -4, "y": -1, "partId": "custom_1769974460678", "rotation": 3 },
+                { "x": 0, "y": -1, "partId": "custom_1769974460678", "rotation": 1 },
+                { "x": -3, "y": -2, "partId": "custom_1768410823264", "rotation": 1 },
+                { "x": 2, "y": -2, "partId": "custom_1768410823264", "rotation": 1 },
+                { "x": -3, "y": 1, "partId": "custom_1768410823264", "rotation": 1 },
+                { "x": 2, "y": 1, "partId": "custom_1768410823264", "rotation": 1 },
+                { "x": -2, "y": -2, "partId": "custom_1768035239205", "rotation": 1 },
+                { "x": -2, "y": 1, "partId": "custom_1768035239205", "rotation": 1 },
+                { "x": 0, "y": 1, "partId": "custom_1767997148612", "rotation": 1 },
+                { "x": 0, "y": -2, "partId": "custom_1767997148612", "rotation": 3 }
+            ];
+
+            // Hive Carrier has NO direct weapons, only drones.
+            // We consciously DO NOT populate activeBursts or weaponCooldowns here.
+            this.weaponCooldowns = [];
+            this.activeBursts = [];
+
+            this.sprite = null;
+            this.shootRate = 0;
+            this.projectileType = null;
         } else if (type === 'circler') {
             // Circler - Fast approach, then circles player shooting rockets
             this.rotationOffset = 0;
@@ -254,8 +288,121 @@ export class Enemy {
         }
     }
 
-    update(dt, playerX, playerY, projectiles, asteroids = [], lootCrates = [], allEnemies = []) {
+    /**
+     * Check if a projectile at (px, py) hits any active shield on this enemy.
+     * Returns { hit: true, partData } if blocked, { hit: false } otherwise.
+     * On hit, puts that shield on cooldown.
+     */
+    checkShieldHit(px, py) {
+        if (!this.shipParts || this.shipParts.length === 0) return { hit: false };
+
+        const shipCos = Math.cos(this.rotation + (this.rotationOffset || 0));
+        const shipSin = Math.sin(this.rotation + (this.rotationOffset || 0));
+
+        for (const partData of this.shipParts) {
+            const def = PartsLibrary[partData.partId];
+            if (!def || def.type !== 'shield') continue;
+
+            // Check if shield is on cooldown
+            if (partData.shieldCooldown && partData.shieldCooldown > 0) continue;
+
+            // Calculate shield world position
+            const isRotated = ((partData.rotation || 0) % 2 !== 0);
+            const w = isRotated ? def.height : def.width;
+            const h = isRotated ? def.width : def.height;
+            const localCX = (partData.x + (w - 1) / 2) * TILE_SIZE;
+            const localCY = (partData.y + (h - 1) / 2) * TILE_SIZE;
+            const shieldWorldX = this.x + (localCX * shipCos - localCY * shipSin);
+            const shieldWorldY = this.y + (localCX * shipSin + localCY * shipCos);
+
+            // Shield radius based on part size and scale factor
+            const shieldRadius = (def.width * TILE_SIZE / 2) * (def.stats.shieldRadiusScale || 1.4);
+
+            // Distance check
+            const dx = px - shieldWorldX;
+            const dy = py - shieldWorldY;
+            const distSq = dx * dx + dy * dy;
+
+            if (distSq < shieldRadius * shieldRadius) {
+                // Hit! Put shield on cooldown
+                partData.shieldCooldown = def.stats.shieldCooldown || 3.0;
+                return { hit: true, partData, shieldX: shieldWorldX, shieldY: shieldWorldY };
+            }
+        }
+
+        return { hit: false };
+    }
+
+    /**
+     * Check if a point (px, py) hits any part on this enemy.
+     * Uses rotated rectangle collision for accurate per-part detection.
+     * @param {number} px - Projectile X position
+     * @param {number} py - Projectile Y position
+     * @param {number} pRadius - Projectile radius (optional, default 4)
+     * @returns {{ hit: boolean, partData?: object }}
+     */
+    checkPartHit(px, py, pRadius = 4) {
+        if (!this.shipParts || this.shipParts.length === 0) {
+            // Fallback to radius-based collision for enemies without parts
+            const dx = px - this.x;
+            const dy = py - this.y;
+            const distSq = dx * dx + dy * dy;
+            const minDist = pRadius + (this.radius || 20);
+            if (distSq < minDist * minDist) {
+                return { hit: true };
+            }
+            return { hit: false };
+        }
+
+        const shipAngle = this.rotation + (this.rotationOffset || 0);
+        const shipCos = Math.cos(shipAngle);
+        const shipSin = Math.sin(shipAngle);
+
+        for (const partData of this.shipParts) {
+            const def = PartsLibrary[partData.partId];
+            if (!def) continue;
+
+            // Calculate part world position and size
+            const isRotated = ((partData.rotation || 0) % 2 !== 0);
+            const partW = (isRotated ? def.height : def.width) * TILE_SIZE;
+            const partH = (isRotated ? def.width : def.height) * TILE_SIZE;
+            const localCX = (partData.x + (isRotated ? def.height : def.width) / 2 - 0.5) * TILE_SIZE;
+            const localCY = (partData.y + (isRotated ? def.width : def.height) / 2 - 0.5) * TILE_SIZE;
+            const partWorldX = this.x + (localCX * shipCos - localCY * shipSin);
+            const partWorldY = this.y + (localCX * shipSin + localCY * shipCos);
+
+            // Transform projectile to part's local space (unrotate)
+            const dx = px - partWorldX;
+            const dy = py - partWorldY;
+            const localX = dx * Math.cos(-shipAngle) - dy * Math.sin(-shipAngle);
+            const localY = dx * Math.sin(-shipAngle) + dy * Math.cos(-shipAngle);
+
+            // Expand hitbox by projectile radius for point-in-rect check
+            const halfW = partW / 2 + pRadius;
+            const halfH = partH / 2 + pRadius;
+
+            if (Math.abs(localX) < halfW && Math.abs(localY) < halfH) {
+                return { hit: true, partData, partWorldX, partWorldY };
+            }
+        }
+
+        return { hit: false };
+    }
+
+    update(dt, playerX, playerY, projectiles, asteroids = [], lootCrates = [], allEnemies = [], room = null) {
         if (this.isDead) return;
+
+        // DEBUG: Catch NaN entry
+        if (isNaN(this.x) || isNaN(this.y) || isNaN(this.rotation)) {
+            console.error(`[Enemy] NaN Detected at START of Update! ID: ${this.type}`, this.x, this.y, this.rotation);
+            // reset to safe?
+            return;
+        }
+
+        // Calculate Aim Angle (Global)
+        if (playerX !== undefined && playerY !== undefined) {
+            this.aimAngle = Math.atan2(playerY - this.y, playerX - this.x);
+        }
 
         // Frozen Logic
         if (this.frozenTimer > 0) {
@@ -289,27 +436,17 @@ export class Enemy {
 
                 if (isOrbiting) {
                     // ORBIT
-                    // 1. Current Angle
                     const currentAngle = Math.atan2(this.y - playerY, this.x - playerX);
-
-                    // 2. Direction (CCW for Starboard/Right weapons)
                     const direction = 1;
-
-                    // 3. Next Angle (Slower speed)
-                    const orbitSpeed = 0.64; // Reduced for smoother look
+                    const orbitSpeed = 0.64;
                     const nextAngle = currentAngle + orbitSpeed * direction * dt;
-
-                    // 4. Radius (Smooth snap)
                     const desiredRadius = this.engagementDist * 1.2;
                     const nextRadius = dist + (desiredRadius - dist) * 2.0 * dt;
 
-                    // 5. Set Pos directly (Orbit ignores obstacle avoidance for smoothness)
                     this.x = playerX + Math.cos(nextAngle) * nextRadius;
                     this.y = playerY + Math.sin(nextAngle) * nextRadius;
 
-                    // 6. Rotation (Face Tangent) with Smoothing
                     const targetRotation = nextAngle + (Math.PI / 2);
-
                     let diff = targetRotation - this.rotation;
                     while (diff < -Math.PI) diff += Math.PI * 2;
                     while (diff > Math.PI) diff -= Math.PI * 2;
@@ -320,12 +457,10 @@ export class Enemy {
                     } else {
                         this.rotation = targetRotation;
                     }
-
-                    applyMovement = false; // We set x/y directly
+                    applyMovement = false;
                 } else {
                     // APPROACH
                     const targetRotation = Math.atan2(dy, dx);
-
                     let diff = targetRotation - this.rotation;
                     while (diff < -Math.PI) diff += Math.PI * 2;
                     while (diff > Math.PI) diff -= Math.PI * 2;
@@ -336,17 +471,96 @@ export class Enemy {
                     } else {
                         this.rotation = targetRotation;
                     }
-
                     moveX = Math.cos(this.rotation) * this.speed * dt;
                     moveY = Math.sin(this.rotation) * this.speed * dt;
                     applyMovement = true;
                 }
+
+            } else if (this.type === 'hive_carrier') {
+                // HIVE CARRIER LOGIC - FLEE/COWARD
+
+                // Leash Logic (Room Based)
+                let tooFar = false;
+                if (room) {
+                    // Start Room might be cleared, but we still respect its bounds if passed
+                    // room.x/y/width/height are in WORLD PIXELS
+                    const roomWorldCX = room.x + room.width / 2;
+                    const roomWorldCY = room.y + room.height / 2;
+                    const roomRadius = (Math.min(room.width, room.height) / 2) * 0.9;
+
+                    const rdx = this.x - roomWorldCX;
+                    const rdy = this.y - roomWorldCY;
+                    if (rdx * rdx + rdy * rdy > roomRadius * roomRadius) {
+                        tooFar = true;
+                        // Turn back to room center
+                        var targetRotation = Math.atan2(-rdy, -rdx);
+                    }
+                } else if (dist > 1500) {
+                    // Fallback Leash to player if no room info
+                    tooFar = true;
+                    var targetRotation = Math.atan2(dy, dx);
+                }
+
+                if (!tooFar) {
+                    if (dist < this.engagementDist) {
+                        // Too close! Run away
+                        const angleToPlayer = Math.atan2(dy, dx);
+                        targetRotation = angleToPlayer + Math.PI;
+                        applyMovement = true;
+                    } else {
+                        // Just right? Drift slowly
+                        targetRotation = this.rotation;
+                        // Add slight drift
+                        moveX = Math.cos(this.rotation) * this.speed * 0.2 * dt;
+                        moveY = Math.sin(this.rotation) * this.speed * 0.2 * dt;
+                        this.x += moveX;
+                        this.y += moveY;
+                        applyMovement = false; // We handled it manually
+                    }
+                } else {
+                    applyMovement = true; // Move back to center
+                }
+                // (Block merged)
+
+                // DEBUG TARGET ROTATION
+                if (typeof targetRotation === 'undefined' || isNaN(targetRotation)) {
+                    console.error('[Enemy] targetRotation is NaN/Undefined!', {
+                        type: this.type,
+                        room: !!room,
+                        tooFar,
+                        dist,
+                        x: this.x,
+                        y: this.y
+                    });
+                    // Rescue
+                    targetRotation = this.rotation;
+                }
+
+                // Rotation Smoothing
+                let diff = targetRotation - this.rotation;
+                while (diff > Math.PI) diff -= Math.PI * 2;
+                while (diff < -Math.PI) diff += Math.PI * 2;
+
+                const maxStep = this.turnRate * dt;
+                if (Math.abs(diff) > maxStep) {
+                    this.rotation += Math.sign(diff) * maxStep;
+                } else {
+                    this.rotation = targetRotation;
+                }
+
+                if (applyMovement) {
+                    moveX = Math.cos(this.rotation) * this.speed * dt;
+                    moveY = Math.sin(this.rotation) * this.speed * dt;
+                }
+
+                // Ensure no weapons
+                if (this.weaponCooldowns.length > 0) this.weaponCooldowns = [];
             } else {
                 // STANDARD ENEMY LOGIC
                 const targetRotation = Math.atan2(dy, dx);
                 let diff = targetRotation - this.rotation;
-                while (diff < -Math.PI) diff += Math.PI * 2;
                 while (diff > Math.PI) diff -= Math.PI * 2;
+                while (diff < -Math.PI) diff += Math.PI * 2;
 
                 const maxStep = this.turnRate * dt;
                 if (Math.abs(diff) > maxStep) {
@@ -429,8 +643,9 @@ export class Enemy {
                     const localX = (burst.part.x + (w - 1) / 2) * TILE_SIZE;
                     const localY = (burst.part.y + (h - 1) / 2) * TILE_SIZE;
 
-                    const cos = Math.cos(this.rotation);
-                    const sin = Math.sin(this.rotation);
+                    const shipAngle = this.rotation + (this.rotationOffset || 0);
+                    const cos = Math.cos(shipAngle);
+                    const sin = Math.sin(shipAngle);
                     const worldX = this.x + (localX * cos - localY * sin);
                     const worldY = this.y + (localX * sin + localY * cos);
 
@@ -477,8 +692,9 @@ export class Enemy {
                         const localX = (wep.part.x + (w - 1) / 2) * TILE_SIZE;
                         const localY = (wep.part.y + (h - 1) / 2) * TILE_SIZE;
 
-                        const cos = Math.cos(this.rotation);
-                        const sin = Math.sin(this.rotation);
+                        const shipAngle = this.rotation + (this.rotationOffset || 0);
+                        const cos = Math.cos(shipAngle);
+                        const sin = Math.sin(shipAngle);
                         const worldX = this.x + (localX * cos - localY * sin);
                         const worldY = this.y + (localX * sin + localY * cos);
 
@@ -499,11 +715,13 @@ export class Enemy {
             }
         } else {
             // Basic enemy shooting
-            this.shootCooldown -= dt;
-            if (this.shootCooldown <= 0) {
-                const pSpeed = this.projectileType === 'laser' ? 800 : 400;
-                projectiles.push(new Projectile(this.x, this.y, this.rotation, this.projectileType, pSpeed, 'enemy'));
-                this.shootCooldown = this.shootRate;
+            if (this.shootRate > 0) {
+                this.shootCooldown -= dt;
+                if (this.shootCooldown <= 0) {
+                    const pSpeed = this.projectileType === 'laser' ? 800 : 400;
+                    projectiles.push(new Projectile(this.x, this.y, this.rotation, this.projectileType, pSpeed, 'enemy'));
+                    this.shootCooldown = this.shootRate;
+                }
             }
         }
     }
@@ -571,17 +789,20 @@ export class Enemy {
                     // But we don't have access to player pos in draw(). 
 
                     // Workaround: We'll assume the enemy AI keeps it facing roughly, 
-                    // BUT we override the fixed part rotation to always be "0" (Forward) visually?
-                    // User complained "turret ... static to enemies ship".
-                    // They want it to rotate freely.
+                    // BUT we use the calculated aimAngle (from update) if available.
 
-                    // Since I don't have player pos here easily (passed in update, not draw),
-                    // I'll make a simplifying assumption:
-                    // Turrets always point "Right" (Forward) relative to the ship (0 degrees).
-                    // This corrects the "Mounted Sideways" issue automatically.
-                    // If the user mounted it rotated 3 (Up), we force it to 0 (Forward).
+                    if (this.aimAngle !== undefined) {
+                        // Transform global aim angle to local rotation
+                        // Global = ShipRotation + RotationOffset + LocalPartRot
+                        // We want: DrawAngle = AimAngle - (ShipRotation + RotationOffset)
 
-                    drawAngle = 0;
+                        // But wait, ctx is already rotated by (this.rotation + this.rotationOffset).
+                        // So we just need the difference.
+                        drawAngle = this.aimAngle - (this.rotation + (this.rotationOffset || 0));
+                    } else {
+                        // Fallback: Fixed forward relative to ship
+                        drawAngle = 0;
+                    }
                 }
 
                 // Red tint for enemy (using sprite override instead of CSS filter for Edge performance)
@@ -590,12 +811,36 @@ export class Enemy {
 
                 // Draw base block for weapons (like player ship does)
                 if (def.type === 'weapon' && def.baseSprite) {
-                    // Base uses hull rotation (original mounting)
                     def.baseSprite.draw(ctx, drawX, drawY, (partData.rotation || 0) * (Math.PI / 2), 0.5, 0.5, null, enemyColor);
                 }
 
                 // Turret uses tracked rotation (Forward)
                 def.sprite.draw(ctx, turretX, turretY, drawAngle + (def.rotationOffset || 0), null, null, null, enemyColor);
+
+                // Shield Visual
+                if (def.type === 'shield' && (!partData.shieldCooldown || partData.shieldCooldown <= 0)) {
+                    // Draw nice pulsing blue shield overlay
+                    // We need a time factor for pulse, maybe just use Date.now or pass active timer
+                    const pulse = 1.0 + Math.sin(Date.now() / 200) * 0.1;
+                    const scale = (def.stats.shieldRadiusScale || 1.4) * pulse;
+
+                    ctx.beginPath();
+                    ctx.arc(drawX, drawY, (def.width * TILE_SIZE / 2) * scale, 0, Math.PI * 2);
+                    ctx.strokeStyle = '#00ffff'; // Cyan shield
+                    ctx.lineWidth = 2;
+                    ctx.shadowBlur = 10;
+                    ctx.shadowColor = '#00ffff';
+                    ctx.globalAlpha = 0.4;
+                    ctx.stroke();
+
+                    ctx.fillStyle = '#00ffff';
+                    ctx.globalAlpha = 0.1;
+                    ctx.fill();
+
+                    // Reset context for next part
+                    ctx.shadowBlur = 0;
+                    ctx.globalAlpha = 1.0;
+                }
             }
 
             if (this.frozenTimer > 0 || this.freezeMeter > 0) {
@@ -654,18 +899,49 @@ export class Enemy {
             barCenterX = (minWorldX + maxWorldX) / 2; // Center of bounding box
         }
 
-        const barW = 40;
-        const barH = 4;
-        const hpPct = this.hp / this.maxHp;
-        const barY = topY - 15; // 15px above topmost part
+        // Scale width by max HP, minimum 40px, maximum 160px
+        const barW = Math.min(160, Math.max(40, this.maxHp / 2));
+        const barH = 8;
+        const hpPct = Math.max(0, this.hp / this.maxHp);
+        const barY = topY - 25;
 
-        // Black outline (2px)
-        renderer.ctx.strokeStyle = '#000';
-        renderer.ctx.lineWidth = 2;
-        renderer.ctx.strokeRect(barCenterX - barW / 2 - 1, barY - 1, barW + 2, barH + 2);
+        const ctx = renderer.ctx;
+        ctx.save();
 
-        // Background and fill
-        renderer.drawRect(barCenterX - barW / 2, barY, barW, barH, '#333');
-        renderer.drawRect(barCenterX - barW / 2, barY, barW * hpPct, barH, '#ff4444');
+        // Terminal/Holographic Border
+        ctx.strokeStyle = '#00ffff';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(barCenterX - barW / 2 - 2, barY - 2, barW + 4, barH + 4);
+
+        // Dark Background
+        ctx.fillStyle = 'rgba(0, 20, 30, 0.8)';
+        ctx.fillRect(barCenterX - barW / 2, barY, barW, barH);
+
+        // Health Fill (Red to Bright Red Gradient)
+        if (hpPct > 0) {
+            const fillW = barW * hpPct;
+            ctx.fillStyle = '#ff3333';
+            ctx.fillRect(barCenterX - barW / 2, barY, fillW, barH);
+
+            // Highlight shine
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
+            ctx.fillRect(barCenterX - barW / 2, barY, fillW, barH / 2);
+        }
+
+        // Tech Segments (Dynamic count based on width)
+        const segmentCount = Math.floor(barW / 20);
+        if (segmentCount > 1) {
+            ctx.strokeStyle = 'rgba(0, 255, 255, 0.2)';
+            ctx.lineWidth = 1;
+            for (let i = 1; i < segmentCount; i++) {
+                const sx = (barCenterX - barW / 2) + (barW / segmentCount) * i;
+                ctx.beginPath();
+                ctx.moveTo(sx, barY - 2);
+                ctx.lineTo(sx, barY + barH + 2);
+                ctx.stroke();
+            }
+        }
+
+        ctx.restore();
     }
 }

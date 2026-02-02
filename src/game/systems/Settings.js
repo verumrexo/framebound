@@ -10,7 +10,6 @@ export class Settings {
             masterVolume: 0.8,
             musicVolume: 0.4,
             sfxVolume: 0.6,
-            pixelSize: 1,
             antiAliasing: false,
             cssPixelation: true,
             resolutionScale: 1.0,
@@ -19,7 +18,9 @@ export class Settings {
             cursorLength: 15,
             cursorGap: 3,
             cursorColor: '#00ffff',
-            cursorOutline: true
+            cursorOutline: true,
+            showDamageNumbers: true,
+            damageNumberMode: 'singular'
         };
 
         // State for floaty sliders
@@ -58,6 +59,32 @@ export class Settings {
         } catch (e) {
             console.warn('[Settings] Failed to load cursor settings:', e);
         }
+
+        // Load Game Settings
+        try {
+            const saved = localStorage.getItem('framebound_game_settings');
+            if (saved) {
+                const parsed = JSON.parse(saved);
+                this.game.showDamageNumbers = parsed.showDamageNumbers ?? this.defaults.showDamageNumbers;
+                this.game.damageNumberMode = parsed.damageNumberMode || this.defaults.damageNumberMode;
+            } else {
+                this.game.showDamageNumbers = this.defaults.showDamageNumbers;
+                this.game.damageNumberMode = this.defaults.damageNumberMode;
+            }
+        } catch (e) {
+            console.warn('[Settings] Failed to load game settings:', e);
+        }
+    }
+
+    saveGameSettings() {
+        try {
+            localStorage.setItem('framebound_game_settings', JSON.stringify({
+                showDamageNumbers: this.game.showDamageNumbers,
+                damageNumberMode: this.game.damageNumberMode
+            }));
+        } catch (e) {
+            console.warn('[Settings] Failed to save game settings:', e);
+        }
     }
 
     saveCursorSettings() {
@@ -77,7 +104,6 @@ export class Settings {
         this.sliderStates.music.target = this.sliderStates.music.current = Math.round(audio.musicGain.gain.value * 100);
         this.sliderStates.sfx.target = this.sliderStates.sfx.current = Math.round(audio.sfxGain.gain.value * 100);
 
-        const pixelSize = renderer.pixelSize;
         const antiAliasing = renderer.smoothingEnabled;
         const cssPixelation = renderer.pixelatedCSS;
 
@@ -101,25 +127,26 @@ export class Settings {
                     display: flex;
                     flex-direction: column;
                     align-items: center;
-                    width: 550px;
+                    width: 700px;
                     padding: 20px;
                 }
                 .settings-content {
                     width: 100%;
-                    display: flex;
-                    flex-direction: column;
-                    gap: 25px;
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 30px;
                     max-height: 70vh;
                     overflow-y: auto;
                     padding-right: 15px;
                     scrollbar-width: thin;
                 }
                 .setting-group-label {
+                    grid-column: span 2;
                     color: #444;
                     font-size: 10px;
                     border-bottom: 2px solid #222;
                     padding-bottom: 8px;
-                    margin-top: 15px;
+                    margin-top: 20px;
                     text-transform: lowercase;
                     letter-spacing: 4px;
                 }
@@ -234,19 +261,6 @@ export class Settings {
 
                     <div class="setting-group-label">visual matrix</div>
 
-                    <div class="setting-row">
-                        <div class="label-row">
-                            <span>mosaic density</span>
-                            <span class="val-display">${pixelSize}px</span>
-                        </div>
-                        <div class="slider-outer">
-                            <div class="slider-track"></div>
-                            <div class="slider-fill" style="width: ${(pixelSize / 16) * 100}%"></div>
-                            <div class="slider-thumb" style="left: ${(pixelSize / 16) * 100}%"></div>
-                            <input type="range" id="rng-pixelSize" min="1" max="16" step="1" value="${pixelSize}" class="slider-input">
-                        </div>
-                    </div>
-
                     <div class="checkbox-row">
                         <span>bi-linear filter</span>
                         <input type="checkbox" id="chk-aliasing" class="setting-checkbox" ${antiAliasing ? 'checked' : ''}>
@@ -284,6 +298,23 @@ export class Settings {
                     ${this.createFloatySlider('cursorThickness', 'line thickness', this.sliderStates.cursorThickness.current, 1, 10)}
                     ${this.createFloatySlider('cursorLength', 'reticle span', this.sliderStates.cursorLength.current, 5, 50)}
                     ${this.createFloatySlider('cursorGap', 'central void', this.sliderStates.cursorGap.current, 0, 20)}
+
+                    <div class="setting-group-label">combat telemetry</div>
+
+                    <div class="checkbox-row">
+                        <span>damage popups</span>
+                        <input type="checkbox" id="chk-showDamage" class="setting-checkbox" ${this.game.showDamageNumbers ? 'checked' : ''}>
+                    </div>
+
+                    <div class="setting-row">
+                        <div class="label-row">
+                            <span>damage logic</span>
+                        </div>
+                        <select id="sel-damageMode" style="background: #111; color: #00ffff; border: 1px solid #333; padding: 8px; font-family: 'Press Start 2P'; font-size: 10px; width: 100%; cursor: pointer; text-transform: lowercase;">
+                            <option value="singular" ${this.game.damageNumberMode === 'singular' ? 'selected' : ''}>discrete</option>
+                            <option value="additive" ${this.game.damageNumberMode === 'additive' ? 'selected' : ''}>accumulative</option>
+                        </select>
+                    </div>
                 </div>
 
                 <button id="btn-settings-back" class="menu-btn" style="width: 280px; margin-top: 50px; font-size: 14px;">return to main_process</button>
@@ -316,15 +347,6 @@ export class Settings {
                 }
             });
 
-            const rngPixel = document.getElementById('rng-pixelSize');
-            if (rngPixel) {
-                rngPixel.oninput = (e) => {
-                    const v = parseInt(e.target.value);
-                    renderer.setPixelSize(v);
-                    this.render(parentOverlay, backCallback); // Re-render for simplicity on simple sliders
-                };
-            }
-
             const chkAliasing = document.getElementById('chk-aliasing');
             const chkCss = document.getElementById('chk-css');
             const selShape = document.getElementById('sel-cursorShape');
@@ -337,6 +359,12 @@ export class Settings {
             if (selShape) selShape.onchange = (e) => { this.game.cursorSettings.shape = e.target.value; this.saveCursorSettings(); };
             if (clrColor) clrColor.onchange = (e) => { this.game.cursorSettings.color = e.target.value; this.saveCursorSettings(); };
             if (chkOutline) chkOutline.onchange = (e) => { this.game.cursorSettings.outline = e.target.checked; this.saveCursorSettings(); };
+
+            const chkShowDamage = document.getElementById('chk-showDamage');
+            const selDamageMode = document.getElementById('sel-damageMode');
+
+            if (chkShowDamage) chkShowDamage.onchange = (e) => { this.game.showDamageNumbers = e.target.checked; this.saveGameSettings(); };
+            if (selDamageMode) selDamageMode.onchange = (e) => { this.game.damageNumberMode = e.target.value; this.saveGameSettings(); };
 
             if (btnBack) btnBack.onclick = () => {
                 if (this.updateInterval) clearInterval(this.updateInterval);

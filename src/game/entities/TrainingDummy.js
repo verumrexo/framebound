@@ -51,19 +51,34 @@ export class TrainingDummy {
 
     update(dt, playerX, playerY, projectiles) {
         const now = Date.now();
+
         if (this.startTime !== 0) {
-            const duration = (now - this.startTime) / 1000;
-            if (duration > 0.1) {
-                this.currentDps = Math.round(this.totalDamage / duration);
+            const timeSinceStart = (now - this.startTime) / 1000;
+            if (timeSinceStart > 0) {
+                this.currentDps = Math.round(this.totalDamage / timeSinceStart);
             }
 
-            // Reset if no hits for 8 seconds
-            if (now - this.lastHitTime > 8000) {
+            if (now - this.lastHitTime > 5000) {
                 this.startTime = 0;
                 this.totalDamage = 0;
                 this.currentDps = 0;
             }
         }
+    }
+
+    checkShieldHit(px, py) {
+        return { hit: false };
+    }
+
+    checkPartHit(px, py, radius = 4) {
+        const dx = px - this.x;
+        const dy = py - this.y;
+        const distSq = dx * dx + dy * dy;
+        const hitDist = this.radius + radius;
+        if (distSq < hitDist * hitDist) {
+            return { hit: true };
+        }
+        return { hit: false };
     }
 
     draw(renderer) {

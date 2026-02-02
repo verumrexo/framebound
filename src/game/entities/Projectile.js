@@ -5,14 +5,42 @@ export class Projectile {
         this.type = type;
         this.owner = owner;
         this.damage = damage;
+        this.life = 2.0; // Seconds
 
+        if (this.owner === 'enemy') {
+            console.log('[DEBUG] Enemy Projectile:', type, 'at', x, y, 'speed', speed);
+        }
         const projSpeed = type === 'laser' ? 1500 : (type === 'small_laser' ? 1800 : (type === 'railgun' || type === 'saber' || type === 'beam_freeze' ? 0 : (type === 'pellet' ? 700 + Math.random() * 200 : (type === 'cluster_grenade' ? 350 : speed))));
         this.vx = Math.cos(angle) * projSpeed;
         this.vy = Math.sin(angle) * projSpeed;
         this.angle = angle;
 
         this.radius = (type === 'laser' || type === 'small_laser' || type === 'pellet') ? 2 : (type === 'mini_bullet' ? 1.5 : (type === 'railgun' ? 6 : (type === 'saber' ? 3 : 4)));
-        this.life = lifetime !== null ? lifetime : ((type === 'railgun') ? 2.4 : ((type === 'saber') ? 1.6 : (type === 'beam_freeze') ? 0.05 : (type === 'rocket' || type === 'guided_rocket') ? 3.0 : (type === 'cluster_grenade') ? 1.8 : (type === 'mini_grenade') ? 1.0 : 60.0));
+
+        // Determine Lifetime
+        // Robust check: ensure lifetime is actually a number before using it
+        if (typeof lifetime === 'number') {
+            this.life = lifetime;
+        } else {
+            switch (type) {
+                case 'railgun': this.life = 2.4; break;
+                case 'saber': this.life = 1.6; break;
+                case 'beam_freeze': this.life = 0.05; break;
+                case 'rocket':
+                case 'rocket_le':
+                case 'rocket_he':
+                case 'guided_rocket': this.life = 3.0; break;
+                case 'cluster_grenade': this.life = 1.8; break;
+                case 'mini_grenade': this.life = 1.0; break;
+                case 'tiny_grenade': this.life = 0.5; break;
+                case 'ggbm': this.life = 3.0; break;
+                default: this.life = 60.0; break;
+            }
+        }
+
+        // Safety Override for Beams
+        if (type === 'beam_freeze') this.life = 0.05;
+
         this.maxLife = this.life;
         this.railStayTime = (type === 'railgun') ? 1.1 : ((type === 'saber') ? 0.6 : 0);
         this.isDead = false;
@@ -26,10 +54,10 @@ export class Projectile {
         }
 
         // Custom variables for erratic movement
-        if (this.type === 'rocket' || this.type === 'guided_rocket' || this.type === 'ggbm' || this.type === 'cluster_grenade') {
+        if (this.type === 'rocket' || this.type === 'rocket_le' || this.type === 'rocket_he' || this.type === 'guided_rocket' || this.type === 'ggbm' || this.type === 'cluster_grenade') {
             this.wavyTime = Math.random() * 100;
             this.wavySpeed = 4 + Math.random() * 2;
-            this.wavyAmp = this.type === 'rocket' ? (0.2 + Math.random() * 0.15) : (this.type === 'cluster_grenade' ? 0.15 : 0.08);
+            this.wavyAmp = (this.type === 'rocket' || this.type === 'rocket_le' || this.type === 'rocket_he') ? (0.2 + Math.random() * 0.15) : (this.type === 'cluster_grenade' ? 0.15 : 0.08);
             this.baseAngle = angle;
             this.speed = projSpeed * (this.type === 'ggbm' ? 0.7 : (this.type === 'cluster_grenade' ? 0.6 : 1.0));
             // Add a permanent random "drift" to each rocket's base trajectory
@@ -44,7 +72,7 @@ export class Projectile {
             // Cluster grenade spin
             if (this.type === 'cluster_grenade') {
                 this.spinAngle = 0;
-                this.clusterCount = 6; // Number of child grenades
+                this.clusterCount = 10; // Number of child grenades
             }
         }
     }
@@ -55,21 +83,29 @@ export class Projectile {
             return;
         }
 
-        if (this.type === 'rocket' || this.type === 'guided_rocket' || this.type === 'ggbm' || this.type === 'cluster_grenade') {
+        if (this.type === 'rocket' || this.type === 'rocket_le' || this.type === 'rocket_he' || this.type === 'guided_rocket' || this.type === 'ggbm' || this.type === 'cluster_grenade') {
             if ((this.type === 'guided_rocket' || this.type === 'ggbm') && game && this.owner === 'player') {
                 // Find nearest enemy or boss
                 let nearest = null;
                 let minDist = 2000; // Increased range
 
-                // Targets: Enemies and Bosses
-                const targets = [...(game.enemies || []), ...(game.bosses || [])];
-
-                for (const target of targets) {
-                    if (target.isDead) continue;
-                    const dist = Math.hypot(target.x - this.x, target.y - this.y);
+                // Check enemies (no array allocation)
+                for (const enemy of (game.enemies || [])) {
+                    if (enemy.isDead) continue;
+                    const dist = Math.hypot(enemy.x - this.x, enemy.y - this.y);
                     if (dist < minDist) {
                         minDist = dist;
-                        nearest = target;
+                        nearest = enemy;
+                    }
+                }
+
+                // Check bosses (no array allocation)  
+                for (const boss of (game.bosses || [])) {
+                    if (boss.isDead) continue;
+                    const dist = Math.hypot(boss.x - this.x, boss.y - this.y);
+                    if (dist < minDist) {
+                        minDist = dist;
+                        nearest = boss;
                     }
                 }
 
@@ -114,7 +150,7 @@ export class Projectile {
 
         if (this.life <= 0) {
             this.isDead = true;
-            if (this.type === 'rocket' || this.type === 'cluster_grenade' || this.type === 'mini_grenade') this.shouldExplode = true;
+            if (this.type === 'rocket' || this.type === 'rocket_le' || this.type === 'rocket_he' || this.type === 'guided_rocket' || this.type === 'ggbm' || this.type === 'cluster_grenade' || this.type === 'mini_grenade' || this.type === 'tiny_grenade') this.shouldExplode = true;
         }
     }
 
@@ -163,7 +199,7 @@ export class Projectile {
                 const isSaber = this.type === 'saber';
                 const isFreeze = this.type === 'beam_freeze';
 
-                const mainColor = isSaber ? '#88ffff' : (isFreeze ? '#00ccff' : '#00ffff');
+                const mainColor = isSaber ? '#88ffff' : (isFreeze ? '#00ccff' : '#ff4444'); // Railgun is RED
                 const coreColor = '#ffffff';
                 const glowWidth = (isSaber ? 4 : (isFreeze ? 10 : 12)) * sizeScale;
                 const coreWidth = (isSaber ? 1.5 : (isFreeze ? 3 : 4)) * sizeScale;
@@ -176,20 +212,35 @@ export class Projectile {
                 renderer.drawRect(-15, -2, 30, 4, color);
             }
             renderer.ctx.restore();
-        } else if (this.type === 'rocket' || this.type === 'guided_rocket') {
+        } else if (this.type === 'rocket' || this.type === 'rocket_le' || this.type === 'guided_rocket') {
             // Rocket Visual
             renderer.ctx.save();
             renderer.ctx.translate(this.x, this.y);
             renderer.ctx.rotate(this.angle);
 
             // Body
-            const bodyColor = this.type === 'guided_rocket' ? '#44aaff' : '#ffaa44';
+            const bodyColor = this.type === 'guided_rocket' ? '#44aaff' : (this.type === 'rocket_le' ? '#ff0000' : '#ffaa44');
             renderer.drawRect(-10, -3, 20, 6, bodyColor);
             renderer.drawRect(4, -3, 6, 6, '#444');      // Nose cone
 
             // Thrust/Flame
             const flameSize = 4 + Math.sin(Date.now() * 0.05) * 2;
             renderer.drawRect(-14, -2, flameSize, 4, '#ffff00');
+
+            renderer.ctx.restore();
+        } else if (this.type === 'rocket_he') {
+            // Rocket HE Visual - blue rockets
+            renderer.ctx.save();
+            renderer.ctx.translate(this.x, this.y);
+            renderer.ctx.rotate(this.angle);
+
+            // Body - blue for HE
+            renderer.drawRect(-10, -3, 20, 6, '#44aaff');
+            renderer.drawRect(4, -3, 6, 6, '#224466');   // Darker blue nose cone
+
+            // Thrust/Flame
+            const flameSize = 4 + Math.sin(Date.now() * 0.05) * 2;
+            renderer.drawRect(-14, -2, flameSize, 4, '#00ccff'); // Cyan flame
 
             renderer.ctx.restore();
         } else if (this.type === 'ggbm') {
@@ -216,6 +267,17 @@ export class Projectile {
             const color = this.owner === 'enemy' ? '#ff4444' : '#44ff44';
             renderer.drawRect(-4, -4, 8, 8, color);
             renderer.drawRect(-2, -2, 4, 4, '#ffffff');
+
+            renderer.ctx.restore();
+        } else if (this.type === 'tiny_grenade') {
+            // Tiny Grenade Visual - very small spinning pellet
+            renderer.ctx.save();
+            renderer.ctx.translate(this.x, this.y);
+            renderer.ctx.rotate(Date.now() * 0.02); // Even faster spin
+
+            const color = this.owner === 'enemy' ? '#ff4444' : '#88ff88';
+            renderer.drawRect(-2, -2, 4, 4, color);
+            renderer.drawRect(-1, -1, 2, 2, '#ffffff');
 
             renderer.ctx.restore();
         } else if (this.type === 'cluster_grenade') {

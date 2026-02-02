@@ -1,10 +1,134 @@
 // Single source of truth for version info
 // UPDATE THIS FILE when making changes to the game
 
-export const VERSION = 'v0.6.8';
-export const VERSION_NAME = 'audible density';
+export const VERSION = '0.6.18';
+export const VERSION_NAME = 'ACOUSTIC_CHAOS';
 
 export const CHANGELOG = [
+    {
+        ver: '0.6.18',
+        name: 'ACOUSTIC_CHAOS',
+        date: '2026-02-02',
+        items: [
+            'NEW: Mini grenades now spawn 2 tiny grenades on explosion for chain damage.',
+            'BUFF: Nova Cluster spawns 10 child grenades (up from 6).',
+            'NEW: Nova Cluster weapon now has custom sound (nova.wav).',
+            'TWEAK: Beam sounds (rail, rail_shot, rail_charge) use aggressive volume reduction when stacking.',
+            'TWEAK: Saber sounds significantly quieter (charge 0.08, fire 0.15, shot 0.15).',
+            'TWEAK: Railgun sounds rebalanced (charge 0.4, fire 0.5).',
+            'FIX: Railgun beam color changed to red (#ff4444).',
+            'FIX: Charge sounds now properly stop when releasing mouse button.',
+            'FIX: Saber/Railgun charge sounds no longer stack on rapid clicks (per-part tracking).',
+            'NEW: Shipwrecks now appear on minimap as red squares when room is cleared.',
+            'FIX: Minimap now filters out rock asteroids, only shows crystals (gold/cyan colors).'
+        ]
+    },
+    {
+        ver: '0.6.17',
+        name: 'CALIBRATED_BARRELS',
+        date: '2026-02-02',
+        items: [
+            'FIX: Corrected gun barrel alignment by rotating the muzzle offset by the sprite\'s visual angle (aim + orientation).',
+            'FIX: Updated Part Designer to calculate barrel positions relative to custom pivots, fixing offset and multi-barrel turrets.',
+            'FIX: Resolved drone AI crash where they would attempt to read properties of a null game object during targeting.',
+            'NEW: Integrated custom game logo into the main menu for improved branding.',
+            'NEW: Minimap now enters Scavenge Mode when a room is cleared, showing all remaining crates and asteroids.',
+            'FIX: GGBM missiles now correctly trigger explosions and track targets as intended.',
+            'FIX: Rocketle and Rocket HE rockets are now red.',
+            'FIX: Dash cooldown UI now correctly updates after using a dash.'
+        ]
+    },
+    {
+        ver: '0.6.14',
+        name: 'KINETIC_STABILITY',
+        date: '2026-02-02',
+        items: [
+            'FIX: Corrected player movement logic to properly scale with level and thrusters (restored 150/300 baseline).',
+            'FIX: Removed duplicate update calls in Game.js which were doubling move speeds.',
+            'FIX: Corrected LevelGenerator coordinate mapping to prevent invisible walls during room transitions.',
+            'FIX: Corrected Room.js readyWeapon check to handle zero-charge cases.',
+            'FIX: Synchronized currentRoom state when loading from save files.'
+        ]
+    },
+    {
+        ver: '0.6.13',
+        name: 'BOSS_REFORGED',
+        date: '2026-02-02',
+        items: [
+            'REFACTOR: created CollisionSystem.js with unified collision API.',
+            'FIX: z-index draw order (asteroids/crates now behind enemies and player ship).',
+            'FIX: implemented beam weapon collision with shipwrecks (was missing).',
+            'PERF: eliminated array allocation in homing projectile target search.',
+            'FIX: removed erroneous friendly fire check (enemy projectiles were hitting other enemies).',
+            'FIX: removed duplicate accelerant bonus for lasers (was applying twice).',
+            'PERF: removed mosaic pixelation effect (was causing canvas resize every frame).',
+            'docs: updated readme.md to reflect v0.6.13 features and style.',
+            'FIX: Aligned projectile spawn points with visual rotation offset (fixed "shooting from nowhere").',
+            'NEW: Boss parts now use random symmetrical rotations for more varied ship designs.',
+            'FIX: Overhauled boss part generation to prevent overlapping parts and ensure symmetry.',
+            'FIX: Fixed broken update loop syntax that was causing game-wide lag.',
+            'NEW: Added player vulnerability to enemy AOE explosions.',
+            'FIX: Standardized projectile AOE damage to respect shooter ownership (no more self-damage).',
+            'FIX: Fixed infinite explosion bug (projectiles were not being removed after death).',
+            'NEW: added shield collision detection for bosses against player projectiles',
+            'FIX: fixed boss self-damage loop (bosses no longer explode themselves with their own rockets)',
+            'FIX: Corrected boss orientation to face the player forward along its symmetry axis.',
+            'FIX: Updated debug mode to render per-part boxes for bosses instead of lazy circles.',
+            'FIX: Replaced boss radius hitbox with accurate per-part hitboxes (OBB collision).',
+            'UPDATE: Boss generation is now horizontally symmetrical and uses the full parts library.',
+            'NEW: Added "spine link", "angular shard", and "lattice hull" structural parts.',
+            'FIX: Initialized player stats in Game constructor to prevent NaN money/xp.',
+            'TWEAK: Normalized boss movement and weapon logic to match standard enemies.',
+            'FIX: Training Dummy now has proper collision methods (no more crashes).',
+            'REFACTOR: Boss.js now extends Enemy class (cleaner code, shared logic).'
+        ]
+    },
+    {
+        ver: '0.6.12',
+        name: 'NAN_VOID_PATCH',
+        date: '2026-02-02',
+        items: [
+            'CRITICAL FIX: Initialized Game.level to 1 to prevent NaN position corruption loop.',
+            'FIX: Added safety checks in Boss constructor for invalid levels.'
+        ]
+    },
+    {
+        ver: "v0.6.11",
+        name: "titan protocol",
+        date: "2026-02-02",
+        items: [
+            "- synchronized boss entities with modern combat systems",
+            "- implemented per-part hitboxes for bosses (no more generic circle)",
+            "- added support for 'freeze enemies' debug toggle to bosses",
+            "- updated boss health bars to use holographic/segmented style",
+            "- bosses now properly handle freeze mechanics and visual taints"
+        ]
+    },
+    {
+        ver: "v0.6.10",
+        name: "distributed systems",
+        date: "2026-02-02",
+        items: [
+            "- overhauled terminal config with a multi-column grid layout",
+            "- integrated damage popup settings into main config",
+            "- added persistent combat telemetry settings",
+            "- increased settings menu width for better legibility",
+            "- enemy health bars now scale in length based on maximum hp"
+        ]
+    },
+    {
+        ver: "v0.6.9",
+        name: "kinetic feedback",
+        date: "2026-02-02",
+        items: [
+            "- implemented dynamic damage numbers (floating popups)",
+            "- added 'additive' vs 'singular' damage number modes in devtools",
+            "- redesigned enemy health bars (holographic/segmented style)",
+            "- increased health bar size and visibility",
+            "- fixed explosion loop crash in renderer",
+            "- fixed devtools crash (initialization order)"
+        ]
+    },
     {
         ver: "v0.6.8",
         name: "sonic architecture",
@@ -16,7 +140,13 @@ export const CHANGELOG = [
             "- guaranteed 15% volume floor (never fully muted)",
             "- reduced freeze ray tick rate to 10hz (visuals at 50hz)",
             "- fixed visual beam despawn bugs",
-            "- optimized sound prioritization for spammy effects"
+            "- optimized sound prioritization for spammy effects",
+            "- fixed enemy drones disappearing after hangar",
+            "- fixed drone stacking (drone-to-drone separation)",
+            "- fixed hive carrier shaking when spawning drones",
+            "- implemented per-part hitboxes for enemies",
+            "- added 'show hitboxes' debug toggle",
+            "- added 'freeze enemies' debug toggle"
         ]
     },
     {

@@ -153,9 +153,10 @@ export class Hangar {
                 canvas.height = sprite.height * sprite.scale;
                 const ctx = canvas.getContext('2d');
                 ctx.imageSmoothingEnabled = false;
-                sprite.draw(ctx, canvas.width / 2, canvas.height / 2, 0);
+                // Force center anchor (0.5, 0.5) for inventory display to avoid off-center custom pivots
+                sprite.draw(ctx, canvas.width / 2, canvas.height / 2, 0, 0.5, 0.5);
                 if (def.baseSprite && def.drawTurretInInventory) {
-                    def.sprite.draw(ctx, canvas.width / 2, canvas.height / 2, 0);
+                    def.sprite.draw(ctx, canvas.width / 2, canvas.height / 2, 0, 0.5, 0.5);
                 }
 
                 itemWrapper.appendChild(canvas);
@@ -209,6 +210,7 @@ export class Hangar {
         let rarityColor = '#0f0'; // Common
         if (def && def.rarity === 'rare') rarityColor = '#0088ff';
         if (def && def.rarity === 'epic') rarityColor = '#aa00ff';
+        if (def && def.rarity === 'legendary') rarityColor = '#ffaa00';
 
         tooltipEl.innerHTML = `
             <div style="font-size: 16px; color: ${rarityColor}; margin-bottom: 5px; border-bottom: 1px solid rgba(0,255,0,0.3); text-transform: uppercase;">

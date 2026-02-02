@@ -7,7 +7,6 @@ export class Renderer {
         this.smoothingEnabled = false;
         this.pixelatedCSS = true;
         this.resolutionScale = 1.0; // 0.25 to 1.0
-        this.pixelSize = 1; // Default back to 1 per user request
         this.needsResize = false;
 
         // Offscreen buffer for resolution scaling
@@ -61,9 +60,7 @@ export class Renderer {
         this.needsResize = true; // Defer resize to next frame to avoid breaking current draw
     }
 
-    setPixelSize(size) {
-        this.pixelSize = Math.max(1, Math.min(16, Math.floor(size)));
-    }
+
 
     // Get the active drawing context (offscreen if scaling, main otherwise)
     getDrawContext() {
@@ -111,26 +108,6 @@ export class Renderer {
                 0, 0, this.width, this.height
             );
         }
-
-        // Apply mosaic pixelation effect
-        if (this.pixelSize > 1) {
-            this.applyMosaic();
-        }
-    }
-
-    applyMosaic() {
-        const sw = Math.ceil(this.width / this.pixelSize);
-        const sh = Math.ceil(this.height / this.pixelSize);
-
-        // Draw smaller version to offscreen then scale back (Nearest Neighbor)
-        this.offscreenCanvas.width = sw;
-        this.offscreenCanvas.height = sh;
-        this.offscreenCtx.imageSmoothingEnabled = false;
-        this.offscreenCtx.drawImage(this.canvas, 0, 0, this.width, this.height, 0, 0, sw, sh);
-
-        this.ctx.setTransform(1, 0, 0, 1, 0, 0);
-        this.ctx.imageSmoothingEnabled = false;
-        this.ctx.drawImage(this.offscreenCanvas, 0, 0, sw, sh, 0, 0, this.width, this.height);
     }
 
     withCamera(camera, drawOperation) {
@@ -138,14 +115,17 @@ export class Renderer {
         const scale = this.resolutionScale < 1.0 ? this.resolutionScale : 1.0;
 
         ctx.save();
-        if (camera.zoom) {
-            ctx.scale(camera.zoom * scale, camera.zoom * scale);
-        } else if (scale !== 1.0) {
-            ctx.scale(scale, scale);
+        try {
+            if (camera.zoom) {
+                ctx.scale(camera.zoom * scale, camera.zoom * scale);
+            } else if (scale !== 1.0) {
+                ctx.scale(scale, scale);
+            }
+            ctx.translate(-camera.x, -camera.y);
+            drawOperation();
+        } finally {
+            ctx.restore();
         }
-        ctx.translate(-camera.x, -camera.y);
-        drawOperation();
-        ctx.restore();
     }
 
     drawRect(x, y, w, h, color) {

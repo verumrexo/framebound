@@ -3,7 +3,7 @@ import { Boss } from '../entities/Boss.js';
 import { Asteroid } from '../entities/Asteroid.js';
 import { LootCrate } from '../entities/LootCrate.js';
 import { Shipwreck } from '../entities/Shipwreck.js';
-import { RoomType } from './LevelGenerator.js';
+import { RoomType } from './RoomType.js';
 
 export class Room {
     constructor(gridX, gridY, widthUnits, heightUnits) {
@@ -78,6 +78,7 @@ export class Room {
                 this.cleared = false;
             } else {
                 this.cleared = true;
+                this.locked = false; // Start room is never locked
             }
         }
     }
@@ -332,6 +333,7 @@ export class Room {
             const bx = this.x + this.width / 2;
             const by = this.y + this.height / 2;
             const boss = new Boss(bx, by, game.level);
+            boss.game = game;
             game.bosses.push(boss);
             game.showNotification("WARNING: BOSS DETECTED", '#ff0000');
             return;
