@@ -15,6 +15,8 @@ export const CHANGELOG = [
             'hangar overhaul: unified part list and augmentation tracker',
             'combat telemetry: fixed fire rate and physics scaling bugs',
             'fix: boss scaling now correctly uses floor level instead of player level',
+            'security: devtools auth now disables high score recording',
+            'dev tools: added authentication logout mechanism',
             'core stability: resolved critical integrity bar desync',
             'dev tools update: localized mythic force-inject'
         ]

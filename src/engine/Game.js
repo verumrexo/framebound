@@ -813,6 +813,11 @@ export class Game {
             this.audio.play('frame_death', { volume: 0.7 });
 
             // Check if this is a high score (async)
+            if (this.devTools.authenticated) {
+                console.log('[Death] Dev Mode active - high scores disabled');
+                return;
+            }
+
             HighScoreManager.isHighScore(this.score).then(isHigh => {
                 if (isHigh) {
                     this.nameEntryActive = true;
@@ -1998,9 +2003,16 @@ export class Game {
             this.renderer.ctx.fillStyle = '#ffff00';
             this.renderer.ctx.font = "20px 'Press Start 2P'";
             this.renderer.ctx.fillText(`FINAL SCORE: ${this.score}`, this.renderer.width / 2, this.renderer.height / 2);
+
+            if (this.devTools.authenticated) {
+                this.renderer.ctx.fillStyle = '#ff4444';
+                this.renderer.ctx.font = "12px 'Press Start 2P'";
+                this.renderer.ctx.fillText("dev mode: scores disabled", this.renderer.width / 2, this.renderer.height / 2 + 30);
+            }
+
             this.renderer.ctx.fillStyle = 'white';
             this.renderer.ctx.font = "20px 'Press Start 2P'";
-            this.renderer.ctx.fillText("press r to restart", this.renderer.width / 2, this.renderer.height / 2 + 60);
+            this.renderer.ctx.fillText("press r to restart", this.renderer.width / 2, this.renderer.height / 2 + (this.devTools.authenticated ? 80 : 60));
             this.renderer.ctx.textAlign = 'left';
         }
 

@@ -273,6 +273,7 @@ export class DevTools {
         // --- EDITORS ---
         createBtn('🛠️ ship editor', () => this.openShipEditor(), '#00ffff', false);
         createBtn('📐 designer', () => this.openDesigner(), '#ff00ff', false);
+        createBtn('🚫 disable devtools', () => this.logout(), '#ff4444', false);
 
         document.body.appendChild(this.ui);
 
@@ -519,24 +520,13 @@ export class DevTools {
 
     unlockAllParts() {
         // Toggle Infinite Mode (Flag in Hangar)
-        this.game.hangar.hasInfiniteParts = !this.game.hangar.hasInfiniteParts;
-        const state = this.game.hangar.hasInfiniteParts ? "enabled" : "disabled";
-
-        let count = 0;
-        // Ensure we have at least 1 of everything if enabling
-        if (this.game.hangar.hasInfiniteParts) {
-            Object.keys(PartsLibrary).forEach(key => {
-                if (key !== 'core') {
-                    if (!this.game.hangar.inventory[key] || this.game.hangar.inventory[key] < 1) {
-                        this.game.hangar.inventory[key] = 1;
-                        count++;
-                    }
-                }
-            });
+        for (const id of Object.keys(PartsLibrary)) {
+            if (id !== 'core') {
+                this.game.hangar.inventory[id] = (this.game.hangar.inventory[id] || 0) + 1;
+            }
         }
-
-        this.game.hangar.updateUI(); // Refresh UI logic
-        this.game.showNotification(`infinite parts: ${state} (added ${count} missing)`, "#00ffff");
+        this.game.hangar.updateUI();
+        this.game.showNotification("all parts unlocked", "#00ffff");
     }
 
     openShipEditor() {
@@ -554,5 +544,12 @@ export class DevTools {
             this.game.designer.open(null);
             this.toggle();
         }
+    }
+    logout() {
+        localStorage.removeItem('fb_dev_auth');
+        this.authenticated = false;
+        this.active = false;
+        this.ui.style.display = 'none';
+        this.game.showNotification("dev mode disabled - scores re-enabled", "#00ff00");
     }
 }

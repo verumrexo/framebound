@@ -21,7 +21,9 @@
 - [x] Fix Boss insta-kill (Add telegraphing)
 - [ ] Implement Boss Phases & attacks (symmetry/hitboxes done)
   - [x] nerf railgun aim (charge delay + telegraph)
+  - [x] Fix Boss Scaling Bug
 - [x] level up system overhaul
+- [x] Implement DevTools Logout & High Score Blocking
 - [ ] biome system - visual themes per level
 
 ## 🎨 Polish & Feel
