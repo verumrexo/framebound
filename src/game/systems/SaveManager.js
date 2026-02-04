@@ -26,8 +26,8 @@ export class SaveManager {
             const saveData = {
                 version: SAVE_VERSION,
                 level: game.level,
-                score: game.score,
                 levelSeed: game.levelGen.seed, // Store the seed for deterministic regeneration
+                isTainted: game.isTainted || false,
                 xp: game.xp,
                 gold: game.gold,
                 xpToNext: game.xpToNext,
@@ -81,6 +81,9 @@ export class SaveManager {
             }
 
             console.log('[Save] Save loaded successfully');
+            if (data.isTainted) {
+                console.log('[Save] This run is tainted (DevTools used).');
+            }
             return data;
         } catch (e) {
             console.error('[Save] Failed to load save:', e);

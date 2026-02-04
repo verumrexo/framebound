@@ -2,11 +2,12 @@ import { PartsLibrary, TILE_SIZE } from '../parts/Part.js';
 import { Assets } from '../../Assets.js';
 
 export class TreasureChest {
-    constructor(x, y) {
+    constructor(x, y, randomGen = null) {
         this.x = x;
         this.y = y;
+        this.random = randomGen || Math.random;
         this.radius = 50;
-        this.bobOffset = Math.random() * Math.PI * 2;
+        this.bobOffset = this.random() * Math.PI * 2;
         this.life = 0;
         this.opened = false;
         this.rotation = 0;

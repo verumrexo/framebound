@@ -6,11 +6,12 @@ import { Shipwreck } from '../entities/Shipwreck.js';
 import { RoomType } from './RoomType.js';
 
 export class Room {
-    constructor(gridX, gridY, widthUnits, heightUnits) {
+    constructor(gridX, gridY, widthUnits, heightUnits, randomGen = null) {
         this.gridX = gridX;
         this.gridY = gridY;
         this.widthUnits = widthUnits; // 1 or 2
         this.heightUnits = heightUnits; // 1 or 2
+        this.random = randomGen || Math.random;
 
         // World coordinates
         this.unitSize = 2000;
@@ -96,7 +97,7 @@ export class Room {
 
                 // Shuffle and pick 3 random parts
                 for (let i = allParts.length - 1; i > 0; i--) {
-                    const j = Math.floor(Math.random() * (i + 1));
+                    const j = Math.floor(this.random() * (i + 1));
                     [allParts[i], allParts[j]] = [allParts[j], allParts[i]];
                 }
 
@@ -142,7 +143,7 @@ export class Room {
 
         import('../entities/TreasureChest.js').then(({ TreasureChest }) => {
             // Spawn 1-2 chests
-            const chestCount = 1 + Math.floor(Math.random() * 2);
+            const chestCount = 1 + Math.floor(this.random() * 2);
             const centerX = this.x + this.width / 2;
             const centerY = this.y + this.height / 2;
             const spacing = 150;
@@ -150,7 +151,7 @@ export class Room {
 
             this.treasureChests = [];
             for (let i = 0; i < chestCount; i++) {
-                const chest = new TreasureChest(startX + i * spacing, centerY);
+                const chest = new TreasureChest(startX + i * spacing, centerY, this.random);
                 this.treasureChests.push(chest);
                 game.treasureChests.push(chest);
             }
@@ -168,13 +169,13 @@ export class Room {
             this.vaultChests = [];
 
             // Chest 1: Gold Cost (High Gold)
-            const goldChest = new VaultChest(centerX - spacing / 2, centerY, 'gold', 100);
+            const goldChest = new VaultChest(centerX - spacing / 2, centerY, 'gold', 100, this.random);
             this.vaultChests.push(goldChest);
             game.vaultChests = game.vaultChests || [];
             game.vaultChests.push(goldChest);
 
             // Chest 2: HP Cost (High HP)
-            const hpChest = new VaultChest(centerX + spacing / 2, centerY, 'hp', 50);
+            const hpChest = new VaultChest(centerX + spacing / 2, centerY, 'hp', 50, this.random);
             this.vaultChests.push(hpChest);
             game.vaultChests.push(hpChest);
         });
@@ -210,8 +211,8 @@ export class Room {
         // Spawn 3-5 enemies around the player
         const count = 3 + this.waveCount; // Harder each wave
         for (let i = 0; i < count; i++) {
-            const angle = Math.random() * Math.PI * 2;
-            const dist = 400 + Math.random() * 200;
+            const angle = this.random() * Math.PI * 2;
+            const dist = 400 + this.random() * 200;
             const ex = game.x + Math.cos(angle) * dist;
             const ey = game.y + Math.sin(angle) * dist;
 
@@ -219,8 +220,8 @@ export class Room {
             const roomX = Math.max(this.x + 50, Math.min(this.x + this.width - 50, ex));
             const roomY = Math.max(this.y + 50, Math.min(this.y + this.height - 50, ey));
 
-            const type = Math.random() > 0.6 ? 'striker' : 'basic';
-            const enemy = new Enemy(roomX, roomY, type, floor);
+            const type = this.random() > 0.6 ? 'striker' : 'basic';
+            const enemy = new Enemy(roomX, roomY, type, floor, this.random);
             // Buff enemies in vault
             enemy.maxHp *= 1.5;
             enemy.hp = enemy.maxHp;
@@ -260,27 +261,27 @@ export class Room {
 
     spawnAsteroids(game) {
         // Random count 5-30
-        let count = 5 + Math.floor(Math.random() * 25);
+        let count = 5 + Math.floor(this.random() * 25);
         if (count > 30) count = 30;
 
         for (let i = 0; i < count; i++) {
             const pad = 100;
-            const ax = this.x + pad + Math.random() * (this.width - pad * 2);
-            const ay = this.y + pad + Math.random() * (this.height - pad * 2);
+            const ax = this.x + pad + this.random() * (this.width - pad * 2);
+            const ay = this.y + pad + this.random() * (this.height - pad * 2);
 
             // Determine Size
-            const rSize = Math.random();
+            const rSize = this.random();
             let size = 'medium';
             if (rSize < 0.3) size = 'small';
             if (rSize > 0.8) size = 'large';
 
             // Determine Type
-            const rType = Math.random();
+            const rType = this.random();
             let type = 'rock';
             if (rType < 0.15) type = 'crystal_blue'; // 15% Blue
             else if (rType < 0.20) type = 'crystal_gold'; // 5% Gold (15-20)
 
-            const asteroid = new Asteroid(ax, ay, size, type);
+            const asteroid = new Asteroid(ax, ay, size, type, this.random);
             game.asteroids.push(asteroid);
         }
         return count;
@@ -296,33 +297,33 @@ export class Room {
         // Random count 2 to maxCrates
         let count = 2;
         if (maxCrates > 2) {
-            count = 2 + Math.floor(Math.random() * (maxCrates - 2));
+            count = 2 + Math.floor(this.random() * (maxCrates - 2));
         } else {
             count = maxCrates;
         }
 
         for (let i = 0; i < count; i++) {
             const pad = 150;
-            const cx = this.x + pad + Math.random() * (this.width - pad * 2);
-            const cy = this.y + pad + Math.random() * (this.height - pad * 2);
+            const cx = this.x + pad + this.random() * (this.width - pad * 2);
+            const cy = this.y + pad + this.random() * (this.height - pad * 2);
 
             // Random Size
             const sizes = ['1x1', '1x2', '2x2'];
-            const size = sizes[Math.floor(Math.random() * sizes.length)];
+            const size = sizes[Math.floor(this.random() * sizes.length)];
 
-            game.lootCrates.push(new LootCrate(cx, cy, size));
+            game.lootCrates.push(new LootCrate(cx, cy, size, this.random));
         }
     }
 
     spawnShipwrecks(game) {
         // Very rare per room, aim for 2-3 per floor (approx 15 rooms)
         // Chance ~ 15-20% per room
-        if (Math.random() < 0.2) {
+        if (this.random() < 0.2) {
             const pad = 200;
-            const wx = this.x + pad + Math.random() * (this.width - pad * 2);
-            const wy = this.y + pad + Math.random() * (this.height - pad * 2);
+            const wx = this.x + pad + this.random() * (this.width - pad * 2);
+            const wy = this.y + pad + this.random() * (this.height - pad * 2);
 
-            game.shipwrecks.push(new Shipwreck(wx, wy));
+            game.shipwrecks.push(new Shipwreck(wx, wy, game.floor || 1, this.random));
         }
     }
 
@@ -332,7 +333,7 @@ export class Room {
             // Center of room
             const bx = this.x + this.width / 2;
             const by = this.y + this.height / 2;
-            const boss = new Boss(bx, by, game.floor || 1);
+            const boss = new Boss(bx, by, game.floor || 1, this.random);
             boss.game = game;
             game.bosses.push(boss);
             game.showNotification("WARNING: BOSS DETECTED", '#ff0000');
@@ -342,17 +343,17 @@ export class Room {
         const floor = game.floor || 1;
 
         // Density based on room size
-        const count = 3 + Math.floor(Math.random() * 4) * (this.widthUnits * this.heightUnits);
+        const count = 3 + Math.floor(this.random() * 4) * (this.widthUnits * this.heightUnits);
         const is2x2Room = this.widthUnits === 2 && this.heightUnits === 2;
 
         for (let i = 0; i < count; i++) {
             // Random position within room, padded from walls
             const pad = 200;
-            const ex = this.x + pad + Math.random() * (this.width - pad * 2);
-            const ey = this.y + pad + Math.random() * (this.height - pad * 2);
+            const ex = this.x + pad + this.random() * (this.width - pad * 2);
+            const ey = this.y + pad + this.random() * (this.height - pad * 2);
 
             let type = 'basic';
-            const r = Math.random();
+            const r = this.random();
 
             // Floor-restricted spawns: sniper 3+, circler 2+, rocketeer 4+
             if (r < 0.2 && floor >= 3) {
@@ -367,14 +368,14 @@ export class Room {
                     type = 'rocketeer';
                 } else {
                     // Mix of striker and basic for others
-                    type = Math.random() < 0.3 ? 'striker' : 'basic';
+                    type = this.random() < 0.3 ? 'striker' : 'basic';
                 }
             } else if (is2x2Room) {
                 // Before floor 4, 2x2 rooms get strikers instead
-                type = Math.random() < 0.3 ? 'striker' : 'basic';
+                type = this.random() < 0.3 ? 'striker' : 'basic';
             } else {
                 // Smaller rooms
-                const r2 = Math.random();
+                const r2 = this.random();
                 if (r2 < 0.1 && floor >= 4) {
                     type = 'rocketeer';
                 } else if (r2 < 0.4) {
@@ -382,7 +383,7 @@ export class Room {
                 }
             }
 
-            const enemy = new Enemy(ex, ey, type, floor);
+            const enemy = new Enemy(ex, ey, type, floor, this.random);
             game.enemies.push(enemy);
             this.enemies.push(enemy);
         }

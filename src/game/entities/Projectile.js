@@ -1,11 +1,12 @@
 export class Projectile {
-    constructor(x, y, angle, type = 'bullet', speed = 600, owner = 'player', damage = 10, lifetime = null) {
+    constructor(x, y, angle, type = 'bullet', speed = 600, owner = 'player', damage = 10, lifetime = null, randomGen = null) {
         this.x = x;
         this.y = y;
         this.type = type;
         this.owner = owner;
         this.damage = damage;
         this.life = 2.0; // Seconds
+        this.random = randomGen || Math.random;
 
         if (this.owner === 'enemy') {
             // console.log('[DEBUG] Enemy Projectile:', type, 'at', x, y, 'speed', speed);

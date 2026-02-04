@@ -1,4 +1,4 @@
-import { PartsLibrary, TILE_SIZE } from '../parts/Part.js';
+import { PartsLibrary, PartType, TILE_SIZE } from '../parts/Part.js';
 import { Collision } from '../systems/CollisionSystem.js';
 import { Assets } from '../../Assets.js';
 
@@ -164,9 +164,10 @@ export class Ship {
                 }
             }
 
-            // Core Effect
+            // Core Effect (spinning energy core)
             if (def.id === 'core' && def.coreEffectSprite) {
-                const spin = Date.now() * 0.003;
+                // Use modulo to avoid floating point precision issues with large Date.now() values
+                const spin = rotation + ((Date.now() % 10000) * 0.003);
                 def.coreEffectSprite.draw(ctx, worldPartX, worldPartY, spin);
             }
         }
@@ -347,7 +348,7 @@ export class Ship {
                 if (def.stats.weaponGroup === 'rocket') this.stats.rocketCount++;
                 if (def.stats.weaponGroup === 'velocity') this.stats.velocityCount++;
             }
-            if (def.type === 'structure' && def.id === 'rocket_bay') this.stats.rocketBayCount++;
+            if (def.type === PartType.ROCKET_BAY) this.stats.rocketBayCount++;
             if (def.type === 'structure' && def.id === 'dash_booster') this.stats.boosterCount++;
         }
 

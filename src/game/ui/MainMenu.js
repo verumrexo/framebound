@@ -60,10 +60,12 @@ export class MainMenu {
             startButtons = `
                 <button id="btn-continue" class="menu-btn start-btn">continue operation</button>
                 <button id="btn-new" class="menu-btn start-btn">initiate new run</button>
+                <button id="btn-seed" class="menu-btn start-btn">inject custom seed</button>
             `;
         } else {
             startButtons = `
                 <button id="btn-start" class="menu-btn start-btn">launch mission</button>
+                <button id="btn-seed" class="menu-btn start-btn">inject custom seed</button>
             `;
         }
 
@@ -139,6 +141,9 @@ export class MainMenu {
 
                 #btn-new:hover { border-color: #f00; box-shadow: 0 0 20px rgba(255, 0, 0, 0.2); }
                 #btn-new:hover::before { background: #f00; }
+
+                #btn-seed:hover { border-color: #0ff; box-shadow: 0 0 20px rgba(0, 255, 255, 0.2); }
+                #btn-seed:hover::before { background: #0ff; }
             </style>
         `;
 
@@ -150,6 +155,7 @@ export class MainMenu {
             const btnSettings = document.getElementById('btn-settings');
             const btnLeaderboard = document.getElementById('btn-leaderboard');
             const btnChange = document.getElementById('btn-changelog');
+            const btnSeed = document.getElementById('btn-seed');
 
             if (btnStart) btnStart.onclick = () => this.startGame();
             if (btnContinue) btnContinue.onclick = () => this.continueGame();
@@ -157,7 +163,90 @@ export class MainMenu {
             if (btnSettings) btnSettings.onclick = () => this.renderSettings();
             if (btnLeaderboard) btnLeaderboard.onclick = () => this.renderLeaderboard();
             if (btnChange) btnChange.onclick = () => this.renderChangelog();
+            if (btnSeed) btnSeed.onclick = () => this.renderSeedInput();
         }, 0);
+    }
+
+    renderSeedInput() {
+        if (!this.overlay) return;
+
+        this.currentSeedInput = "";
+
+        const renderInput = () => {
+            this.overlay.innerHTML = `
+                <h2 style="color: #00ffff; margin-bottom: 40px; font-size: 24px; text-transform: lowercase;">manual seed injection</h2>
+                <div style="
+                    background: rgba(0, 10, 20, 0.9);
+                    border: 2px solid #00ffff;
+                    padding: 40px;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    gap: 30px;
+                    box-shadow: 0 0 30px rgba(0, 255, 255, 0.2);
+                ">
+                    <div id="seed-display" style="
+                        background: #001111;
+                        border: 1px solid #00ffff;
+                        padding: 20px;
+                        width: 320px;
+                        text-align: center;
+                        font-size: 24px;
+                        color: #fff;
+                        min-height: 24px;
+                    ">${this.currentSeedInput || 'enter-seed'}</div>
+
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+                        ${['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', 'RUN'].map(key => `
+                            <button class="keypad-btn" style="
+                                background: rgba(0, 55, 55, 0.5);
+                                border: 1px solid #00ffff;
+                                color: #00ffff;
+                                padding: 20px;
+                                font-family: 'Press Start 2P';
+                                font-size: 14px;
+                                cursor: pointer;
+                                width: 90px;
+                                text-align: center;
+                            " onclick="window.game.mainMenu.handleSeedKey('${key}')">${key}</button>
+                        `).join('')}
+                    </div>
+
+                    <button id="btn-seed-back" class="menu-btn" style="background: transparent; border: none; color: #666; font-size: 12px; margin-top: 10px;">[abort_injection]</button>
+                </div>
+            `;
+
+            setTimeout(() => {
+                const back = document.getElementById('btn-seed-back');
+                if (back) back.onclick = () => this.renderMenu();
+            }, 0);
+        };
+
+        this.handleSeedKey = (key) => {
+            if (key === 'C') {
+                this.currentSeedInput = "";
+            } else if (key === 'RUN') {
+                if (this.currentSeedInput.length > 0) {
+                    this.startSeededGame(parseInt(this.currentSeedInput));
+                }
+            } else if (this.currentSeedInput.length < 10) {
+                this.currentSeedInput += key;
+            }
+            renderInput();
+        };
+
+        renderInput();
+    }
+
+    startSeededGame(seed) {
+        // Clear existing save
+        SaveManager.clearSave();
+        this.game.hasPendingSave = false;
+
+        // Initialize level with seed
+        this.game.initLevel(seed);
+
+        this.startGame();
     }
 
     renderSettings() {

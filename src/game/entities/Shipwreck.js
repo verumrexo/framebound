@@ -1,91 +1,260 @@
-
-
 import { Ship } from './Ship.js';
-import { PartsLibrary } from '../parts/Part.js';
-import { TILE_SIZE } from '../parts/PartDefinitions.js';
+import { PartsLibrary, TILE_SIZE } from '../parts/Part.js';
 import { ItemPickup } from './ItemPickup.js';
 import { Assets } from '../../Assets.js';
 
 export class Shipwreck {
-    constructor(x, y) {
+    constructor(x, y, level = 1, randomGen = null) {
         this.x = x;
         this.y = y;
-        this.rotation = Math.random() * Math.PI * 2;
+        this.level = level;
+        this.random = randomGen || Math.random;
+        this.rotation = this.random() * Math.PI * 2;
         this.isDead = false;
 
         // Use Ship class for layout management
         this.ship = new Ship();
         this.ship.parts.clear(); // Clear core
 
-        // Generate random wreckage
+        // Generate random wreckage using Boss logic
         this.generate();
 
         this.itemsDropped = 0;
-        this.maxItems = 2 + Math.floor(Math.random() * 2); // 2 to 3 items max
+        this.maxItems = 2 + Math.floor(this.random() * 2); // 2 to 3 items max
     }
 
     generate() {
-        // Start with a center block (Hull or Structural)
-        this.ship.addPart(0, 0, 'hull');
+        // --- 1. Setup Boss-like Config ---
+        const hullCount = 4 + (this.level * 2);
+        const weaponCount = 2 + (this.level * 2);
 
-        const partTypes = Object.keys(PartsLibrary).filter(k => {
-            return k !== 'core'; // Exclude core
+        // --- 2. Categorize Parts (Copied from Boss.js) ---
+        const p1x1_w = [], p1x1_h = [];
+        const p1x2_w = [], p1x2_h = [];
+        const p2x2_w = [], p2x2_h = [];
+        const pBig = [];
+
+        Object.keys(PartsLibrary).forEach(id => {
+            if (id === 'core') return;
+            const def = PartsLibrary[id];
+            const w = def.width, h = def.height;
+            const isWep = (def.type === 'weapon');
+            const min = Math.min(w, h), max = Math.max(w, h);
+
+            if (w === 1 && h === 1) {
+                if (isWep) p1x1_w.push(id); else p1x1_h.push(id);
+            } else if (min === 1 && max === 2) {
+                if (isWep) p1x2_w.push(id); else p1x2_h.push(id);
+            } else if (w === 2 && h === 2) {
+                if (isWep) p2x2_w.push(id); else p2x2_h.push(id);
+            } else {
+                pBig.push(id);
+            }
         });
-        const count = 5 + Math.floor(Math.random() * 8);
 
-        // Random walk generation
-        const openList = [{ x: 0, y: 0 }];
-        const placed = new Set(['0,0']);
+        // --- 3. Build "Deck" & Limits ---
+        const deck = [];
+        let fillPool = [];
 
-        // Safety break
+        const pushDeck = (list, count) => {
+            for (let i = 0; i < count; i++) {
+                if (list.length > 0) deck.push(list[Math.floor(this.random() * list.length)]);
+            }
+        };
+
+        if (this.level === 1) {
+            fillPool = [...p1x1_w, ...p1x1_h];
+        } else if (this.level === 2) {
+            pushDeck(p1x2_w, 2);
+            fillPool = [...p1x1_w, ...p1x1_h, ...p1x2_h];
+        } else if (this.level === 3) {
+            pushDeck(p2x2_w, 2);
+            pushDeck(p1x2_w, 2);
+            fillPool = [...p1x1_w, ...p1x1_h, ...p1x2_h, ...p2x2_h];
+        } else {
+            pushDeck(p2x2_w, 2);
+            pushDeck(p1x2_w, 2);
+            fillPool = [...p1x1_w, ...p1x1_h, ...p1x2_w, ...p1x2_h, ...p2x2_w, ...p2x2_h, ...pBig];
+        }
+
+        // --- 4. Generation Loop ---
+        const directions = [[0, 1], [0, -1], [1, 0], [-1, 0]];
+        const occupied = new Set(['0,0']);
+        const availableSlots = new Set();
+        directions.forEach(d => { if (d[0] >= 0) availableSlots.add(`${d[0]},${d[1]}`); });
+
+        let partsToPlace = hullCount + weaponCount;
+
+        const limits = { '1x2_hull': 2, '2x2_hull': 2 };
+        const counts = { '1x2_hull': 0, '2x2_hull': 0 };
+
         let attempts = 0;
-        let placedCount = 0;
+        const MAX_ATTEMPTS = 5000;
+        const tempParts = [];
 
-        while (placedCount < count && attempts < 100) {
+        // Add Core first
+        tempParts.push({ x: 0, y: 0, partId: 'core', rotation: 0 });
+
+        while (partsToPlace > 0 && availableSlots.size > 0 && attempts < MAX_ATTEMPTS) {
             attempts++;
-            if (openList.length === 0) break;
 
-            // Pick random existing spot
-            const rIdx = Math.floor(Math.random() * openList.length);
-            const spot = openList[rIdx];
+            let partId = null;
+            let fromDeck = false;
 
-            // Try neighbors
-            const neighbors = [
-                { x: spot.x + 1, y: spot.y },
-                { x: spot.x - 1, y: spot.y },
-                { x: spot.x, y: spot.y + 1 },
-                { x: spot.x, y: spot.y - 1 }
-            ];
+            if (deck.length > 0) {
+                partId = deck[0];
+                fromDeck = true;
+            } else {
+                if (fillPool.length === 0) fillPool = [...p1x1_h];
+                partId = fillPool[Math.floor(this.random() * fillPool.length)];
+            }
 
-            const target = neighbors[Math.floor(Math.random() * neighbors.length)];
-            const key = `${target.x},${target.y}`;
+            const def = PartsLibrary[partId];
+            if (!def) continue;
 
-            if (!placed.has(key)) {
-                const type = partTypes[Math.floor(Math.random() * partTypes.length)];
-                // Random rotation
-                const rot = Math.floor(Math.random() * 4);
+            const wRaw = def.width, hRaw = def.height;
+            const sizeKey = `${Math.min(wRaw, hRaw)}x${Math.max(wRaw, hRaw)}`;
+            const typeKey = def.type === 'weapon' ? 'weap' : 'hull';
+            const limitKey = `${sizeKey}_${typeKey}`;
 
-                if (this.ship.addPart(target.x, target.y, type, rot)) {
-                    placed.add(key);
-                    openList.push(target);
-                    placedCount++;
-
-                    // Add HP to the part instance
-                    const part = this.ship.getPart(target.x, target.y);
-                    if (part) {
-                        const def = PartsLibrary[type];
-                        part.maxHp = (def.stats.hp || 10) * 0.5; // Wrecks are weak
-                        part.hp = part.maxHp;
+            if (!fromDeck) {
+                if (this.level < 4) {
+                    if (counts[limitKey] >= limits[limitKey]) {
+                        attempts--;
+                        partId = this.random() < 0.5 ?
+                            (p1x1_w.length ? p1x1_w[Math.floor(this.random() * p1x1_w.length)] : 'hull') :
+                            (p1x1_h.length ? p1x1_h[Math.floor(this.random() * p1x1_h.length)] : 'hull');
                     }
                 }
             }
+
+            const slots = Array.from(availableSlots);
+            const key = slots[Math.floor(this.random() * slots.length)];
+            const [qx, qy] = key.split(',').map(Number);
+
+            let rot = 3;
+            if (qx !== 0) rot = Math.floor(this.random() * 4);
+            const isRotated = (rot % 2 !== 0);
+            const w = isRotated ? def.height : def.width;
+            const h = isRotated ? def.width : def.height;
+
+            let placed = false;
+            let anchorX = qx, anchorY = qy;
+
+            if (qx === 0) { // Spine
+                if (w % 2 !== 0) {
+                    const offset = (w - 1) / 2;
+                    anchorX = qx - offset;
+                    let clear = true;
+                    const cells = [];
+                    for (let ix = 0; ix < w; ix++) {
+                        for (let iy = 0; iy < h; iy++) {
+                            const cx = anchorX + ix, cy = anchorY + iy;
+                            if (occupied.has(`${cx},${cy}`)) { clear = false; break; }
+                            cells.push(`${cx},${cy}`);
+                        }
+                        if (!clear) break;
+                    }
+
+                    if (clear) {
+                        tempParts.push({ x: anchorX, y: anchorY, partId, rotation: rot });
+                        cells.forEach(k => occupied.add(k));
+                        cells.forEach(k => {
+                            const [cx, cy] = k.split(',').map(Number);
+                            directions.forEach(d => {
+                                const nx = cx + d[0], ny = cy + d[1];
+                                if (nx >= 0 && !occupied.has(`${nx},${ny}`)) availableSlots.add(`${nx},${ny}`);
+                            });
+                        });
+                        availableSlots.delete(key);
+                        partsToPlace--;
+                        placed = true;
+                        if (fromDeck) deck.shift();
+                        if (counts[limitKey] !== undefined) counts[limitKey]++;
+                    }
+                }
+            } else { // Side
+                let mainClear = true;
+                const mainCells = [];
+                for (let ix = 0; ix < w; ix++) {
+                    for (let iy = 0; iy < h; iy++) {
+                        const cx = anchorX + ix, cy = anchorY + iy;
+                        if (occupied.has(`${cx},${cy}`)) { mainClear = false; break; }
+                        mainCells.push(`${cx},${cy}`);
+                    }
+                    if (!mainClear) break;
+                }
+
+                const mirrorAnchorX = -(anchorX + w - 1);
+                const mirrorAnchorY = anchorY;
+                const mirrorRot = (rot === 0) ? 2 : ((rot === 2) ? 0 : rot);
+                let mirrorClear = true;
+                const mirrorCells = [];
+                if (mainClear) {
+                    for (let ix = 0; ix < w; ix++) {
+                        for (let iy = 0; iy < h; iy++) {
+                            const cx = mirrorAnchorX + ix, cy = mirrorAnchorY + iy;
+                            if (occupied.has(`${cx},${cy}`)) { mirrorClear = false; break; }
+                            mirrorCells.push(`${cx},${cy}`);
+                        }
+                        if (!mirrorClear) break;
+                    }
+                }
+
+                if (mainClear && mirrorClear) {
+                    tempParts.push({ x: anchorX, y: anchorY, partId, rotation: rot });
+                    tempParts.push({ x: mirrorAnchorX, y: mirrorAnchorY, partId, rotation: mirrorRot });
+                    [...mainCells, ...mirrorCells].forEach(k => occupied.add(k));
+                    mainCells.forEach(k => {
+                        const [cx, cy] = k.split(',').map(Number);
+                        directions.forEach(d => {
+                            const nx = cx + d[0], ny = cy + d[1];
+                            if (nx >= 0 && !occupied.has(`${nx},${ny}`)) availableSlots.add(`${nx},${ny}`);
+                        });
+                    });
+                    availableSlots.delete(key);
+                    partsToPlace -= 2;
+                    placed = true;
+                    if (fromDeck) deck.shift();
+                    if (counts[limitKey] !== undefined) counts[limitKey] += 2;
+                }
+            }
+            if (!placed && w === 1 && h === 1) availableSlots.delete(key);
         }
 
-        // Ensure 0,0 part has HP too if missed
-        const core = this.ship.getPart(0, 0);
-        if (core && !core.hp) {
-            core.hp = 20;
-            core.maxHp = 20;
+        // --- 5. Apply Decay (Post-Process) ---
+        let keptCount = 0;
+
+        tempParts.forEach(p => {
+            // Always keep core
+            if (p.partId === 'core') {
+                this.ship.addPart(p.x, p.y, p.partId, p.rotation);
+                // Core HP
+                const part = this.ship.getPart(p.x, p.y);
+                if (part) { part.hp = 20; part.maxHp = 20; }
+                keptCount++;
+            } else {
+                // Decay Chance: 15% chance to be missing to look like a wreck
+                if (this.random() > 0.15) {
+                    if (this.ship.addPart(p.x, p.y, p.partId, p.rotation)) {
+                        const part = this.ship.getPart(p.x, p.y);
+                        if (part) {
+                            const d = PartsLibrary[p.partId];
+                            part.maxHp = (d.stats.hp || 10) * 0.5; // Weak HP
+                            part.hp = part.maxHp;
+                        }
+                        keptCount++;
+                    }
+                }
+            }
+        });
+
+        // Ensure at least some wreck exists if decay was too aggressive
+        if (keptCount < 2) {
+            const fallback = ['hull', 'hull', 'hull'];
+            fallback.forEach(id => {
+                this.ship.addPart(Math.floor(this.random() * 3) - 1, Math.floor(this.random() * 3) - 1, id, 0);
+            });
         }
     }
 
@@ -123,12 +292,12 @@ export class Shipwreck {
                 let dropItem = false;
 
                 // 30% chance to drop, if under max limit
-                if (Math.random() < 0.3 && this.itemsDropped < this.maxItems) {
+                if (this.random() < 0.3 && this.itemsDropped < this.maxItems) {
                     dropItem = true;
                     this.itemsDropped++;
                 }
 
-                return { destroyed: true, partId: partId, x: worldX, y: worldY, shouldDrop: dropItem };
+                return { destroyed: true, partId: partId, x: worldX, y: worldY, shouldDrop: dropItem, randomGen: this.random };
             }
             return { destroyed: false };
         }

@@ -3,12 +3,13 @@ import { XPOrb } from './XPOrb.js';
 import { GoldOrb } from './GoldOrb.js';
 
 export class LootCrate {
-    constructor(x, y, sizeInfo = '1x1') {
+    constructor(x, y, sizeInfo = '1x1', randomGen = null) {
         this.x = x;
         this.y = y;
+        this.random = randomGen || Math.random;
         this.vx = 0;
         this.vy = 0;
-        this.rotation = (Math.floor(Math.random() * 4) * Math.PI) / 2; // Aligned rotation
+        this.rotation = (Math.floor(this.random() * 4) * Math.PI) / 2; // Aligned rotation
         this.rotSpeed = 0; // Rotational velocity
         this.isDead = false;
         this.isOpened = false;
@@ -29,7 +30,7 @@ export class LootCrate {
         this.hp = this.maxHp;
 
         // Visual Variance
-        this.variant = Math.floor(Math.random() * 3); // 0, 1, or 2
+        this.variant = Math.floor(this.random() * 3); // 0, 1, or 2
         // Colors:
         // Variant 0: Military Grey/Cyan (XP)
         // Variant 1: Industrial Brown/Orange (Gold)
@@ -50,12 +51,12 @@ export class LootCrate {
         this.hp -= amount;
 
         // Shake / hit effect?
-        this.rotSpeed += (Math.random() - 0.5) * 5;
+        this.rotSpeed += (this.random() - 0.5) * 5;
 
         if (this.hp <= 0) {
             this.hp = 0;
             this.isOpened = true;
-            this.rotSpeed += (Math.random() - 0.5) * 10; // Violence on break
+            this.rotSpeed += (this.random() - 0.5) * 10; // Violence on break
             return true; // Return true if just opened
         }
         return false;
@@ -99,8 +100,8 @@ export class LootCrate {
             // Draw scraps (simulated pixels)
             ctx.fillStyle = this.detailColor;
             for (let i = 0; i < 8; i++) {
-                const px = (Math.random() - 0.5) * w;
-                const py = (Math.random() - 0.5) * h;
+                const px = (this.random() - 0.5) * w;
+                const py = (this.random() - 0.5) * h;
                 ctx.fillRect(px, py, ps * 2, ps * 2);
             }
 

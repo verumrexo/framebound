@@ -219,7 +219,7 @@ export class LevelGenerator {
     }
 
     addRoom(gx, gy, w, h) {
-        const room = new Room(gx, gy, w, h);
+        const room = new Room(gx, gy, w, h, this.random);
         room.type = RoomType.NORMAL;
         this.rooms.push(room);
 

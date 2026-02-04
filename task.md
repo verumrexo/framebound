@@ -15,6 +15,7 @@
 - [ ] auto aim - targeting assistance
 - [ ] prism - beam splitter
 - [ ] emp - area disable
+- [ ] fmj - armor piercing rounds
 
 ## 🎮 Core Gameplay
 - [x] enemy variety - striker, rocketeer, sniper, circler
@@ -25,6 +26,9 @@
 - [x] level up system overhaul
 - [x] Implement DevTools Logout & High Score Blocking
 - [ ] biome system - visual themes per level
+- [ ] parts falling off when shot - visual debris on damage
+- [ ] full screen map - view the entire floor
+- [ ] custom seeds - manual floor generation control
 
 ## 🎨 Polish & Feel
 - [x] particle effects
@@ -32,7 +36,7 @@
 - [x] sound effects
 - [x] ui improvements
 - [x] HP Numbers inside hp bars
-- [x] Random Biomes per floorverhaul
+- [x] Random Biomes per floor overhaul
 
 ## ⚖️ Balance
 - [x] difficulty scaling per floor

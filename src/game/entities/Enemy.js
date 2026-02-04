@@ -4,11 +4,12 @@ import { TILE_SIZE } from '../parts/PartDefinitions.js';
 import { PartsLibrary } from '../parts/Part.js';
 
 export class Enemy {
-    constructor(x, y, type = 'basic', floorLevel = 1) {
+    constructor(x, y, type = 'basic', floorLevel = 1, randomGen = null) {
         this.x = x;
         this.y = y;
         this.type = type;
         this.floorLevel = floorLevel;
+        this.random = randomGen || Math.random;
         this.isDead = false;
         this.rotation = 0;
         this.rotationOffset = 0; // Default no offset
@@ -46,7 +47,7 @@ export class Enemy {
                     this.weaponCooldowns.push({
                         part: part,
                         def: def,
-                        cooldown: Math.random() * (def.stats.cooldown || 2),
+                        cooldown: this.random() * (def.stats.cooldown || 2),
                         chargeTimer: 0,
                         lockedAngle: null
                     });
@@ -91,7 +92,7 @@ export class Enemy {
                     this.weaponCooldowns.push({
                         part: part,
                         def: def,
-                        cooldown: Math.random() * (def.stats.cooldown || 2),
+                        cooldown: this.random() * (def.stats.cooldown || 2),
                         chargeTimer: 0,
                         lockedAngle: null
                     });
@@ -137,7 +138,7 @@ export class Enemy {
                     this.weaponCooldowns.push({
                         part: part,
                         def: def,
-                        cooldown: Math.random() * (def.stats.cooldown || 2)
+                        cooldown: this.random() * (def.stats.cooldown || 2)
                     });
                 }
             }
@@ -192,8 +193,8 @@ export class Enemy {
             this.damageMultiplier = 0.5; // 50% damage
 
             // Circling behavior
-            this.circleAngle = Math.random() * Math.PI * 2; // Random starting angle
-            this.circleDirection = Math.random() < 0.5 ? 1 : -1; // Clockwise or counter-clockwise
+            this.circleAngle = this.random() * Math.PI * 2; // Random starting angle
+            this.circleDirection = this.random() < 0.5 ? 1 : -1; // Clockwise or counter-clockwise
 
             // Ship parts - booster and 2x rocketle
             this.shipParts = [
@@ -212,7 +213,7 @@ export class Enemy {
                     this.weaponCooldowns.push({
                         part: part,
                         def: def,
-                        cooldown: Math.random() * (def.stats.cooldown || 2)
+                        cooldown: this.random() * (def.stats.cooldown || 2)
                     });
                 }
             }
@@ -247,7 +248,7 @@ export class Enemy {
                     this.weaponCooldowns.push({
                         part: part,
                         def: def,
-                        cooldown: Math.random() * (def.stats.cooldown || 2)
+                        cooldown: this.random() * (def.stats.cooldown || 2)
                     });
                 }
             }
@@ -257,7 +258,7 @@ export class Enemy {
             this.projectileType = null;
         }
 
-        this.shootCooldown = Math.random() * (this.shootRate || 2);
+        this.shootCooldown = this.random() * (this.shootRate || 2);
 
         // Floor-based scaling: 2x HP and damage per floor
         const floorMultiplier = Math.pow(2, this.floorLevel - 1);
@@ -398,7 +399,7 @@ export class Enemy {
 
         // DEBUG: Catch NaN entry
         if (isNaN(this.x) || isNaN(this.y) || isNaN(this.rotation)) {
-            console.error(`[Enemy] NaN Detected at START of Update! ID: ${this.type}`, this.x, this.y, this.rotation);
+            console.error(`[Enemy] NaN Detected at START of Update! ID: ${this.type} `, this.x, this.y, this.rotation);
             // reset to safe?
             return;
         }
@@ -663,7 +664,7 @@ export class Enemy {
                     const baseDamage = burst.def.stats.damage || 5;
                     const finalDamage = baseDamage * (this.damageMultiplier || 1);
 
-                    projectiles.push(new Projectile(worldX, worldY, angleToPlayer + spread, pType, pSpeed, 'enemy', finalDamage));
+                    projectiles.push(new Projectile(worldX, worldY, angleToPlayer + spread, pType, pSpeed, 'enemy', finalDamage, null, this.random));
 
                     burst.count--;
                     if (burst.count <= 0) {
@@ -738,7 +739,7 @@ export class Enemy {
                         // Use locked angle (or current if something failed)
                         const fireAngle = (wep.lockedAngle !== null ? wep.lockedAngle : currentAngleToPlayer) + spread;
 
-                        projectiles.push(new Projectile(worldX, worldY, fireAngle, pType, pSpeed, 'enemy', finalDamage));
+                        projectiles.push(new Projectile(worldX, worldY, fireAngle, pType, pSpeed, 'enemy', finalDamage, null, this.random));
 
                         // Reset
                         wep.cooldown = wep.def.stats.cooldown || 2;
@@ -785,7 +786,7 @@ export class Enemy {
                         const baseDamage = wep.def.stats.damage || 5;
                         const finalDamage = baseDamage * (this.damageMultiplier || 1);
 
-                        projectiles.push(new Projectile(worldX, worldY, angleToPlayer + spread, pType, pSpeed, 'enemy', finalDamage));
+                        projectiles.push(new Projectile(worldX, worldY, angleToPlayer + spread, pType, pSpeed, 'enemy', finalDamage, null, this.random));
                         wep.cooldown = wep.def.stats.cooldown || 2;
                     }
                 }
@@ -796,7 +797,7 @@ export class Enemy {
                 this.shootCooldown -= dt;
                 if (this.shootCooldown <= 0) {
                     const pSpeed = this.projectileType === 'laser' ? 800 : 400;
-                    projectiles.push(new Projectile(this.x, this.y, this.rotation, this.projectileType, pSpeed, 'enemy'));
+                    projectiles.push(new Projectile(this.x, this.y, this.rotation, this.projectileType, pSpeed, 'enemy', 10, null, this.random));
                     this.shootCooldown = this.shootRate;
                 }
             }
@@ -971,7 +972,7 @@ export class Enemy {
                             ctx.strokeStyle = '#ffffff'; // Locked: White/Cyan
                             ctx.shadowColor = '#00ffff';
                             ctx.shadowBlur = 10;
-                            ctx.lineWidth = 1 + Math.random(); // Flicker
+                            ctx.lineWidth = 1 + this.random(); // Flicker
                         } else {
                             ctx.strokeStyle = '#ff0000'; // Tracking: Red
                             ctx.shadowColor = '#ff0000';
@@ -1098,7 +1099,7 @@ export class Enemy {
         ctx.textBaseline = 'middle';
 
         // Removed shadow to keep it clean
-        ctx.fillText(`${Math.ceil(this.hp)}/${Math.ceil(this.maxHp)}`, barCenterX, barY + barH / 2 + 1);
+        ctx.fillText(`${Math.ceil(this.hp)} /${Math.ceil(this.maxHp)}`, barCenterX, barY + barH / 2 + 1);
 
         ctx.shadowBlur = 0; // Reset
         ctx.restore();

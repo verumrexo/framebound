@@ -2,9 +2,10 @@ import { XPOrb } from './XPOrb.js';
 import { GoldOrb } from './GoldOrb.js';
 
 export class Asteroid {
-    constructor(x, y, size = 'medium', type = 'rock') {
+    constructor(x, y, size = 'medium', type = 'rock', randomGen = null) {
         this.x = x;
         this.y = y;
+        this.random = randomGen || Math.random;
         this.sizeCategory = size; // small, medium, large
         this.type = type; // rock, crystal_blue, crystal_gold
         this.isDead = false;
@@ -22,18 +23,18 @@ export class Asteroid {
         this.hp = this.maxHp;
 
         // Physics
-        this.rotation = Math.random() * Math.PI * 2;
-        this.rotSpeed = (Math.random() - 0.5) * 0.5; // Very slow spin
-        this.vx = (Math.random() - 0.5) * 20; // Very slow drift
-        this.vy = (Math.random() - 0.5) * 20;
+        this.rotation = this.random() * Math.PI * 2;
+        this.rotSpeed = (this.random() - 0.5) * 0.5; // Very slow spin
+        this.vx = (this.random() - 0.5) * 20; // Very slow drift
+        this.vy = (this.random() - 0.5) * 20;
 
         // Procedural Shape Generation
         this.vertices = [];
-        const segments = 8 + Math.floor(Math.random() * 5); // 8-12 segments
+        const segments = 8 + Math.floor(this.random() * 5); // 8-12 segments
         for (let i = 0; i < segments; i++) {
             const angle = (i / segments) * Math.PI * 2;
             // Radius variation for jaggedness (0.8 to 1.2 x radius)
-            const r = this.radius * (0.8 + Math.random() * 0.4);
+            const r = this.radius * (0.8 + this.random() * 0.4);
             this.vertices.push({
                 x: Math.cos(angle) * r,
                 y: Math.sin(angle) * r
@@ -48,7 +49,7 @@ export class Asteroid {
             this.hp = 0;
             this.isBroken = true;
             // Add some spin on break
-            this.rotSpeed += (Math.random() - 0.5) * 5;
+            this.rotSpeed += (this.random() - 0.5) * 5;
             return true; // Just broke
         }
         return false;
@@ -132,8 +133,8 @@ export class Asteroid {
             // Draw scattered pixels interior
             ctx.fillStyle = this.type === 'rock' ? '#444' : this.type === 'crystal_blue' ? '#008888' : '#885500';
             for (let i = 0; i < 6; i++) {
-                const px = (Math.random() - 0.5) * this.radius * 1.5;
-                const py = (Math.random() - 0.5) * this.radius * 1.5;
+                const px = (this.random() - 0.5) * this.radius * 1.5;
+                const py = (this.random() - 0.5) * this.radius * 1.5;
                 ctx.fillRect(px, py, pixelSize, pixelSize);
             }
         }

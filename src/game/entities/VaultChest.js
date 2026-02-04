@@ -2,13 +2,14 @@ import { PartsLibrary, TILE_SIZE } from '../parts/Part.js';
 import { Assets } from '../../Assets.js';
 
 export class VaultChest {
-    constructor(x, y, costType, costAmount) {
+    constructor(x, y, costType, costAmount, randomGen = null) {
         this.x = x;
         this.y = y;
+        this.random = randomGen || Math.random;
         this.costType = costType; // 'gold' or 'hp'
         this.costAmount = costAmount;
         this.radius = 50;
-        this.bobOffset = Math.random() * Math.PI * 2;
+        this.bobOffset = this.random() * Math.PI * 2;
         this.life = 0;
         this.opened = false; // "Opened" means successfully claimed after ambush
         this.locked = false;  // Triggered when paid (ambush active)
@@ -94,7 +95,7 @@ export class VaultChest {
             ? `Sacrifice ${this.costAmount} HP`
             : `Pay ${this.costAmount} Gold`;
 
-        ctx.fillText(`[E] ${costText}`, this.x, tooltipY + 45);
+        ctx.fillText(`[E] ${costText} `, this.x, tooltipY + 45);
 
         ctx.textAlign = 'left';
     }

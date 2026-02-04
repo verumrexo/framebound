@@ -7,6 +7,7 @@ import { Boss } from '../entities/Boss.js';
 import { Enemy } from '../entities/Enemy.js';
 import { TreasureChest } from '../entities/TreasureChest.js';
 import { PartsLibrary } from '../parts/Part.js';
+import { Shipwreck } from '../entities/Shipwreck.js';
 
 export class DevTools {
     constructor(game) {
@@ -146,6 +147,7 @@ export class DevTools {
             btn.onclick = (e) => {
                 e.stopPropagation();
                 if (requiresPlacement) {
+                    this.game.isTainted = true;
                     this.startPlacement(action);
                 } else {
                     action(btn); // Pass button ref to action for state-based buttons
@@ -249,17 +251,20 @@ export class DevTools {
         createBtn('🐝 enemy: hive carrier', (x, y) => this.spawnEnemy(x, y, 'hive_carrier'), '#ff00ff');
 
         createBtn('👹 spawn boss', (x, y) => this.spawnBoss(x, y), '#ff00ff');
+        createBtn('⚓ spawn shipwreck', (x, y) => this.spawnShipwreck(x, y), '#884400');
 
         // --- UTILITY ---
         createBtn('☢️ nuke room', () => this.nuke(), '#ff0000', false);
         createBtn('⏩ next floor', () => this.game.nextLevel(), '#aa00ff', false);
         createBtn('🔼 force level up', () => {
+            this.game.isTainted = true;
             this.game.levelUpManager.triggerLevelUp('mythic');
             this.toggle(); // Close menu to see screen
         }, '#00ff88', false);
 
         const godBtn = createBtn('😇 god mode: off', (btn) => {
             if (!this.game.playerShip) return;
+            this.game.isTainted = true;
             this.game.playerShip.godMode = !this.game.playerShip.godMode;
             const active = this.game.playerShip.godMode;
             btn.innerText = `😇 god mode: ${active ? 'on' : 'off'}`;
@@ -373,9 +378,6 @@ export class DevTools {
             </div>
             <button style="margin-top: 30px; background: none; border: none; color: #888; font-family: 'Press Start 2P'; font-size: 8px; cursor: pointer;" onclick="window.game.devTools.hideKeypad()">[abort_connection]</button>
         `;
-
-        // Tool injection for the global window.game ref
-        if (!window.game) window.game = this.game;
     }
 
     handleKeypadInput(key) {
@@ -509,6 +511,11 @@ export class DevTools {
         this.game.showNotification("spawned boss", "#ff00ff");
     }
 
+    spawnShipwreck(x, y) {
+        this.game.shipwrecks.push(new Shipwreck(x, y, this.game.floor || 1));
+        this.game.showNotification("spawned shipwreck", "#884400");
+    }
+
     nuke() {
         console.log('[Dev] NUKE TRIGGERED');
         let count = 0;
@@ -519,14 +526,16 @@ export class DevTools {
     }
 
     unlockAllParts() {
-        // Toggle Infinite Mode (Flag in Hangar)
+        this.game.isTainted = true;
+        // Enable Infinite Mode in Hangar
+        this.game.hangar.hasInfiniteParts = true;
         for (const id of Object.keys(PartsLibrary)) {
             if (id !== 'core') {
-                this.game.hangar.inventory[id] = (this.game.hangar.inventory[id] || 0) + 1;
+                this.game.hangar.inventory[id] = 99; // Give plenty
             }
         }
         this.game.hangar.updateUI();
-        this.game.showNotification("all parts unlocked", "#00ffff");
+        this.game.showNotification("infinite parts enabled", "#00ffff");
     }
 
     openShipEditor() {

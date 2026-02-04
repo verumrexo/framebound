@@ -2,7 +2,7 @@ import { Sprite } from "../../engine/Sprite.js";
 import { Projectile } from "./Projectile.js";
 
 export class Drone {
-    constructor(x, y, ownerPart, owner = 'player') {
+    constructor(x, y, ownerPart, owner = 'player', randomGen = null) {
         if (isNaN(x) || isNaN(y)) {
             console.error(`[Drone] CREATED WITH NaN! Owner: ${owner}`, x, y);
         } else {
@@ -10,6 +10,7 @@ export class Drone {
         }
         this.x = x;
         this.y = y;
+        this.random = randomGen || Math.random;
         this.ownerPart = ownerPart; // The part that spawned it (can be null if passed manually)
         this.owner = owner;
         this.isDead = false;
@@ -19,7 +20,7 @@ export class Drone {
         this.speed = 220;
         this.turnRate = 4.0;
         this.radius = 8;
-        this.rotation = Math.random() * Math.PI * 2;
+        this.rotation = this.random() * Math.PI * 2;
 
         // Attack
         this.cooldown = 0;
@@ -128,7 +129,7 @@ export class Drone {
                 this.shoot(game, targetAngle);
             } else if (this.owner === 'player' && this.cooldown <= 0 && dist < this.range) {
                 // Debug why not shooting
-                // console.log(`[Drone] Aiming... AngleDiff: ${angleDiff.toFixed(2)}`);
+                // console.log(`[Drone] Aiming...AngleDiff: ${ angleDiff.toFixed(2) } `);
             }
         } else {
             // Idle / Follow Owner logic
@@ -256,8 +257,7 @@ export class Drone {
     shoot(game, angle) {
         this.cooldown = this.maxCooldown;
         // Small laser projectile
-        const p = new Projectile(this.x, this.y, angle, 'small_laser', 500, this.owner, 5);
-        p.life = 0.8;
+        const p = new Projectile(this.x, this.y, angle, 'small_laser', 500, this.owner, 5, 0.8, this.random);
         game.projectiles.push(p);
 
         game.audio.play('shoot_dart', { volume: 0.3, pitch: 1.5 });
@@ -267,7 +267,7 @@ export class Drone {
         // Debug: Log once per second
         if (!this.lastDebug || Date.now() - this.lastDebug > 1000) {
             this.lastDebug = Date.now();
-            console.log(`[Drone] Draw at ${Math.round(this.x)}, ${Math.round(this.y)} Rotation: ${this.rotation} Owner: ${this.owner}`);
+            console.log(`[Drone] Draw at ${Math.round(this.x)}, ${Math.round(this.y)} Rotation: ${this.rotation} Owner: ${this.owner} `);
         }
 
         // Draw relative to camera handled by renderer if we pass world coords

@@ -393,7 +393,7 @@ export class WeaponSystem {
             }
 
             // Projectile(x, y, angle, type, speed, owner, damage, lifetime)
-            const p = new Projectile(pX, pY, finalAngle, def.stats.projectileType || 'bullet', speed, 'player', def.stats.damage || 10, def.stats.lifetime);
+            const p = new Projectile(pX, pY, finalAngle, def.stats.projectileType || 'bullet', speed, 'player', def.stats.damage || 10, def.stats.lifetime, game.random);
 
             if (def.stats.projectileType === 'railgun' || def.stats.projectileType === 'beam_freeze') p.isBeam = true;
 

@@ -3,19 +3,20 @@ import { TILE_SIZE } from '../parts/PartDefinitions.js';
 import { Assets } from '../../Assets.js';
 
 export class ItemPickup {
-    constructor(x, y, partId) {
+    constructor(x, y, partId, randomGen = null) {
         this.x = x;
         this.y = y;
+        this.random = randomGen || Math.random;
         this.partId = partId;
         this.radius = TILE_SIZE * 0.5;
 
         // Drifting physics
-        const angle = Math.random() * Math.PI * 2;
-        const speed = 10 + Math.random() * 20;
+        const angle = this.random() * Math.PI * 2;
+        const speed = 10 + this.random() * 20;
         this.vx = Math.cos(angle) * speed;
         this.vy = Math.sin(angle) * speed;
 
-        this.bobOffset = Math.random() * 100;
+        this.bobOffset = this.random() * 100;
         this.life = 0;
         this.isDead = false;
 

@@ -76,19 +76,19 @@ export class LevelUpManager {
         this.active = true;
         this.choices = [];
         this.game.paused = true;
-        this.game.audio.play('item_pickup', { pitch: 0.5 }); // Placeholder sound
+        this.game.audio.play('item_pickup', { pitch: 0.5 });
 
-        // Generate 3 unique choices
-        // For now we just pick random upgrade types, duplicate types allowed if we implement stacking?
-        // Let's allow duplicate types (e.g. 2 Hull upgrades of diff rarity)
-
+        // Generate 3 unique upgrade categories
+        const availableUpgrades = [...this.upgrades];
         for (let i = 0; i < 3; i++) {
-            this.choices.push(this.generateChoice(forceRarity));
+            if (availableUpgrades.length === 0) break;
+            const typeIndex = Math.floor(Math.random() * availableUpgrades.length);
+            const type = availableUpgrades.splice(typeIndex, 1)[0];
+            this.choices.push(this.generateChoiceForType(type, forceRarity));
         }
     }
 
-    generateChoice(forceRarity = null) {
-        // 1. Pick Rarity
+    generateChoiceForType(type, forceRarity = null) {
         let rarity;
         if (forceRarity) {
             rarity = this.rarities.find(r => r.id === forceRarity) || this.rarities[0];
@@ -96,9 +96,6 @@ export class LevelUpManager {
             rarity = this.rollRarity();
         }
         const rarityIndex = this.rarities.indexOf(rarity);
-
-        // 2. Pick Upgrade Type
-        const type = this.upgrades[Math.floor(Math.random() * this.upgrades.length)];
 
         return {
             rarity: rarity,

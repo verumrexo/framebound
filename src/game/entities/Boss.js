@@ -3,12 +3,14 @@ import { PartsLibrary, TILE_SIZE } from '../parts/Part.js';
 import { Projectile } from './Projectile.js';
 
 export class Boss extends Enemy {
-    constructor(x, y, level) {
+    constructor(x, y, level, randomGen = null) {
         // Initialize as a 'boss' type enemy
-        super(x, y, 'boss', level);
+        super(x, y, 'boss', level, randomGen);
 
         this.level = level || 1;
         if (isNaN(this.level)) this.level = 1;
+
+        // random is inherited from Enemy! 🙄💅
 
         // Custom Boss Properties
         this.hullCount = 4 + (this.level * 2);
@@ -76,7 +78,7 @@ export class Boss extends Enemy {
         // Helper to add N random items from list to deck
         const pushDeck = (list, count) => {
             for (let i = 0; i < count; i++) {
-                if (list.length > 0) deck.push(list[Math.floor(Math.random() * list.length)]);
+                if (list.length > 0) deck.push(list[Math.floor(this.random() * list.length)]);
             }
         };
 
@@ -140,7 +142,7 @@ export class Boss extends Enemy {
             } else {
                 // Random Fill
                 if (fillPool.length === 0) fillPool = [...p1x1_h]; // Fallback safety
-                partId = fillPool[Math.floor(Math.random() * fillPool.length)];
+                partId = fillPool[Math.floor(this.random() * fillPool.length)];
             }
 
             const def = PartsLibrary[partId];
@@ -156,9 +158,9 @@ export class Boss extends Enemy {
                         // Limit reached, try again (should filter pool really, but retry works with attempts)
                         attempts--; // Don't burn attempt on limit check logic if mostly valid
                         // Actually, just pick a 1x1 part instead to ensure progress
-                        partId = Math.random() < 0.5 ?
-                            (p1x1_w.length ? p1x1_w[Math.floor(Math.random() * p1x1_w.length)] : 'hull') :
-                            (p1x1_h.length ? p1x1_h[Math.floor(Math.random() * p1x1_h.length)] : 'hull');
+                        partId = this.random() < 0.5 ?
+                            (p1x1_w.length ? p1x1_w[Math.floor(this.random() * p1x1_w.length)] : 'hull') :
+                            (p1x1_h.length ? p1x1_h[Math.floor(this.random() * p1x1_h.length)] : 'hull');
                     }
                 }
             }
@@ -167,12 +169,12 @@ export class Boss extends Enemy {
             const slots = Array.from(availableSlots);
             // Optimization: If placing Big part, maybe prioritize slots further out?
             // Current: Uniform random slot.
-            const key = slots[Math.floor(Math.random() * slots.length)];
+            const key = slots[Math.floor(this.random() * slots.length)];
             const [qx, qy] = key.split(',').map(Number);
 
             // Rotation Logic
             let rot = 3;
-            if (qx !== 0) rot = Math.floor(Math.random() * 4);
+            if (qx !== 0) rot = Math.floor(this.random() * 4);
             const isRotated = (rot % 2 !== 0);
             const w = isRotated ? def.height : def.width;
             const h = isRotated ? def.width : def.height;
@@ -275,7 +277,7 @@ export class Boss extends Enemy {
                 if (fromDeck) {
                     // Temporarily skip Deck, try placing a 1x1 hull to open slots
                     // But don't remove from deck
-                    const fillerId = p1x1_h.length ? p1x1_h[Math.floor(Math.random() * p1x1_h.length)] : 'hull';
+                    const fillerId = p1x1_h.length ? p1x1_h[Math.floor(this.random() * p1x1_h.length)] : 'hull';
                     // We'll let the next loop iteration handle it by effectively 'ignoring' the deck for one turn?
                     // OR: Recursively force a 1x1 placement now?
                     // Simpler: Just allow the loop to retry.
@@ -313,7 +315,7 @@ export class Boss extends Enemy {
                 this.weaponCooldowns.push({
                     part: part,
                     def: def,
-                    cooldown: Math.random() * (def.stats.cooldown || 2),
+                    cooldown: this.random() * (def.stats.cooldown || 2),
                     chargeTimer: 0,
                     lockedAngle: null
                 });

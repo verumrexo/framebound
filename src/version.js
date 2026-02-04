@@ -1,10 +1,24 @@
 // Single source of truth for version info
 // UPDATE THIS FILE when making changes to the game
 
-export const VERSION = '0.7.0';
-export const VERSION_NAME = 'Core Evolution';
+export const VERSION = '0.7.1';
+export const VERSION_NAME = 'Tainted Skies';
 
 export const CHANGELOG = [
+    {
+        ver: '0.7.1',
+        name: 'Tainted Skies',
+        date: '2026-02-03',
+        changes: [
+            'navigation: fullscreen map (M key) with fast travel to visited rooms',
+            'environment: starfield overhaul - parallax star layers, star clusters, planets with rings, shooting stars',
+            'hotfix: rocket bay logic corrected (now properly boosts Rocket LE)',
+            'quality: level-up upgrades now offer 3 unique categories (no more dupes)',
+            'anti-cheat: devtools usage permanently "taints" the run, disabling high scores',
+            'persistence: taint status is saved and loaded to prevent reload exploits',
+            'fix: core spin effect restored (floating point precision fix)'
+        ]
+    },
     {
         ver: '0.7.0',
         name: 'Core Evolution',
