@@ -3045,6 +3045,7 @@ export class Game {
                         ctx.fillText("l-click: shoot", centerX - 100, centerY - 80);
                         ctx.fillText("e: interact", centerX - 100, centerY - 10);
                         ctx.fillText("tab: hangar", centerX - 100, centerY + 60);
+                        ctx.fillText("m: map", centerX - 100, centerY + 130);
                         ctx.restore();
                     }
                 }

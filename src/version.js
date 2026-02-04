@@ -16,7 +16,8 @@ export const CHANGELOG = [
             'quality: level-up upgrades now offer 3 unique categories (no more dupes)',
             'anti-cheat: devtools usage permanently "taints" the run, disabling high scores',
             'persistence: taint status is saved and loaded to prevent reload exploits',
-            'fix: core spin effect restored (floating point precision fix)'
+            'fix: core spin effect restored (floating point precision fix)',
+            'tutorial: added "m: map" instruction to start room'
         ]
     },
     {

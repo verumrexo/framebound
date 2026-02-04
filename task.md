@@ -53,6 +53,9 @@
 - [ ] starfield.js overhaul
 - [ ] save system overhaul - persistent asteroids/boxes
 
+- [x] Add "m: map" to tutorial text in `Game.js`
+- [x] Bump version to 0.7.1 in `version.js`
+
 ## 🎲 Content
 - [ ] more room types
 - [ ] rare events
