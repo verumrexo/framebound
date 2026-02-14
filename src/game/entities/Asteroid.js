@@ -91,36 +91,30 @@ export class Asteroid {
         }
 
         const drawPixelLine = (x0, y0, x1, y1) => {
-            const dx = Math.abs(x1 - x0);
-            const dy = Math.abs(y1 - y0);
-            const sx = (x0 < x1) ? 1 : -1;
-            const sy = (y0 < y1) ? 1 : -1;
+            let X0 = Math.round(x0 / pixelSize);
+            let Y0 = Math.round(y0 / pixelSize);
+            let X1 = Math.round(x1 / pixelSize);
+            let Y1 = Math.round(y1 / pixelSize);
+
+            const dx = Math.abs(X1 - X0);
+            const dy = Math.abs(Y1 - Y0);
+            const sx = (X0 < X1) ? 1 : -1;
+            const sy = (Y0 < Y1) ? 1 : -1;
             let err = dx - dy;
 
             while (true) {
-                ctx.fillRect(Math.floor(x0 / pixelSize) * pixelSize, Math.floor(y0 / pixelSize) * pixelSize, pixelSize, pixelSize);
-                if (Math.abs(x0 - x1) < pixelSize && Math.abs(y0 - y1) < pixelSize) break;
+                ctx.fillRect(X0 * pixelSize - pixelSize / 2, Y0 * pixelSize - pixelSize / 2, pixelSize, pixelSize);
+                if (X0 === X1 && Y0 === Y1) break;
                 const e2 = 2 * err;
-                if (e2 > -dy) { err -= dy; x0 += sx * pixelSize; }
-                if (e2 < dx) { err += dx; y0 += sy * pixelSize; } // Fix: Use correct Bresenham logic adapted for steps
-            }
-        };
-
-        // Simpler stepped interpolation for pixel look
-        const drawStepped = (x0, y0, x1, y1) => {
-            const steps = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) / pixelSize;
-            for (let i = 0; i <= steps; i++) {
-                const t = i / steps;
-                const px = x0 + (x1 - x0) * t;
-                const py = y0 + (y1 - y0) * t;
-                ctx.fillRect(Math.floor(px / pixelSize) * pixelSize - pixelSize / 2, Math.floor(py / pixelSize) * pixelSize - pixelSize / 2, pixelSize, pixelSize);
+                if (e2 > -dy) { err -= dy; X0 += sx; }
+                if (e2 < dx) { err += dx; Y0 += sy; }
             }
         };
 
         if (this.vertices.length > 0) {
             for (let i = 0; i < this.vertices.length; i++) {
                 const nextI = (i + 1) % this.vertices.length;
-                drawStepped(this.vertices[i].x, this.vertices[i].y, this.vertices[nextI].x, this.vertices[nextI].y);
+                drawPixelLine(this.vertices[i].x, this.vertices[i].y, this.vertices[nextI].x, this.vertices[nextI].y);
             }
         }
 
