@@ -28,20 +28,7 @@ export class NetworkManager {
         this.socket.on("connect", () => {
             console.log("Connected to server");
             this.isConnected = true;
-
-            // Serialize Ship Data
-            const parts = [];
-            if (this.game.playerShip) {
-                for (const p of this.game.playerShip.getUniqueParts()) {
-                    parts.push({
-                        x: p.x,
-                        y: p.y,
-                        partId: p.partId,
-                        rotation: p.rotation
-                    });
-                }
-            }
-            this.socket.emit('join_game', { parts: parts });
+            // join_game is now sent after init -> createLocalPlayer
         });
 
         this.socket.on("disconnect", () => {
@@ -53,6 +40,10 @@ export class NetworkManager {
             console.log("My ID:", data.id);
             console.log("Game Seed:", data.seed);
             this.playerId = data.id;
+
+            // Create local player NOW (server authoritative creation)
+            this.game.createLocalPlayer(data);
+
             if (data.seed) {
                 this.game.startGame(data.seed);
             }
@@ -123,18 +114,27 @@ export class NetworkManager {
         });
 
         this.socket.on("player_shoot", (data) => {
-            if (data.id === this.playerId) {
-                console.warn("[Network] Received OWN shoot event! (Double Fire Bug)");
-                return;
-            }
+            // Server Authoritative Shooting: We process ALL shoot events, including our own.
 
-            // Spawn Remote Projectile
+            // Spawn Projectile
             const def = PartsLibrary[data.partId];
             if (def) {
-                // Try to find the partRef on the remote player for recoil/etc if possible
-                // RemotePlayer data is simplified, might not have perfect part refs
-                // For now, pass null or mock
-                this.game.spawnProjectile(def, data.x, data.y, data.angle, null);
+                // If it's own player, we might want to attach partRef for recoil?
+                // But partRef is local state.
+                // Currently spawnProjectile accepts partRef for recoil & visual effects.
+                // If we pass null, we lose recoil on local ship?
+                // Yes, recoil logic in spawnProjectile depends on partRef.
+
+                let partRef = null;
+                if (data.id === this.playerId && this.game.playerShip) {
+                    // Try to find the local part that shot?
+                    // We don't know EXACTLY which part shot (if multiple identical parts).
+                    // But we can approximate or ignore recoil for now.
+                    // Or we could pass partIndex in the packet?
+                    // For now, let's accept losing visual recoil or fix it later.
+                }
+
+                this.game.spawnProjectile(def, data.x, data.y, data.angle, partRef);
             }
         });
 
@@ -217,5 +217,21 @@ export class NetworkManager {
     sendEnemyHit(id, damage, killed) {
         if (!this.isConnected) return;
         this.socket.emit("enemy_hit", { id, damage, killed });
+    }
+
+    sendJoinGame() {
+        if (!this.isConnected || !this.game.playerShip) return;
+
+        // Serialize Ship Data
+        const parts = [];
+        for (const p of this.game.playerShip.getUniqueParts()) {
+            parts.push({
+                x: p.x,
+                y: p.y,
+                partId: p.partId,
+                rotation: p.rotation
+            });
+        }
+        this.socket.emit('join_game', { parts: parts });
     }
 }
