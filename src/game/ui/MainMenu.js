@@ -55,17 +55,15 @@ export class MainMenu {
         const hasSave = SaveManager.hasSave();
 
         // Build start button(s) based on save state
-        let startButtons;
+        let localButtons;
         if (hasSave) {
-            startButtons = `
-                <button id="btn-continue" class="menu-btn start-btn">continue operation</button>
-                <button id="btn-new" class="menu-btn start-btn">initiate new run</button>
-                <button id="btn-seed" class="menu-btn start-btn">inject custom seed</button>
+            localButtons = `
+                <button id="btn-continue" class="menu-btn start-btn">local: continue</button>
+                <button id="btn-new" class="menu-btn start-btn">local: new run</button>
             `;
         } else {
-            startButtons = `
-                <button id="btn-start" class="menu-btn start-btn">launch mission</button>
-                <button id="btn-seed" class="menu-btn start-btn">inject custom seed</button>
+            localButtons = `
+                <button id="btn-start" class="menu-btn start-btn">local: new run</button>
             `;
         }
 
@@ -85,7 +83,9 @@ export class MainMenu {
             <div id="loading-text" style="color: #ffd700; font-size: 16px; display: none;">initializing systems...</div>
 
             <div style="display: flex; flex-direction: column; gap: 25px; width: 400px;">
-                ${startButtons}
+                ${localButtons}
+                <button id="btn-online" class="menu-btn start-btn" style="border-color: #ffaa00; color: #ffddaa;">online lobby</button>
+                <button id="btn-seed" class="menu-btn start-btn">inject custom seed</button>
                 <button id="btn-settings" class="menu-btn">system settings</button>
                 <button id="btn-leaderboard" class="menu-btn">global rankings</button>
                 <button id="btn-changelog" class="menu-btn">patch notes</button>
@@ -135,36 +135,185 @@ export class MainMenu {
                     transform-origin: top;
                 }
 
-                /* Specific Button Accents on Hover (Optional, or distinct theming) */
-                #btn-continue:hover { border-color: #0f0; box-shadow: 0 0 20px rgba(0, 255, 0, 0.2); }
-                #btn-continue:hover::before { background: #0f0; }
-
-                #btn-new:hover { border-color: #f00; box-shadow: 0 0 20px rgba(255, 0, 0, 0.2); }
-                #btn-new:hover::before { background: #f00; }
-
-                #btn-seed:hover { border-color: #0ff; box-shadow: 0 0 20px rgba(0, 255, 255, 0.2); }
-                #btn-seed:hover::before { background: #0ff; }
+                #btn-online:hover { border-color: #ffaa00; box-shadow: 0 0 20px rgba(255, 170, 0, 0.2); }
+                #btn-online:hover::before { background: #ffaa00; }
             </style>
         `;
 
-        // Attach Listeners
         setTimeout(() => {
             const btnStart = document.getElementById('btn-start');
             const btnContinue = document.getElementById('btn-continue');
             const btnNew = document.getElementById('btn-new');
+            const btnOnline = document.getElementById('btn-online');
             const btnSettings = document.getElementById('btn-settings');
             const btnLeaderboard = document.getElementById('btn-leaderboard');
             const btnChange = document.getElementById('btn-changelog');
             const btnSeed = document.getElementById('btn-seed');
 
-            if (btnStart) btnStart.onclick = () => this.startGame();
+            if (btnStart) btnStart.onclick = () => this.startNewGame();
             if (btnContinue) btnContinue.onclick = () => this.continueGame();
             if (btnNew) btnNew.onclick = () => this.startNewGame();
+            if (btnOnline) btnOnline.onclick = () => this.renderLobbyBrowser();
             if (btnSettings) btnSettings.onclick = () => this.renderSettings();
             if (btnLeaderboard) btnLeaderboard.onclick = () => this.renderLeaderboard();
             if (btnChange) btnChange.onclick = () => this.renderChangelog();
             if (btnSeed) btnSeed.onclick = () => this.renderSeedInput();
         }, 0);
+    }
+
+    renderLobbyBrowser() {
+        if (!this.overlay) return;
+
+        // Connect Network
+        if (this.game.network && !this.game.network.isConnected) {
+            this.game.network.connect();
+        }
+
+        this.overlay.innerHTML = `
+            <h2 style="color: #ffaa00; margin-bottom: 20px; font-size: 24px;">online lobbies</h2>
+            <div id="lobby-status" style="color: #888; font-size: 12px; margin-bottom: 20px;">connecting...</div>
+
+            <div style="display: flex; gap: 20px; margin-bottom: 20px;">
+                <button id="btn-create" class="menu-btn" style="width: 180px;">create lobby</button>
+                <button id="btn-refresh" class="menu-btn" style="width: 180px;">refresh list</button>
+            </div>
+
+            <div id="lobby-list" style="
+                width: 600px;
+                height: 300px;
+                background: rgba(0,0,0,0.5);
+                border: 1px solid #444;
+                overflow-y: auto;
+                margin-bottom: 20px;
+                padding: 10px;
+            ">
+                <div style="color: #666; text-align: center; padding: 20px;">waiting for server response...</div>
+            </div>
+
+            <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 20px;">
+                 <span style="font-size: 12px; color: #aaa;">join id:</span>
+                 <input id="input-lobby-id" type="text" maxlength="6" style="
+                    background: rgba(0,0,0,0.5);
+                    border: 1px solid #666;
+                    color: white;
+                    padding: 10px;
+                    font-family: 'Press Start 2P';
+                    width: 100px;
+                    text-transform: uppercase;
+                 ">
+                 <button id="btn-join-id" class="menu-btn" style="padding: 10px;">join</button>
+            </div>
+
+            <button id="btn-back" class="menu-btn" style="width: 200px;">back</button>
+        `;
+
+        // Bind UI Events
+        setTimeout(() => {
+            const btnCreate = document.getElementById('btn-create');
+            const btnRefresh = document.getElementById('btn-refresh');
+            const btnJoinId = document.getElementById('btn-join-id');
+            const btnBack = document.getElementById('btn-back');
+            const inputId = document.getElementById('input-lobby-id');
+
+            if (btnCreate) btnCreate.onclick = () => {
+                this.game.network.createLobby();
+                document.getElementById('lobby-status').innerText = "creating lobby...";
+            };
+
+            if (btnRefresh) btnRefresh.onclick = () => {
+                this.game.network.listLobbies();
+                document.getElementById('lobby-status').innerText = "refreshing...";
+            };
+
+            if (btnJoinId) btnJoinId.onclick = () => {
+                const id = inputId.value.toUpperCase();
+                if (id.length === 6) {
+                    this.game.network.joinLobby(id);
+                    document.getElementById('lobby-status').innerText = `joining ${id}...`;
+                }
+            };
+
+            if (btnBack) btnBack.onclick = () => {
+                this.game.network.socket.disconnect(); // Disconnect when backing out
+                this.renderMenu();
+            };
+        }, 0);
+
+        // Bind Network Callbacks
+        if (this.game.network) {
+            this.game.network.onLobbyListUpdate = (list) => {
+                const container = document.getElementById('lobby-list');
+                const status = document.getElementById('lobby-status');
+                if (status) status.innerText = "ready";
+                if (!container) return;
+
+                if (list.length === 0) {
+                    container.innerHTML = `<div style="color: #666; text-align: center; padding: 20px;">no active lobbies found.</div>`;
+                    return;
+                }
+
+                container.innerHTML = '';
+                list.forEach(lobby => {
+                    const el = document.createElement('div');
+                    el.style.cssText = `
+                        display: flex;
+                        justify-content: space-between;
+                        padding: 10px;
+                        border-bottom: 1px solid #333;
+                        cursor: pointer;
+                        transition: background 0.2s;
+                    `;
+                    el.onmouseover = () => el.style.background = 'rgba(255, 255, 255, 0.1)';
+                    el.onmouseout = () => el.style.background = 'transparent';
+                    el.onclick = () => {
+                        this.game.network.joinLobby(lobby.id);
+                        document.getElementById('lobby-status').innerText = `joining ${lobby.id}...`;
+                    };
+
+                    const nameSpan = document.createElement('span');
+                    nameSpan.style.color = '#00ffff';
+                    nameSpan.textContent = lobby.name;
+                    el.appendChild(nameSpan);
+
+                    const countSpan = document.createElement('span');
+                    countSpan.style.color = '#888';
+                    countSpan.style.fontSize = '10px';
+                    countSpan.textContent = `${lobby.players}/${lobby.maxPlayers}`;
+                    el.appendChild(countSpan);
+
+                    container.appendChild(el);
+                });
+            };
+
+            this.game.network.onLobbyJoined = (data) => {
+                console.log("Joined Lobby:", data);
+                // Start Game!
+                // init event will follow shortly from server
+                this.startGame(true); // isOnline = true
+            };
+
+            this.game.network.onLobbyError = (msg) => {
+                const status = document.getElementById('lobby-status');
+                if (status) {
+                    status.innerText = `error: ${msg}`;
+                    status.style.color = '#ff4444';
+                }
+            };
+
+            // Initial List
+            setTimeout(() => {
+                if(this.game.network.isConnected) this.game.network.listLobbies();
+                else {
+                    // Wait for connect
+                    const check = setInterval(() => {
+                        if (this.game.network.isConnected) {
+                            this.game.network.listLobbies();
+                            clearInterval(check);
+                        }
+                    }, 100);
+                }
+            }, 100);
+        }
     }
 
     renderSeedInput() {
@@ -244,9 +393,9 @@ export class MainMenu {
         this.game.hasPendingSave = false;
 
         // Initialize level with seed
-        this.game.initLevel(seed);
+        // this.game.initLevel(seed); // Handled in game.startOffline(seed)
 
-        this.startGame();
+        this.startNewGame(seed);
     }
 
     renderSettings() {
@@ -359,10 +508,16 @@ export class MainMenu {
         }, 0);
     }
 
-    startGame() {
+    startGame(isOnline = false) {
         // Unlock Audio
         if (this.game.audio.context.state === 'suspended') {
             this.game.audio.context.resume();
+        }
+
+        // Handle Mode (If not online, assume Offline)
+        if (!isOnline) {
+             if (this.game.startOffline) this.game.startOffline();
+             else console.error("Game.startOffline not implemented yet!");
         }
 
         // Start Loop
@@ -385,6 +540,9 @@ export class MainMenu {
             this.game.audio.context.resume();
         }
 
+        // Force Offline
+        if (this.game.startOffline) this.game.startOffline(undefined, true); // true = isLoad
+
         // Load save data
         this.game.loadFromSave();
 
@@ -400,7 +558,7 @@ export class MainMenu {
         }, 500);
     }
 
-    startNewGame() {
+    startNewGame(seed) {
         // Clear existing save
         SaveManager.clearSave();
         this.game.hasPendingSave = false;
@@ -409,6 +567,9 @@ export class MainMenu {
         if (this.game.audio.context.state === 'suspended') {
             this.game.audio.context.resume();
         }
+
+        // Force Offline
+        if (this.game.startOffline) this.game.startOffline(seed);
 
         // Start Loop
         this.game.loop.start();
