@@ -88,25 +88,6 @@ export class Asteroid {
         }
 
         const drawPixelLine = (x0, y0, x1, y1) => {
-            let X0 = Math.round(x0 / pixelSize);
-            let Y0 = Math.round(y0 / pixelSize);
-            let X1 = Math.round(x1 / pixelSize);
-            let Y1 = Math.round(y1 / pixelSize);
-
-            const dx = Math.abs(X1 - X0);
-            const dy = Math.abs(Y1 - Y0);
-            const sx = (X0 < X1) ? 1 : -1;
-            const sy = (Y0 < Y1) ? 1 : -1;
-            let err = dx - dy;
-
-            while (true) {
-                ctx.fillRect(X0 * pixelSize - pixelSize / 2, Y0 * pixelSize - pixelSize / 2, pixelSize, pixelSize);
-                if (X0 === X1 && Y0 === Y1) break;
-                const e2 = 2 * err;
-                if (e2 > -dy) { err -= dy; X0 += sx; }
-                if (e2 < dx) { err += dx; Y0 += sy; }
-        // Simpler stepped interpolation for pixel look
-        const drawStepped = (x0, y0, x1, y1) => {
             const steps = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) / pixelSize;
             for (let i = 0; i <= steps; i++) {
                 const t = i / steps;
