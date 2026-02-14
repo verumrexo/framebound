@@ -2805,7 +2805,6 @@ export class Game {
                         asteroid.vy -= ny * push * 0.5 * dt;
 
                         this.camera.shake = 5;
-                        console.log("Part Collision Detected!");
                         hit = true;
                         break; // Handle one collision per frame per asteroid is enough
                     }
