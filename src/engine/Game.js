@@ -40,6 +40,7 @@ import { Settings as GameSettings } from '../game/systems/Settings.js';
 import { Collision } from '../game/systems/CollisionSystem.js';
 import { Biomes, getRandomBiome } from '../game/environment/Biomes.js';
 import { NetworkManager } from './NetworkManager.js';
+import { Physics } from '../shared/Physics.js';
 
 export class Game {
     constructor(canvas) {
@@ -129,7 +130,7 @@ export class Game {
         // this.enemies.push(new Enemy(400, -200)); 
         // ^ Commented out to rely on Room generation logic
 
-        this.playerShip = new Ship();
+        this.playerShip = null; // Initialized by NetworkManager on 'init'
         this.hangar = new Hangar(this);
         this.designer = new Designer(this);
         this.shipBuilder = new ShipBuilder(this);
@@ -233,7 +234,24 @@ export class Game {
         this.nameEntryActive = false;
 
         // Multiplayer
-        this.network = new NetworkManager(this);
+        this.network = this.networkManager;
+    }
+
+    createLocalPlayer(data) {
+        if (this.playerShip) return;
+        console.log('[Game] Creating Local Player Ship');
+        this.playerShip = new Ship();
+
+        // Sync with Server Position if provided
+        if (data) {
+             if (data.x !== undefined) this.x = data.x;
+             if (data.y !== undefined) this.y = data.y;
+        }
+
+        // Notify Network to join (now that we have a ship to sync parts from)
+        if (this.networkManager) {
+            this.networkManager.sendJoinGame();
+        }
     }
 
     start() {
@@ -244,6 +262,13 @@ export class Game {
 
 
     loadFromSave() {
+        // Enforce Server Authority: Cannot load save (which sets position) until Server Init
+        if (!this.playerShip) {
+            console.warn('[Save] Cannot load save yet - waiting for server init...');
+            this.showNotification("waiting for uplink...", "#ff0000");
+            return;
+        }
+
         const save = SaveManager.load();
         if (!save) {
             console.warn('[Save] No save data found');
@@ -950,6 +975,7 @@ export class Game {
 
     update(dt) {
         if (!this.running) return;
+        if (!this.playerShip) return;
 
         // Consolidate mouse/input state for the frame
         let isMouseDown = this.input.isMouseDown();
@@ -1260,23 +1286,22 @@ export class Game {
             if (this.input.isKeyDown('KeyD')) inputX += 1;
         }
 
-        if (inputX !== 0 || inputY !== 0) {
-            const mag = Math.sqrt(inputX * inputX + inputY * inputY);
+        // Physics Options Calculation
+        const thrustMultiplier = 1 + (this.playerShip.stats.thrust * 0.05);
+        const isSpawnRoom = this.currentRoom && this.currentRoom.gridX === 0 && this.currentRoom.gridY === 0;
+        const outOfCombat = this.currentRoom && (this.currentRoom.cleared ||
+            this.currentRoom.type === 'shop' || this.currentRoom.type === 'treasure' || isSpawnRoom);
+        const combatBoost = outOfCombat ? 2.0 : 1.0;
 
-            // Apply Thruster Boost: 5% per thruster block
-            const thrustMultiplier = 1 + (this.playerShip.stats.thrust * 0.05);
+        let maxVelocity = 800 * (1 + (this.playerShip.stats.thrust * 0.05)) * levelBonus;
+        if (this.dashActiveTimer > 0) maxVelocity *= 2.5;
+        if (outOfCombat) maxVelocity *= 2.0;
 
-            // Out-of-combat acceleration boost
-            const isSpawnRoom = this.currentRoom && this.currentRoom.gridX === 0 && this.currentRoom.gridY === 0;
-            const outOfCombat = this.currentRoom && (this.currentRoom.cleared ||
-                this.currentRoom.type === 'shop' || this.currentRoom.type === 'treasure' || isSpawnRoom);
-            const combatBoost = outOfCombat ? 2.0 : 1.0; // 2x acceleration out of combat
-
-            const currentAccel = this.acceleration * thrustMultiplier * levelBonus * combatBoost;
-
-            this.vx += (inputX / mag) * currentAccel * dt;
-            this.vy += (inputY / mag) * currentAccel * dt;
-        }
+        const physOptions = {
+            acceleration: this.acceleration * thrustMultiplier * levelBonus * combatBoost,
+            friction: this.friction,
+            maxVelocity: maxVelocity
+        };
 
         // Shop Item - Mouse Hover Tooltip and E-key Purchase
         const shopMouse = this.input.getMousePos();
@@ -1342,9 +1367,8 @@ export class Game {
 
         this.eKeyLastFrame = this.input.isKeyDown('KeyE');
 
-        // Apply Physics
-        this.x += this.vx * dt;
-        this.y += this.vy * dt;
+        // Apply Physics (Client Prediction)
+        Physics.update(this, { x: inputX, y: inputY }, dt, physOptions);
 
         // Network Sync - Send Inputs instead of Position
         if (this.network && this.network.isConnected) {
@@ -1358,33 +1382,6 @@ export class Game {
                 y: this.y
             };
             this.network.sendInput(inputState);
-        }
-
-        // Friction and Max Speed
-        this.vx *= this.friction;
-        this.vy *= this.friction;
-
-        // Apply Thruster Boost to Max Speed as well
-        const baseMaxVelocity = 800;
-        let maxVelocity = baseMaxVelocity * (1 + (this.playerShip.stats.thrust * 0.05)) * levelBonus;
-
-        // Increase Max Speed during dash
-        if (this.dashActiveTimer > 0) {
-            maxVelocity *= 2.5;
-        }
-
-        // Out-of-combat speed boost (room cleared, non-combat room, or spawn room)
-        const isSpawnRoom = this.currentRoom && this.currentRoom.gridX === 0 && this.currentRoom.gridY === 0;
-        const isOutOfCombat = this.currentRoom && (this.currentRoom.cleared ||
-            this.currentRoom.type === 'shop' || this.currentRoom.type === 'treasure' || isSpawnRoom);
-        if (isOutOfCombat) {
-            maxVelocity *= 2.0; // 2x speed boost when not in combat
-        }
-
-        const currentSpeed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
-        if (currentSpeed > maxVelocity) {
-            this.vx = (this.vx / currentSpeed) * maxVelocity;
-            this.vy = (this.vy / currentSpeed) * maxVelocity;
         }
 
         // Turret Aiming
@@ -1753,8 +1750,6 @@ export class Game {
                         if (partRef.burstLeft > 0) {
                             // Handled via burst logic
                         } else {
-                            this.spawnProjectile(def, fireX, fireY, angle, partRef);
-
                             if (this.network && this.network.isConnected) {
                                 this.network.sendShoot({
                                     partId: def.id,
@@ -1762,6 +1757,8 @@ export class Game {
                                     y: fireY,
                                     angle: angle
                                 });
+                            } else {
+                                this.spawnProjectile(def, fireX, fireY, angle, partRef);
                             }
                         }
 
@@ -1841,15 +1838,6 @@ export class Game {
                             fireY += Math.sin(angle) * barrelLen;
                         }
 
-                        this.spawnProjectile(def, fireX, fireY, angle, partRef);
-
-                        partRef.burstLeft--;
-                        let interval = def.stats.burstInterval || 0.1;
-                        if (def.stats.weaponGroup === 'rocket' && this.playerShip.stats.rocketBayCount > 0) {
-                            interval /= (1 + this.playerShip.stats.rocketBayCount);
-                        }
-                        partRef.burstTimer = interval;
-
                         if (this.network && this.network.isConnected) {
                             this.network.sendShoot({
                                 partId: def.id,
@@ -1857,7 +1845,16 @@ export class Game {
                                 y: fireY,
                                 angle: angle
                             });
+                        } else {
+                            this.spawnProjectile(def, fireX, fireY, angle, partRef);
                         }
+
+                        partRef.burstLeft--;
+                        let interval = def.stats.burstInterval || 0.1;
+                        if (def.stats.weaponGroup === 'rocket' && this.playerShip.stats.rocketBayCount > 0) {
+                            interval /= (1 + this.playerShip.stats.rocketBayCount);
+                        }
+                        partRef.burstTimer = interval;
                     } else {
                         partRef.burstLeft = 0;
                     }
@@ -3008,6 +3005,15 @@ export class Game {
             this.renderer.ctx.font = "20px 'Press Start 2P'";
             this.renderer.ctx.textAlign = 'center';
             this.renderer.ctx.fillText("CONNECTING...", this.renderer.width / 2, this.renderer.height / 2);
+            return;
+        }
+
+        if (!this.playerShip) {
+            this.renderer.clear();
+            this.renderer.ctx.fillStyle = 'white';
+            this.renderer.ctx.font = "20px 'Press Start 2P'";
+            this.renderer.ctx.textAlign = 'center';
+            this.renderer.ctx.fillText("WAITING FOR UPLINK...", this.renderer.width / 2, this.renderer.height / 2);
             return;
         }
 

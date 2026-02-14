@@ -1,10 +1,22 @@
 // Single source of truth for version info
 // UPDATE THIS FILE when making changes to the game
 
-export const VERSION = '1.0.1 (beta)';
-export const VERSION_NAME = 'SYNC_FIX';
+export const VERSION = '1.0.2 (beta)';
+export const VERSION_NAME = 'System: Authority';
 
 export const CHANGELOG = [
+    {
+        ver: '1.0.2 (beta)',
+        name: 'System: Authority',
+        date: new Date().toISOString().split('T')[0],
+        items: [
+            "REFACTOR: Player creation is now strictly server-authoritative (fixes double-spawn)",
+            "REFACTOR: Physics logic migrated to shared module for consistency",
+            "FIX: Input hygiene - removed client-side shooting prediction to prevent double projectiles",
+            "NET: Join sequence optimized to wait for server init packet",
+            "UX: Added waiting screen for server uplink"
+        ]
+    },
     {
         ver: '1.0.1 (beta)',
         name: 'SYNC_FIX',
