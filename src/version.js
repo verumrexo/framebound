@@ -23,6 +23,8 @@ export const CHANGELOG = [
         name: 'SYNC_FIX',
         date: new Date().toISOString().split('T')[0],
         items: [
+            "removed leftover debug collision logging",
+            "refactor: removed unused drawPixelLine and imports from Asteroid.js",
             "Fixed enemy shooting synchronization (server-side projectile speed)",
             "Fixed double-ship bug by filtering local player in NetworkManager",
             "Fixed enemy respawn bug (server sends dead enemy list on join)",
