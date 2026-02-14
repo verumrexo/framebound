@@ -68,6 +68,77 @@ io.on('connection', (socket) => {
         }
     });
 
+    if (enemyUpdates.length > 0) {
+        io.emit('enemy_update', enemyUpdates);
+    }
+
+    if (generatedProjectiles.length > 0) {
+        const shoots = generatedProjectiles.map(p => {
+            const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+            return {
+                x: Math.round(p.x),
+                y: Math.round(p.y),
+                angle: parseFloat(p.angle.toFixed(4)),
+                type: p.type,
+                speed: Math.round(speed),
+                damage: p.damage
+            };
+        });
+        io.emit('enemy_shoots', shoots);
+    }
+}, 1000 / PHYSICS_TICK_RATE);
+
+io.on('connection', (socket) => {
+    console.log(`[Connect] ${socket.id}`);
+    clients.set(socket.id, {
+        id: socket.id,
+        x: 0, y: 0,
+        vx: 0, vy: 0,
+        rotation: 0, map: 'default',
+        parts: [], // Ship structure
+        input: {},
+        hp: 100,
+        maxHp: 100
+    });
+
+    // Notify client of their ID and the Game Seed
+    const deadEnemyIds = [];
+    serverEnemies.forEach(e => {
+        if (e.isDead) deadEnemyIds.push(e.id);
+    });
+
+    socket.emit('init', {
+        id: socket.id,
+        seed: GAME_SEED,
+        deadEnemies: deadEnemyIds
+    });
+
+    // Wait for join_game to broadcast
+    socket.on('join_game', (data) => {
+        const player = clients.get(socket.id);
+        if (player) {
+            player.parts = data.parts || [];
+
+            // Broadcast new player join with parts
+            socket.broadcast.emit('player_join', {
+                id: socket.id,
+                parts: player.parts
+            });
+
+            // Send existing players to new player
+            const existingPlayers = Array.from(clients.values()).filter(p => p.id !== socket.id && p.parts);
+            socket.emit('players_list', existingPlayers);
+        }
+    });
+
+    socket.on('update_state', (data) => {
+        const player = clients.get(socket.id);
+        if (player) {
+            player.x = data.x;
+            player.y = data.y;
+            player.rotation = data.rotation;
+            // We can still do server-side validation here if needed
+        }
     socket.on('list_lobbies', () => {
         const list = [];
         rooms.forEach(r => {

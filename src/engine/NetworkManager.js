@@ -205,6 +205,13 @@ export class NetworkManager {
                 }
             }
         });
+
+        this.socket.on("enemy_shoots", (shoots) => {
+            if (!this.game) return;
+            for (const data of shoots) {
+                this.game.spawnEnemyProjectile(data);
+            }
+        });
     }
 
     createLobby(name) {
