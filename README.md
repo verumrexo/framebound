@@ -1,6 +1,6 @@
-# frame bound 🚀
+# framebound:uplink 
 
-**v0.6.13 - boss_reforged** 💀
+**v1.0.1 (beta) protocol:uplink** 
 
 congrats, you found the source code for the only space roguelike that won't make your computer scream for mercy. it's built with vanilla javascript and vite because we actually care about performance, unlike some people.
 
@@ -24,10 +24,3 @@ congrats, you found the source code for the only space roguelike that won't make
 - **e**: talk to things / open chests
 - **tab**: look at your inventory (hangar)
 - **l**: dev terminal (you probably don't have the PIN anyway 🙄)
-
-### setup for devs (or whatever you call yourselves)
-```bash
-npm install
-npm run dev
-```
-now go break something. ✌️
