@@ -21,7 +21,12 @@ export class NetworkManager {
     }
 
     connect() {
-        if (this.socket) return; // Already connected/connecting
+        if (this.socket) {
+            if (!this.socket.connected) {
+                this.socket.connect();
+            }
+            return;
+        }
 
         this.socket = io({
             transports: ['websocket'],
