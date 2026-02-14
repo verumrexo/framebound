@@ -1,12 +1,12 @@
 // Single source of truth for version info
 // UPDATE THIS FILE when making changes to the game
 
-export const VERSION = '1.0.1';
+export const VERSION = '1.0.1 (beta)';
 export const VERSION_NAME = 'SYNC_FIX';
 
 export const CHANGELOG = [
     {
-        ver: '1.0.1',
+        ver: '1.0.1 (beta)',
         name: 'SYNC_FIX',
         date: new Date().toISOString().split('T')[0],
         items: [
