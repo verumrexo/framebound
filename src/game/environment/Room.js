@@ -221,7 +221,9 @@ export class Room {
             const roomY = Math.max(this.y + 50, Math.min(this.y + this.height - 50, ey));
 
             const type = this.random() > 0.6 ? 'striker' : 'basic';
-            const enemy = new Enemy(roomX, roomY, type, floor, this.random);
+            // Deterministic ID for ambush: rX_rY_ambush_W_I
+            const enemyId = `e_${this.gridX}_${this.gridY}_amb_${this.waveCount}_${i}`;
+            const enemy = new Enemy(roomX, roomY, type, floor, this.random, enemyId);
             // Buff enemies in vault
             enemy.maxHp *= 1.5;
             enemy.hp = enemy.maxHp;
@@ -383,7 +385,9 @@ export class Room {
                 }
             }
 
-            const enemy = new Enemy(ex, ey, type, floor, this.random);
+            // Deterministic ID: rX_rY_I
+            const enemyId = `e_${this.gridX}_${this.gridY}_${i}`;
+            const enemy = new Enemy(ex, ey, type, floor, this.random, enemyId);
             game.enemies.push(enemy);
             this.enemies.push(enemy);
         }

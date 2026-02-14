@@ -29,6 +29,8 @@ import { LootCrate } from '../game/entities/LootCrate.js';
 import { ItemPickup } from '../game/entities/ItemPickup.js';
 import { Shipwreck } from '../game/entities/Shipwreck.js';
 import { SaveManager } from '../game/systems/SaveManager.js';
+import { LevelUpManager } from '../game/systems/LevelUpManager.js';
+
 import { ShipBuilder } from '../game/systems/ShipBuilder.js';
 import { AudioManager } from './AudioManager.js';
 import { MainMenu } from '../game/ui/MainMenu.js';
@@ -36,6 +38,8 @@ import { HighScoreManager } from '../game/systems/HighScoreManager.js';
 import { VERSION, VERSION_NAME } from '../version.js';
 import { Settings as GameSettings } from '../game/systems/Settings.js';
 import { Collision } from '../game/systems/CollisionSystem.js';
+import { Biomes, getRandomBiome } from '../game/environment/Biomes.js';
+import { NetworkManager } from './NetworkManager.js';
 
 export class Game {
     constructor(canvas) {
@@ -63,6 +67,8 @@ export class Game {
         this.mainMenu = new MainMenu(this);
         this.loadingPromise = this.loadSounds();
         this.projectiles = [];
+        this.explosions = []; // Added missing init
+        this.notifications = []; // Added missing init
         this.drones = [];
         this.enemies = [];
         this.bosses = [];
@@ -102,11 +108,14 @@ export class Game {
         this.starfield = new Starfield(4000, 4000); // Parallax starfield
         this.grid = new Grid(200); // 200px cells
 
+        // Initial Biome
+        this.applyBiome(Biomes.DEFAULT);
+
         // Level Generation
         this.levelGen = new LevelGenerator();
-        this.rooms = this.levelGen.generate(15);
-        this.currentRoom = this.levelGen.getRoom(0, 0);
-        this.currentRoom.onEnter(this); // Init start room
+        // this.rooms = ... (Deferred to startGame)
+
+        // Check for saved game
 
         // Check for saved game
         this.hasPendingSave = SaveManager.hasSave();
@@ -124,12 +133,15 @@ export class Game {
         this.hangar = new Hangar(this);
         this.designer = new Designer(this);
         this.shipBuilder = new ShipBuilder(this);
+        this.levelUpManager = new LevelUpManager(this);
 
         // Minimap (Top Right, 200x200)
         // Adjust x/y dynamically in update/draw or set initial here
         this.minimap = new Minimap(this.renderer.width - 220, 20, 200, 0.03);
         this.fullscreenMap = new FullscreenMap(this);
         this.fullscreenMapOpen = false;
+
+        this.networkManager = new NetworkManager(this);
 
         // Toggle Hangar with Tab
         window.addEventListener('keydown', (e) => {
@@ -219,6 +231,9 @@ export class Game {
         this.isGameOver = false;
         this.nameEntry = '';
         this.nameEntryActive = false;
+
+        // Multiplayer
+        this.network = new NetworkManager(this);
     }
 
     start() {
@@ -889,7 +904,53 @@ export class Game {
         }
     }
 
+
+    spawnEnemyProjectile(data) {
+        // data: {x, y, angle, type, speed, damage}
+        // Import Projectile? It's already imported in Game.js usually?
+        // Game.js has `import { Projectile } ...` at top? Let's assume yes.
+        // Wait, I need to check imports.
+        // If not, I'll need to use the class if available in scope.
+        // Actually, Projectile is imported at top of Game.js.
+
+        const p = new Projectile(data.x, data.y, data.angle, data.type, data.speed, 'enemy', data.damage);
+        this.projectiles.push(p);
+
+        // Optional: Play sound here since server doesn't play sound?
+        // The server Enemy.js "plays" sound but we shimmed it.
+        // We might want to play sound on client when receiving this event.
+        // this.audio.play(...) - depends on type.
+        // The Projectile class doesn't play sound on spawn, Enemy does.
+        // So we should play sound here.
+        const pType = data.type;
+        this.audio.play('shoot_' + (pType === 'railgun' ? 'rail_shot' : (pType === 'saber' ? 'lsr' : 'lps')), { volume: 0.6 });
+    }
+
+    startGame(seed) {
+        console.log(`[Game] Starting with seed: ${seed}`);
+        this.seed = seed;
+
+        // Sync Starfield
+        if (this.starfield) {
+            this.starfield.setSeed(seed);
+        }
+
+        // Generate Level
+        this.rooms = this.levelGen.generate(15, seed);
+        this.currentRoom = this.levelGen.getRoom(0, 0);
+
+        if (this.currentRoom) {
+            this.currentRoom.onEnter(this);
+        } else {
+            console.error("[Game] Failed to generate start room!");
+        }
+
+        this.running = true;
+    }
+
     update(dt) {
+        if (!this.running) return;
+
         // Consolidate mouse/input state for the frame
         let isMouseDown = this.input.isMouseDown();
         const mouse = this.input.getMousePos();
@@ -1285,6 +1346,20 @@ export class Game {
         this.x += this.vx * dt;
         this.y += this.vy * dt;
 
+        // Network Sync - Send Inputs instead of Position
+        if (this.network && this.network.isConnected) {
+            const inputState = {
+                up: this.input.isKeyDown('KeyW') || this.input.isKeyDown('ArrowUp'),
+                down: this.input.isKeyDown('KeyS') || this.input.isKeyDown('ArrowDown'),
+                left: this.input.isKeyDown('KeyA') || this.input.isKeyDown('ArrowLeft'),
+                right: this.input.isKeyDown('KeyD') || this.input.isKeyDown('ArrowRight'),
+                rotation: this.rotation, // We still send rotation as it's mouse-dependent
+                x: this.x, // Send pos for verification/lerp (optional, but good for hybrid)
+                y: this.y
+            };
+            this.network.sendInput(inputState);
+        }
+
         // Friction and Max Speed
         this.vx *= this.friction;
         this.vy *= this.friction;
@@ -1678,75 +1753,14 @@ export class Game {
                         if (partRef.burstLeft > 0) {
                             // Handled via burst logic
                         } else {
-                            const pCount = def.stats.pelletCount || 1;
-                            const pSpread = def.stats.spread || 0;
-                            const pInterval = def.stats.pelletInterval || 0;
-                            for (let i = 0; i < pCount; i++) {
-                                const finalAngle = angle + (Math.random() - 0.5) * pSpread;
-                                let pX = fireX;
-                                let pY = fireY;
-                                if (pCount > 1 && def.stats.barrelSpacing) {
-                                    const perpX = Math.cos(angle + Math.PI / 2);
-                                    const perpY = Math.sin(angle + Math.PI / 2);
-                                    const offset = (i - (pCount - 1) / 2) * def.stats.barrelSpacing;
-                                    pX += perpX * offset;
-                                    pY += perpY * offset;
-                                }
-                                const p = new Projectile(pX, pY, finalAngle, def.stats.projectileType || 'bullet', def.stats.projectileSpeed || 600, 'player', def.stats.damage || 10);
-                                if (def.stats.projectileType === 'railgun' || def.stats.projectileType === 'beam_freeze') p.isBeam = true;
+                            this.spawnProjectile(def, fireX, fireY, angle, partRef);
 
-                                // High visual rate, low hit rate for freeze ray
-                                if (def.stats.projectileType === 'beam_freeze') {
-                                    partRef.shotCount = (partRef.shotCount || 0) + 1;
-                                    if (partRef.shotCount % 5 !== 0) {
-                                        p.isVisualOnly = true;
-                                    }
-                                }
-
-                                // Randomize interval between 0.01 and 0.03 (50%-150% of 0.02 base)
-                                p.delay = i * pInterval * (0.5 + Math.random());
-                                this.projectiles.push(p);
-
-                                // Set Recoil (Visual only) - Velocity guns only
-                                if (def.stats.weaponGroup === 'velocity') {
-                                    partRef.recoil = 5.0; // Pushes back 5 pixels
-                                }
-                            }
-
-                            // Play Sound (per-weapon)
-                            let snd = 'hit'; // fallback
-                            const weaponSounds = {
-                                'gun_basic': 'shoot_dart',
-                                'scattr': 'shoot_scattr',
-                                'lps': 'shoot_lps',
-                                'ggbm': 'shoot_ggbm',
-                                'rocketle': 'shoot_rocketle',
-                                'minigun': 'shoot_minigun',
-                                'custom_1767999386292': 'shoot_lsr',
-                                'custom_1768036702131': 'shoot_rocket_he',
-                                'custom_1768397007593': 'rail_shot',
-                                'custom_1768857172136': 'shoot_sniper',
-                                'custom_1769204337665': 'shoot_dart', // Burst
-                                'custom_1769336961268': 'shoot_lsr', // Freeze Ray
-                                'railgun': 'rail_shot'
-                            };
-                            if (weaponSounds[def.id]) snd = weaponSounds[def.id];
-
-                            // Adjust pitch for Freeze Ray to sound different
-                            let pitch = def.stats.soundPitch;
-                            if (def.id === 'custom_1769336961268') pitch = 0.5; // Deep beam sound
-
-                            // Play Sound (per-weapon) - Throttle for high-rate visual beams
-                            let shouldPlayShoot = true;
-                            if (def.stats.projectileType === 'beam_freeze') {
-                                if (partRef.shotCount % 5 !== 0) shouldPlayShoot = false;
-                            }
-
-                            if (shouldPlayShoot) {
-                                this.audio.play(snd, {
-                                    volume: def.stats.soundVolume ?? 0.6,
-                                    pitch: pitch,
-                                    randomizePitch: 0.15
+                            if (this.network && this.network.isConnected) {
+                                this.network.sendShoot({
+                                    partId: def.id,
+                                    x: fireX,
+                                    y: fireY,
+                                    angle: angle
                                 });
                             }
                         }
@@ -1827,31 +1841,7 @@ export class Game {
                             fireY += Math.sin(angle) * barrelLen;
                         }
 
-                        const pCount = def.stats.pelletCount || 1;
-                        const pSpread = def.stats.spread || 0;
-                        const pInterval = def.stats.pelletInterval || 0;
-                        for (let i = 0; i < pCount; i++) {
-                            const finalAngle = angle + (Math.random() - 0.5) * pSpread;
-                            let pX = fireX;
-                            let pY = fireY;
-                            if (pCount > 1 && def.stats.barrelSpacing) {
-                                const perpX = Math.cos(angle + Math.PI / 2);
-                                const perpY = Math.sin(angle + Math.PI / 2);
-                                const offset = (i - (pCount - 1) / 2) * def.stats.barrelSpacing;
-                                pX += perpX * offset;
-                                pY += perpY * offset;
-                            }
-                            // Pass def.stats.lifetime (or null) as the new 8th argument
-                            const p = new Projectile(pX, pY, finalAngle, def.stats.projectileType || 'bullet', 600, 'player', def.stats.damage || 10, def.stats.lifetime);
-                            // Randomize interval between 0.01 and 0.03 (50%-150% of 0.02 base)
-                            p.delay = i * pInterval * (0.5 + Math.random());
-                            this.projectiles.push(p);
-
-                            // Set Recoil (Visual only) - Velocity guns only
-                            if (def.stats.weaponGroup === 'velocity') {
-                                partRef.recoil = 5.0; // Pushes back 5 pixels
-                            }
-                        }
+                        this.spawnProjectile(def, fireX, fireY, angle, partRef);
 
                         partRef.burstLeft--;
                         let interval = def.stats.burstInterval || 0.1;
@@ -1860,29 +1850,14 @@ export class Game {
                         }
                         partRef.burstTimer = interval;
 
-                        // Play Sound for Burst (per-weapon)
-                        let snd = 'hit'; // fallback
-                        const weaponSounds = {
-                            'gun_basic': 'shoot_dart',
-                            'scattr': 'shoot_scattr',
-                            'lps': 'shoot_lps',
-                            'ggbm': 'shoot_ggbm',
-                            'rocketle': 'shoot_rocketle',
-                            'minigun': 'shoot_minigun',
-                            'custom_1767999386292': 'shoot_lsr',
-                            'custom_1768036702131': 'shoot_rocket_he',
-                            'custom_1768397007593': 'rail_shot',
-                            'custom_1768857172136': 'shoot_sniper',
-                            'custom_1769204337665': 'shoot_dart', // Burst
-                            'railgun': 'rail_shot'
-                        };
-                        if (weaponSounds[def.id]) snd = weaponSounds[def.id];
-
-                        this.audio.play(snd, {
-                            volume: def.stats.soundVolume ?? 0.6,
-                            pitch: def.stats.soundPitch,
-                            randomizePitch: 0.15
-                        });
+                        if (this.network && this.network.isConnected) {
+                            this.network.sendShoot({
+                                partId: def.id,
+                                x: fireX,
+                                y: fireY,
+                                angle: angle
+                            });
+                        }
                     } else {
                         partRef.burstLeft = 0;
                     }
@@ -1927,6 +1902,11 @@ export class Game {
                                     const isFreeze = p.type === 'beam_freeze';
                                     const hitVol = isFreeze ? 0.05 : 0.3;
                                     this.audio.play('hit', { volume: hitVol, pitch: 1.3, randomizePitch: 0.1, isSpammy: isFreeze });
+
+                                    // Sync Hit
+                                    if (this.network && this.network.isConnected) {
+                                        this.network.sendEnemyHit(enemy.id, p.damage, enemy.isDead);
+                                    }
                                 }
                             }
                         } else {
@@ -1938,6 +1918,11 @@ export class Game {
                                 this.audio.play('hit', { volume: 0.5, pitch: 1.3, randomizePitch: 0.1 });
                                 p.isDead = true;
                                 if (p.type === 'rocket' || p.type === 'mini_grenade' || p.type === 'cluster_grenade') p.shouldExplode = true;
+
+                                // Sync Hit
+                                if (this.network && this.network.isConnected) {
+                                    this.network.sendEnemyHit(enemy.id, p.damage, enemy.isDead);
+                                }
                             }
                         }
                     }
@@ -2583,9 +2568,16 @@ export class Game {
 
         // Update Enemies
         let anyDead = false;
+        const isConnected = this.networkManager && this.networkManager.isConnected;
+
+
+
         for (const enemy of this.enemies) {
-            // Skip update if frozen for debugging
-            if (!(this.devTools && this.devTools.freezeEnemies)) {
+            // Skip update if frozen for debugging OR if server authoritative
+            // We still want to run update if NOT connected (single player fallback)
+            // But if connected, Server sends x/y/rotation.
+
+            if (!(this.devTools && this.devTools.freezeEnemies) && !isConnected) {
                 enemy.update(dt, this.x, this.y, this.projectiles, this.asteroids, this.lootCrates, this.enemies, this.currentRoom);
             }
             if (enemy.isDead) anyDead = true;
@@ -3001,9 +2993,24 @@ export class Game {
         this.camera.update(dt);
         this.mouseDownLastFrame = isMouseDown;
         this.input.clearPressed();
+
+        // Multiplayer Update
+        if (this.networkManager) {
+            this.networkManager.sendUpdate(this.x, this.y, this.rotation);
+        }
     }
 
     draw() {
+        if (!this.running) {
+            // Optional: Draw "Connecting..." screen
+            this.renderer.clear();
+            this.renderer.ctx.fillStyle = 'white';
+            this.renderer.ctx.font = "20px 'Press Start 2P'";
+            this.renderer.ctx.textAlign = 'center';
+            this.renderer.ctx.fillText("CONNECTING...", this.renderer.width / 2, this.renderer.height / 2);
+            return;
+        }
+
         this.renderer.clear('#000'); // OLED Black
 
         // Draw Starfield (Screen Space / Parallax)
@@ -3081,6 +3088,30 @@ export class Game {
             // Ships (on top of environment)
             this.enemies.forEach(e => e.draw(this.renderer));
             this.bosses.forEach(b => b.draw(this.renderer));
+
+            // Draw Other Players
+            if (this.network && this.network.otherPlayers) {
+                for (const [id, p] of this.network.otherPlayers) {
+                    if (p.draw) {
+                        p.draw(this.renderer);
+                    } else {
+                        // Fallback if draw not available (e.g. raw object)
+                        this.renderer.ctx.save();
+                        this.renderer.ctx.translate(p.x, p.y);
+                        this.renderer.ctx.rotate(p.rotation);
+                        this.renderer.ctx.strokeStyle = '#00ffff';
+                        this.renderer.ctx.lineWidth = 2;
+                        this.renderer.ctx.beginPath();
+                        this.renderer.ctx.moveTo(20, 0);
+                        this.renderer.ctx.lineTo(-15, 15);
+                        this.renderer.ctx.lineTo(-5, 0);
+                        this.renderer.ctx.lineTo(-15, -15);
+                        this.renderer.ctx.closePath();
+                        this.renderer.ctx.stroke();
+                        this.renderer.ctx.restore();
+                    }
+                }
+            }
 
             this.shopItems.forEach(s => { if (!s.purchased) { s.update(0.016); s.draw(this.renderer); } });
             if (this.hoveredShopItem && !this.hoveredShopItem.purchased) {
@@ -3930,6 +3961,14 @@ export class Game {
 
     async nextLevel() {
         this.floor++;
+
+        // Change Biome
+        if (this.floor > 1) {
+            this.applyBiome(getRandomBiome());
+        } else {
+            this.applyBiome(Biomes.DEFAULT);
+        }
+
         this.showNotification(`WARPING TO FLOOR ${this.floor}...`, '#aa00ff');
 
         // Reset Logic
@@ -4156,6 +4195,114 @@ export class Game {
                 const oy = chest.y + (Math.random() - 0.5) * 60;
                 this.itemPickups.push(new ItemPickup(ox, oy, randId));
             }
+        }
+    }
+
+    applyBiome(biome) {
+        console.log(`[Biome] Applying: ${biome.name}`);
+        this.currentBiome = biome;
+
+        // Apply colors
+        this.renderer.setBackgroundColor(biome.colors.background);
+        this.grid.setColor(biome.colors.grid);
+        if (this.starfield) {
+            this.starfield.setColor(biome.colors.stars);
+            this.starfield.generate(); // Randomize starfield layout 
+        }
+
+        // Notify user
+        this.showNotification(`entering ${biome.name}`, biome.colors.grid);
+    }
+    spawnProjectile(def, fireX, fireY, angle, partRef = null) {
+        // Projectile Spawning Logic
+        const pCount = def.stats.pelletCount || 1;
+        const pSpread = def.stats.spread || 0;
+        const pInterval = def.stats.pelletInterval || 0;
+
+        for (let i = 0; i < pCount; i++) {
+            const finalAngle = angle + (Math.random() - 0.5) * pSpread;
+            let pX = fireX;
+            let pY = fireY;
+
+            if (pCount > 1 && def.stats.barrelSpacing) {
+                const perpX = Math.cos(angle + Math.PI / 2);
+                const perpY = Math.sin(angle + Math.PI / 2);
+                const offset = (i - (pCount - 1) / 2) * def.stats.barrelSpacing;
+                pX += perpX * offset;
+                pY += perpY * offset;
+            }
+
+            // Calculate Speed
+            let speed = def.stats.projectileSpeed || 600;
+            if (def.stats.weaponGroup === 'rocket' && this.playerShip) {
+                const speedMul = this.playerShip.permanentStats.missileSpeedMul || 1.0;
+                speed *= speedMul;
+            }
+
+            // Projectile(x, y, angle, type, speed, owner, damage, lifetime)
+            // Owner is 'player' for now. For remote players, maybe 'remote'?
+            // But 'player' just means "not enemy".
+            const p = new Projectile(pX, pY, finalAngle, def.stats.projectileType || 'bullet', speed, 'player', def.stats.damage || 10, def.stats.lifetime);
+
+            // console.log(`[Game] Spawning Projectile: Owner=${p.owner} Type=${p.type} Local=${!partRef || partRef.owner !== 'remote'}`);
+
+            if (def.stats.projectileType === 'railgun' || def.stats.projectileType === 'beam_freeze') p.isBeam = true;
+
+            // Visual Only check for Freeze Ray
+            if (def.stats.projectileType === 'beam_freeze' && partRef) {
+                partRef.shotCount = (partRef.shotCount || 0) + 1;
+                if (partRef.shotCount % 5 !== 0) {
+                    p.isVisualOnly = true;
+                }
+            }
+
+            p.delay = i * pInterval * (0.5 + Math.random());
+            this.projectiles.push(p);
+
+            // Recoil (Visual)
+            if (partRef && def.stats.weaponGroup === 'velocity') {
+                partRef.recoil = 5.0;
+            }
+        }
+
+        // Audio
+        let snd = 'hit'; // fallback
+        const weaponSounds = {
+            'gun_basic': 'shoot_dart',
+            'scattr': 'shoot_scattr',
+            'lps': 'shoot_lps',
+            'ggbm': 'shoot_ggbm',
+            'rocketle': 'shoot_rocketle',
+            'minigun': 'shoot_minigun',
+            'custom_1767999386292': 'shoot_lsr',
+            'custom_1768036702131': 'shoot_rocket_he',
+            'custom_1768397007593': 'rail_shot',
+            'custom_1768857172136': 'shoot_sniper',
+            'custom_1769204337665': 'shoot_dart',
+            'custom_1769336961268': 'shoot_lsr',
+            'railgun': 'rail_shot'
+        };
+        if (weaponSounds[def.id]) snd = weaponSounds[def.id];
+
+        let pitch = def.stats.soundPitch || 1.0;
+        if (def.id === 'custom_1769336961268') pitch = 0.5;
+
+        let shouldPlayShoot = true;
+        if (def.stats.projectileType === 'beam_freeze' && partRef) {
+            if (partRef.shotCount % 5 !== 0) shouldPlayShoot = false;
+        }
+
+        if (def.stats.projectileType === 'saber') {
+            // Lower volume for saber
+            // Handled below via volume param?
+        }
+
+        if (shouldPlayShoot) {
+            this.audio.play(snd, {
+                volume: def.stats.soundVolume ?? 0.6,
+                pitch: pitch,
+                randomizePitch: 0.15
+            });
         }
     }
 }

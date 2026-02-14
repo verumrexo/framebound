@@ -80,7 +80,7 @@ export class MainMenu {
                 line-height: 1.2;
                 letter-spacing: -2px;
                 text-transform: lowercase;
-            ">framebound</h1>
+            ">framebound:uplink</h1>
             <p style="color: #666; font-size: 16px; margin-bottom: 60px; text-transform: lowercase; letter-spacing: 4px;">${this.game.version} // ${this.game.versionName}</p>
             <div id="loading-text" style="color: #ffd700; font-size: 16px; display: none;">initializing systems...</div>
 

@@ -1,15 +1,39 @@
 // Single source of truth for version info
 // UPDATE THIS FILE when making changes to the game
 
-export const VERSION = '0.7.1';
-export const VERSION_NAME = 'Tainted Skies';
+export const VERSION = '1.0.1';
+export const VERSION_NAME = 'SYNC_FIX';
 
 export const CHANGELOG = [
+    {
+        ver: '1.0.1',
+        name: 'SYNC_FIX',
+        date: new Date().toISOString().split('T')[0],
+        items: [
+            "Fixed enemy shooting synchronization (server-side projectile speed)",
+            "Fixed double-ship bug by filtering local player in NetworkManager",
+            "Fixed enemy respawn bug (server sends dead enemy list on join)",
+            "Fixed player rubber-banding (Game.js sends position updates)",
+            "Added server-side projectile simulation"
+        ]
+    },
+    {
+        ver: '1.0.0 (beta)',
+        name: 'framebound:uplink',
+        date: '2026-02-13',
+        items: [
+            'CORE: Initial multiplayer protocol implementation (uplink established).',
+            'NET: Real-time ship replication (parts, rotation, movement).',
+            'NET: Connection established with local relay server.'
+        ]
+    },
     {
         ver: '0.7.1',
         name: 'Tainted Skies',
         date: '2026-02-03',
-        changes: [
+        items: [
+            'feat: starfield layout randomized on every floor',
+            'hotfix: restored biome coloring for starfield & grid',
             'navigation: fullscreen map (M key) with fast travel to visited rooms',
             'environment: starfield overhaul - parallax star layers, star clusters, planets with rings, shooting stars',
             'hotfix: rocket bay logic corrected (now properly boosts Rocket LE)',

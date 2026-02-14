@@ -440,5 +440,16 @@ export class WeaponSystem {
                 randomizePitch: 0.15
             });
         }
+
+        // Network Sync: Send Shoot Event
+        // We send the firing parameters so others can replicate the projectile and sound
+        if (game.network && game.network.isConnected) {
+            game.network.sendShoot({
+                partId: def.id,
+                x: fireX,
+                y: fireY,
+                angle: angle
+            });
+        }
     }
 }

@@ -1,3 +1,5 @@
+import { seededRandom } from '../../utils/random.js';
+
 /**
  * Starfield - Dynamic space background with parallax layers
  * Features: Multi-layer stars, black holes, nebulae, shooting stars, distant planets
@@ -10,13 +12,22 @@ export class Starfield {
         this.color = '#fff';
         this.time = 0;
 
+        this.generate();
+
+        this.shootingStars = [];
+        this.shootingStarTimer = this.random() * 10 + 5; // 5-15s initial delay
+    }
+
+    setSeed(seed) {
+        this.random = seededRandom(seed);
+        this.generate();
+    }
+
+    generate() {
         // Generate all elements
         this.starLayers = this.generateStarLayers();
         this.starClusters = this.generateStarClusters();
-
         this.planets = this.generatePlanets();
-        this.shootingStars = [];
-        this.shootingStarTimer = this.random() * 10 + 5; // 5-15s initial delay
     }
 
     generateStarLayers() {
@@ -193,7 +204,7 @@ export class Starfield {
                 }
 
                 ctx.globalAlpha = alpha;
-                ctx.fillStyle = '#ffffff';
+                ctx.fillStyle = this.color; // Use biome color
                 ctx.fillRect(pos.x, pos.y, star.size, star.size);
             }
         }

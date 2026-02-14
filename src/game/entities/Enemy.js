@@ -4,7 +4,8 @@ import { TILE_SIZE } from '../parts/PartDefinitions.js';
 import { PartsLibrary } from '../parts/Part.js';
 
 export class Enemy {
-    constructor(x, y, type = 'basic', floorLevel = 1, randomGen = null) {
+    constructor(x, y, type = 'basic', floorLevel = 1, randomGen = null, id = null) {
+        this.id = id || `enemy_${Math.floor(Math.random() * 1000000)}`; // Fallback random if not provided
         this.x = x;
         this.y = y;
         this.type = type;
@@ -747,7 +748,7 @@ export class Enemy {
                         wep.isCharging = false;
                         wep.lockedAngle = null;
 
-                        this.audio.play('shoot_' + (pType === 'railgun' ? 'rail_shot' : (pType === 'saber' ? 'lsr' : 'lps')), { volume: 0.6 });
+                        this.audio?.play('shoot_' + (pType === 'railgun' ? 'rail_shot' : (pType === 'saber' ? 'lsr' : 'lps')), { volume: 0.6 });
                     }
 
                 } else {
