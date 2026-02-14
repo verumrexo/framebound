@@ -1,40 +1,18 @@
-export class HPOrb {
+import { BaseOrb } from './BaseOrb.js';
+
+export class HPOrb extends BaseOrb {
     constructor(x, y, value = 10) {
-        this.x = x;
-        this.y = y;
-        this.value = value;
-        this.isDead = false;
-        this.radius = 6;
+        super(x, y, value, 6);
 
         // Visual properties
         this.rotation = Math.random() * Math.PI * 2;
         this.color = '#44ff44'; // Green
-        this.forced = false;
         this.spinSpeed = 6.0;
     }
 
     update(dt, playerX, playerY) {
+        if (super.update(dt, playerX, playerY)) return true;
         if (this.isDead) return;
-
-        const dx = playerX - this.x;
-        const dy = playerY - this.y;
-        const distSq = dx * dx + dy * dy;
-        const dist = Math.sqrt(distSq);
-
-        const magnetRange = 300;
-        const collectRange = 40;
-
-        if (dist < collectRange) {
-            this.isDead = true;
-            return true; // Signal collection
-        }
-
-        if (this.forced || dist < magnetRange) {
-            // Stronger pull as it gets closer. If forced, we use a consistent high force.
-            const force = this.forced ? 1500 : (1 - dist / magnetRange) * 1200;
-            this.x += (dx / dist) * force * dt;
-            this.y += (dy / dist) * force * dt;
-        }
 
         this.rotation += dt * this.spinSpeed;
     }
