@@ -194,19 +194,18 @@ setInterval(() => {
     }
 
     if (generatedProjectiles.length > 0) {
-        generatedProjectiles.forEach(p => {
-            // Broadcast shoot to all clients
+        const shoots = generatedProjectiles.map(p => {
             const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
-
-            io.emit('enemy_shoot', {
+            return {
                 x: Math.round(p.x),
                 y: Math.round(p.y),
                 angle: parseFloat(p.angle.toFixed(4)),
                 type: p.type,
                 speed: Math.round(speed),
                 damage: p.damage
-            });
+            };
         });
+        io.emit('enemy_shoots', shoots);
     }
 }, 1000 / PHYSICS_TICK_RATE);
 

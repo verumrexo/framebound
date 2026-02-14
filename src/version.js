@@ -10,6 +10,7 @@ export const CHANGELOG = [
         name: 'SYNC_FIX',
         date: new Date().toISOString().split('T')[0],
         items: [
+            "Optimized network performance by batching enemy projectile broadcasts (enemy_shoots)",
             "Fixed enemy shooting synchronization (server-side projectile speed)",
             "Fixed double-ship bug by filtering local player in NetworkManager",
             "Fixed enemy respawn bug (server sends dead enemy list on join)",
