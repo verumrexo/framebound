@@ -85,47 +85,17 @@ mockGame.bosses.forEach(b => serverEnemies.push(b));
 
 console.log(`[Server] Generated ${serverEnemies.length} enemies (including bosses).`);
 
-// Physics Constants (Matching Game.js)
+import { Physics } from '../shared/Physics.js';
+
+// Physics Constants
 const PHYSICS_TICK_RATE = 60; // Updates per second
 const DT = 1 / PHYSICS_TICK_RATE;
-const ACCELERATION = 2000;
-const FRICTION = 0.92;
 
 setInterval(() => {
     // Physics Loop
     clients.forEach(player => {
         if (!player.input) return;
-
-        // Apply Input Acceleration
-        let inputX = 0;
-        let inputY = 0;
-
-        if (player.input.up) inputY -= 1;
-        if (player.input.down) inputY += 1;
-        if (player.input.left) inputX -= 1;
-        if (player.input.right) inputX += 1;
-
-        if (inputX !== 0 || inputY !== 0) {
-            const mag = Math.sqrt(inputX * inputX + inputY * inputY);
-            // Default stats for now (TODO: Sync stats from client)
-            const currentAccel = ACCELERATION;
-
-            player.vx += (inputX / mag) * currentAccel * DT;
-            player.vy += (inputY / mag) * currentAccel * DT;
-        }
-
-        // Apply Physics
-        player.x += player.vx * DT;
-        player.y += player.vy * DT;
-
-        // Friction
-        player.vx *= FRICTION;
-        player.vy *= FRICTION;
-
-        // Rotation
-        if (player.input.rotation !== undefined) {
-            player.rotation = player.input.rotation;
-        }
+        Physics.update(player, player.input, DT);
     });
 
     // Broadcast State (Snapshot)
@@ -264,9 +234,8 @@ io.on('connection', (socket) => {
     });
 
     socket.on('player_shoot', (data) => {
-        // Broadcast shoot event to all other players
-        // We include the sender ID so clients know who shot
-        socket.broadcast.emit('player_shoot', {
+        // Broadcast shoot event to ALL players (including sender) to ensure consistency
+        io.emit('player_shoot', {
             id: socket.id,
             ...data
         });

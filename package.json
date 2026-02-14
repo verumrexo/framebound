@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "server": "node src/server/server.js"
+    "server": "node src/server/server.js",
+    "test": "node --test src/game/environment/Biomes.test.js"
+    "test": "node src/tests/prepare.js && node --experimental-test-module-mocks --test src/**/*.test.js"
   },
   "devDependencies": {
     "vite": "^7.2.4"

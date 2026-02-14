@@ -1,6 +1,3 @@
-import { XPOrb } from './XPOrb.js';
-import { GoldOrb } from './GoldOrb.js';
-
 export class Asteroid {
     constructor(x, y, size = 'medium', type = 'rock', randomGen = null) {
         this.x = x;
@@ -108,6 +105,14 @@ export class Asteroid {
                 const e2 = 2 * err;
                 if (e2 > -dy) { err -= dy; X0 += sx; }
                 if (e2 < dx) { err += dx; Y0 += sy; }
+        // Simpler stepped interpolation for pixel look
+        const drawStepped = (x0, y0, x1, y1) => {
+            const steps = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) / pixelSize;
+            for (let i = 0; i <= steps; i++) {
+                const t = i / steps;
+                const px = x0 + (x1 - x0) * t;
+                const py = y0 + (y1 - y0) * t;
+                ctx.fillRect(Math.floor(px / pixelSize) * pixelSize - pixelSize / 2, Math.floor(py / pixelSize) * pixelSize - pixelSize / 2, pixelSize, pixelSize);
             }
         };
 
