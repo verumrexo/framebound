@@ -11,6 +11,7 @@ export const CHANGELOG = [
         date: new Date().toISOString().split('T')[0],
         items: [
             "REFACTOR: Consolidated Orb update logic into BaseOrb class",
+            "TEST: Added unit tests for Biomes system (getRandomBiome validation)",
             "REFACTOR: Player creation is now strictly server-authoritative (fixes double-spawn)",
             "REFACTOR: Physics logic migrated to shared module for consistency",
             "FIX: Input hygiene - removed client-side shooting prediction to prevent double projectiles",
@@ -23,6 +24,9 @@ export const CHANGELOG = [
         name: 'SYNC_FIX',
         date: new Date().toISOString().split('T')[0],
         items: [
+            "Fixed Bresenham line algorithm for Asteroid pixelated rendering",
+            "removed leftover debug collision logging",
+            "refactor: removed unused drawPixelLine and imports from Asteroid.js",
             "Fixed enemy shooting synchronization (server-side projectile speed)",
             "Fixed double-ship bug by filtering local player in NetworkManager",
             "Fixed enemy respawn bug (server sends dead enemy list on join)",

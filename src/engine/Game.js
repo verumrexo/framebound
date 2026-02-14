@@ -237,6 +237,17 @@ export class Game {
         this.network = this.networkManager;
     }
 
+    startOffline(seed, isLoad = false) {
+        console.log('[Game] Starting Offline Mode');
+        if (this.networkManager && this.networkManager.isConnected) {
+            this.networkManager.socket.disconnect();
+        }
+
+        const finalSeed = seed || Math.floor(Math.random() * 2147483647);
+        this.createLocalPlayer();
+        this.startGame(finalSeed);
+    }
+
     createLocalPlayer(data) {
         if (this.playerShip) return;
         console.log('[Game] Creating Local Player Ship');
@@ -246,10 +257,13 @@ export class Game {
         if (data) {
              if (data.x !== undefined) this.x = data.x;
              if (data.y !== undefined) this.y = data.y;
+        } else {
+            this.x = 1000;
+            this.y = 1000;
         }
 
         // Notify Network to join (now that we have a ship to sync parts from)
-        if (this.networkManager) {
+        if (this.networkManager && this.networkManager.isConnected) {
             this.networkManager.sendJoinGame();
         }
     }
@@ -2802,7 +2816,6 @@ export class Game {
                         asteroid.vy -= ny * push * 0.5 * dt;
 
                         this.camera.shake = 5;
-                        console.log("Part Collision Detected!");
                         hit = true;
                         break; // Handle one collision per frame per asteroid is enough
                     }
