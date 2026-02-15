@@ -11,15 +11,23 @@ export class NetworkManager {
         this.playerId = null;
         this.otherPlayers = new Map(); // id -> {x, y, rotation}
 
-        this.connect();
+        // Callbacks for UI
+        this.onLobbyListUpdate = null;
+        this.onLobbyJoined = null;
+        this.onLobbyError = null;
+
+        // Do NOT connect automatically
+        // this.connect();
     }
 
     connect() {
-        // Connect to the server. If dev, it might be localhost:3000
-        // In prod, it should be the same host.
-        // We can use a proxy in vite.config.js to map /socket.io to localhost:3000
-        // Connect via Vite proxy (forwards /socket.io from 5173 to 3000)
-        // This avoids CORS/CSP issues by making it look like a same-origin request
+        if (this.socket) {
+            if (!this.socket.connected) {
+                this.socket.connect();
+            }
+            return;
+        }
+
         this.socket = io({
             transports: ['websocket'],
             upgrade: false
@@ -28,14 +36,35 @@ export class NetworkManager {
         this.socket.on("connect", () => {
             console.log("Connected to server");
             this.isConnected = true;
-            // join_game is now sent after init -> createLocalPlayer
         });
 
         this.socket.on("disconnect", () => {
             console.log("Disconnected from server");
             this.isConnected = false;
+            this.otherPlayers.clear();
         });
 
+        // --- LOBBY EVENTS ---
+        this.socket.on("lobby_list", (list) => {
+            if (this.onLobbyListUpdate) this.onLobbyListUpdate(list);
+        });
+
+        this.socket.on("lobby_created", (data) => {
+            console.log(`[Network] Lobby Created: ${data.roomId}`);
+            if (this.onLobbyJoined) this.onLobbyJoined(data);
+        });
+
+        this.socket.on("lobby_joined", (data) => {
+            console.log(`[Network] Joined Lobby: ${data.roomId}`);
+            if (this.onLobbyJoined) this.onLobbyJoined(data);
+        });
+
+        this.socket.on("lobby_error", (msg) => {
+            console.error(`[Network] Lobby Error: ${msg}`);
+            if (this.onLobbyError) this.onLobbyError(msg);
+        });
+
+        // --- GAME EVENTS ---
         this.socket.on("init", (data) => {
             console.log("My ID:", data.id);
             console.log("Game Seed:", data.seed);
@@ -129,20 +158,10 @@ export class NetworkManager {
             // Spawn Projectile
             const def = PartsLibrary[data.partId];
             if (def) {
-                // If it's own player, we might want to attach partRef for recoil?
-                // But partRef is local state.
-                // Currently spawnProjectile accepts partRef for recoil & visual effects.
-                // If we pass null, we lose recoil on local ship?
-                // Yes, recoil logic in spawnProjectile depends on partRef.
-
                 let partRef = null;
-                if (data.id === this.playerId && this.game.playerShip) {
-                    // Try to find the local part that shot?
-                    // We don't know EXACTLY which part shot (if multiple identical parts).
-                    // But we can approximate or ignore recoil for now.
-                    // Or we could pass partIndex in the packet?
-                    // For now, let's accept losing visual recoil or fix it later.
-                }
+                // if (data.id === this.playerId && this.game.playerShip) {
+                     // Recoil handling if needed
+                // }
 
                 this.game.spawnProjectile(def, data.x, data.y, data.angle, partRef);
             }
@@ -172,6 +191,8 @@ export class NetworkManager {
         });
 
         this.socket.on("players_list", (list) => {
+            // Clear existing remote players not in list?
+            // Actually this is usually sent on join, so just add them.
             for (const p of list) {
                 const rp = new RemotePlayer(p.id);
                 rp.x = p.x;
@@ -208,9 +229,42 @@ export class NetworkManager {
                     // Enemy doesn't exist? Might be out of sync or just spawned?
                     // Level generation *should* be deterministic, so it should exist.
                     // Unless it's a dynamic spawn (not implemented yet).
+                    // Snap position (naive interpolation later)
+                    enemy.x = update.x;
+                    enemy.y = update.y;
+                    enemy.rotation = update.r;
+                    enemy.hp = update.hp;
                 }
             }
         });
+
+        this.socket.on("enemy_shoots", (shoots) => {
+            if (!this.game) return;
+            for (const data of shoots) {
+                this.game.spawnEnemyProjectile(data);
+            }
+        });
+    }
+
+    createLobby(name) {
+        if (!this.isConnected) return;
+        this.socket.emit('create_lobby', { name });
+    }
+
+    joinLobby(roomId) {
+        if (!this.isConnected) return;
+        this.socket.emit('join_lobby', roomId);
+    }
+
+    listLobbies() {
+        if (!this.isConnected) return;
+        this.socket.emit('list_lobbies');
+    }
+
+    leaveLobby() {
+        if (!this.isConnected) return;
+        this.socket.emit('leave_lobby');
+        this.otherPlayers.clear();
     }
 
     sendUpdate(x, y, rotation) {
