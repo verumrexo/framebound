@@ -7,4 +7,5 @@ document.querySelector('#app').innerHTML = `
 
 const canvas = document.querySelector('#gameCanvas');
 const game = new Game(canvas);
+window.game = game;
 game.start();
