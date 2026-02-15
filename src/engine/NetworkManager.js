@@ -29,9 +29,22 @@ export class NetworkManager {
         }
 
         const serverUrl = import.meta.env.VITE_SERVER_URL || undefined;
+
+        // Prevent connection spam if no server is configured in production
+        if (!serverUrl && import.meta.env.PROD) {
+            console.warn("[Network] VITE_SERVER_URL not set in production. Multiplayer disabled.");
+            if (this.onLobbyError) this.onLobbyError("No server configured (VITE_SERVER_URL missing)");
+            return;
+        }
+
         this.socket = io(serverUrl, {
             transports: ['websocket'],
             upgrade: false
+        });
+
+        this.socket.on("connect_error", (err) => {
+            console.error("[Network] Connection Error:", err.message);
+            if (this.onLobbyError) this.onLobbyError("Connection failed");
         });
 
         this.socket.on("connect", () => {
