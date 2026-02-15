@@ -10,6 +10,7 @@ export const CHANGELOG = [
         name: 'System: Authority',
         date: new Date().toISOString().split('T')[0],
         items: [
+            "PERF: Optimized audio engine to skip processing for silent sounds (volume < 0.001), significantly reducing CPU overhead when muted.",
             "REFACTOR: Consolidated Orb update logic into BaseOrb class",
             "TEST: Added unit tests for Biomes system (getRandomBiome validation)",
             "REFACTOR: Player creation is now strictly server-authoritative (fixes double-spawn)",
