@@ -1111,6 +1111,13 @@ export class Game {
             return;
         }
 
+        if (this.levelUpManager.active) {
+            this.levelUpManager.update();
+            this.mouseDownLastFrame = isMouseDown;
+            this.input.clearPressed();
+            return;
+        }
+
         // --- PAUSE MENU INTERACTION ---
         if (this.paused) {
 
@@ -2707,6 +2714,7 @@ export class Game {
 
                     this.showNotification(`CORE UPGRADED: LEVEL ${this.level}`, '#00ffff');
                     this.showNotification(`SYSTEM EFFICIENCY +1%`, '#44ff44');
+                    this.levelUpManager.triggerLevelUp();
                 }
             }
         }
@@ -3745,7 +3753,9 @@ export class Game {
             this.renderer.ctx.restore();
         }
 
-
+        if (this.levelUpManager.active) {
+            this.levelUpManager.draw(this.renderer);
+        }
 
         // Name Entry Screen (Game Over)
         if (this.nameEntryActive) {
