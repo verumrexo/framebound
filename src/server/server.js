@@ -45,12 +45,6 @@ io.on('connection', (socket) => {
 
         console.log(`[Server] Creating Lobby: ${roomName} (${roomId})`);
 
-// Physics Constants
-const PHYSICS_TICK_RATE = 60; // Updates per second
-const DT = 1 / PHYSICS_TICK_RATE;
-const NETWORK_TICK_RATE = 20;
-const NETWORK_DT = 1 / NETWORK_TICK_RATE;
-let networkAccumulator = 0;
         const room = new GameRoom(roomId, io, roomName);
         rooms.set(roomId, room);
 
@@ -58,73 +52,6 @@ let networkAccumulator = 0;
         socket.emit('lobby_created', { roomId, name: roomName });
     });
 
-    // --- ENEMY LOGIC ---
-    const allPlayers = Array.from(clients.values());
-    const generatedProjectiles = []; // Capture shots this frame
-
-    serverEnemies.forEach(enemy => {
-        if (enemy.isDead) return;
-
-        // Find nearest player
-        let nearestPlayer = null;
-        let minDistSq = Infinity;
-
-        for (const p of allPlayers) {
-            const dx = p.x - enemy.x;
-            const dy = p.y - enemy.y;
-            const dSq = dx * dx + dy * dy;
-            if (dSq < minDistSq) {
-                minDistSq = dSq;
-                nearestPlayer = p;
-            }
-        }
-
-        // Update Enemy
-        try {
-            if (nearestPlayer) {
-                enemy.update(DT, nearestPlayer.x, nearestPlayer.y, generatedProjectiles, [], [], serverEnemies);
-            } else {
-                // Idle update if no players
-                enemy.update(DT, undefined, undefined, generatedProjectiles, [], [], serverEnemies);
-            }
-        } catch (e) {
-            console.error(`[Server] Enemy Update Error (ID: ${enemy.id}):`, e.message);
-        }
-    });
-
-    // --- NETWORK BROADCAST (Throttled) ---
-    networkAccumulator += DT;
-    if (networkAccumulator >= NETWORK_DT) {
-        networkAccumulator -= NETWORK_DT;
-
-        // Broadcast Player State (Snapshot)
-        const snapshot = [];
-        clients.forEach(p => {
-            snapshot.push({
-                id: p.id,
-                x: Math.round(p.x), // Round to save bandwidth
-                y: Math.round(p.y),
-                rotation: parseFloat(p.rotation.toFixed(2)),
-                input: p.input, // Echo input for prediction/visuals
-                hp: p.hp,
-                maxHp: p.maxHp
-            });
-        });
-
-        io.emit('world_update', snapshot);
-
-        // Broadcast Enemy State (Snapshot)
-        const enemyUpdates = [];
-        serverEnemies.forEach(enemy => {
-            if (enemy.isDead) return;
-            enemyUpdates.push({
-                id: enemy.id,
-                x: Math.round(enemy.x),
-                y: Math.round(enemy.y),
-                r: parseFloat(enemy.rotation.toFixed(2)),
-                hp: enemy.hp
-            });
-        });
     socket.on('join_lobby', (roomId) => {
         // Leave any existing room
         rooms.forEach(r => {
@@ -141,9 +68,8 @@ let networkAccumulator = 0;
         }
     });
 
-        if (enemyUpdates.length > 0) {
-            io.emit('enemy_update', enemyUpdates);
-        }
+    if (enemyUpdates.length > 0) {
+        io.emit('enemy_update', enemyUpdates);
     }
 
     if (generatedProjectiles.length > 0) {

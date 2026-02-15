@@ -174,8 +174,8 @@ export class MainMenu {
             <div id="lobby-status" style="color: #888; font-size: 12px; margin-bottom: 20px;">connecting...</div>
 
             <div style="display: flex; gap: 20px; margin-bottom: 20px;">
-                <button id="btn-create" class="menu-btn" style="width: 180px;" disabled>create lobby</button>
-                <button id="btn-refresh" class="menu-btn" style="width: 180px;" disabled>refresh list</button>
+                <button id="btn-create" class="menu-btn" style="width: 180px;">create lobby</button>
+                <button id="btn-refresh" class="menu-btn" style="width: 180px;">refresh list</button>
             </div>
 
             <div id="lobby-list" style="
@@ -216,19 +216,13 @@ export class MainMenu {
             const inputId = document.getElementById('input-lobby-id');
 
             if (btnCreate) btnCreate.onclick = () => {
-                if (!this.game.network.isConnected) return;
                 this.game.network.createLobby();
                 document.getElementById('lobby-status').innerText = "creating lobby...";
-                // Re-disable to prevent double clicks
-                btnCreate.disabled = true;
             };
 
             if (btnRefresh) btnRefresh.onclick = () => {
-                if (!this.game.network.isConnected) return;
                 this.game.network.listLobbies();
                 document.getElementById('lobby-status').innerText = "refreshing...";
-                // Re-disable briefly
-                btnRefresh.disabled = true;
             };
 
             if (btnJoinId) btnJoinId.onclick = () => {
@@ -250,13 +244,6 @@ export class MainMenu {
             this.game.network.onLobbyListUpdate = (list) => {
                 const container = document.getElementById('lobby-list');
                 const status = document.getElementById('lobby-status');
-
-                // Enable buttons now that we have connection
-                const btnCreate = document.getElementById('btn-create');
-                const btnRefresh = document.getElementById('btn-refresh');
-                if (btnCreate) btnCreate.disabled = false;
-                if (btnRefresh) btnRefresh.disabled = false;
-
                 if (status) status.innerText = "ready";
                 if (!container) return;
 

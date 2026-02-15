@@ -86,16 +86,8 @@ export class AudioManager {
         const baseVolume = (options.volume !== undefined ? options.volume : 1.0);
         const finalVolume = baseVolume * volumeMultiplier;
 
-        const type = options.type || 'sfx'; // 'sfx' or 'music'
-        const loop = options.loop || false;
-
-        // Optimization: Check effective volume (including Master/Channel gain) before creating nodes
-        const channelGain = (type === 'music' ? this.musicGain.gain.value : this.sfxGain.gain.value);
-        const masterGain = this.masterGain.gain.value;
-        const effectiveVolume = finalVolume * channelGain * masterGain;
-
-        // Never skip entirely unless it's truly silent (and not a looping sound that might need to be unmuted later)
-        if ((effectiveVolume < 0.001 && !loop) || finalVolume < 0.001) return null;
+        // Never skip entirely unless it's truly silent
+        if (finalVolume < 0.001) return null;
 
         // Resume context if suspended (browser behavior)
         if (this.context.state === 'suspended') {
@@ -107,6 +99,8 @@ export class AudioManager {
 
         const pitch = options.pitch !== undefined ? options.pitch : 1.0;
         const randomizePitch = options.randomizePitch || 0;
+        const loop = options.loop || false;
+        const type = options.type || 'sfx'; // 'sfx' or 'music'
 
         const gainNode = this.context.createGain();
         gainNode.gain.value = finalVolume;

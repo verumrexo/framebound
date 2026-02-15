@@ -24,7 +24,11 @@ const mockCanvas = {
 global.window = {
     addEventListener: () => {},
     innerWidth: 1920,
-    innerHeight: 1080
+    innerHeight: 1080,
+    location: {
+        hostname: 'localhost',
+        origin: 'http://localhost:3000'
+    }
 };
 global.document = {
     createElement: () => mockCanvas,

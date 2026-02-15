@@ -2,6 +2,7 @@
 import { io } from "socket.io-client";
 import { RemotePlayer } from "./RemotePlayer.js";
 import { PartsLibrary } from "../game/parts/Part.js";
+import { SERVER_URL } from "../config.js";
 
 export class NetworkManager {
     constructor(game) {
@@ -28,8 +29,12 @@ export class NetworkManager {
             return;
         }
 
-        const serverUrl = import.meta.env.VITE_SERVER_URL || undefined;
-        this.socket = io(serverUrl, {
+        if (!SERVER_URL) {
+            console.warn("[Network] Multiplayer disabled: No server configured (SERVER_URL is null).");
+            return;
+        }
+
+        this.socket = io(SERVER_URL, {
             transports: ['websocket'],
             upgrade: false
         });
@@ -123,31 +128,21 @@ export class NetworkManager {
 
                 if (this.otherPlayers.has(data.id)) {
                     const p = this.otherPlayers.get(data.id);
-                    if (p.addSnapshot) {
-                         p.addSnapshot(data);
-                    } else {
-                        // Fallback: Direct Snap
-                        p.x = data.x;
-                        p.y = data.y;
-                        p.rotation = data.rotation;
-                        if (data.input) p.input = data.input;
-                        if (data.hp !== undefined) p.hp = data.hp;
-                        if (data.maxHp !== undefined) p.maxHp = data.maxHp;
-                    }
+                    p.x = data.x;
+                    p.y = data.y;
+                    p.rotation = data.rotation;
+                    if (data.input) p.input = data.input;
+                    if (data.hp !== undefined) p.hp = data.hp;
+                    if (data.maxHp !== undefined) p.maxHp = data.maxHp;
                 } else {
                     // New player found in snapshot
                     const rp = new RemotePlayer(data.id);
-                    // Initialize with snapshot data
                     rp.x = data.x;
                     rp.y = data.y;
                     rp.rotation = data.rotation;
                     if (data.input) rp.input = data.input;
                     if (data.hp !== undefined) rp.hp = data.hp;
                     if (data.maxHp !== undefined) rp.maxHp = data.maxHp;
-
-                    if (rp.addSnapshot) {
-                        rp.addSnapshot(data);
-                    }
                     this.otherPlayers.set(data.id, rp);
                 }
             }
@@ -213,23 +208,6 @@ export class NetworkManager {
             for (const update of updates) {
                 const enemy = enemyMap.get(update.id);
                 if (enemy) {
-                    if (enemy.addSnapshot) {
-                         enemy.addSnapshot(update);
-                    } else {
-                        // Fallback: Snap position (naive interpolation later)
-                        enemy.x = update.x;
-                        enemy.y = update.y;
-                        enemy.rotation = update.r;
-                        enemy.hp = update.hp;
-                    }
-
-                    // Server is authoritative, so we don't need to predict movement
-                    // But we might want some smoothing if updates are slow
-                    // For now: Snap.
-                } else {
-                    // Enemy doesn't exist? Might be out of sync or just spawned?
-                    // Level generation *should* be deterministic, so it should exist.
-                    // Unless it's a dynamic spawn (not implemented yet).
                     // Snap position (naive interpolation later)
                     enemy.x = update.x;
                     enemy.y = update.y;
