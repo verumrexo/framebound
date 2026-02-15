@@ -10,6 +10,7 @@ export const CHANGELOG = [
         name: 'System: Authority',
         date: new Date().toISOString().split('T')[0],
         items: [
+            "FIX: Expose game instance to window to fix DevTools/MainMenu UI interactions",
             "REFACTOR: Consolidated Orb update logic into BaseOrb class",
             "TEST: Added unit tests for Biomes system (getRandomBiome validation)",
             "REFACTOR: Player creation is now strictly server-authoritative (fixes double-spawn)",
