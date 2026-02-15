@@ -2588,8 +2588,13 @@ export class Game {
             // We still want to run update if NOT connected (single player fallback)
             // But if connected, Server sends x/y/rotation.
 
-            if (!(this.devTools && this.devTools.freezeEnemies) && !isConnected) {
-                enemy.update(dt, this.x, this.y, this.projectiles, this.asteroids, this.lootCrates, this.enemies, this.currentRoom);
+            if (!(this.devTools && this.devTools.freezeEnemies)) {
+                if (!isConnected) {
+                    enemy.update(dt, this.x, this.y, this.projectiles, this.asteroids, this.lootCrates, this.enemies, this.currentRoom);
+                } else if (enemy.interpolate) {
+                    // Client-side Interpolation when connected
+                    enemy.interpolate(dt, this.x, this.y);
+                }
             }
             if (enemy.isDead) anyDead = true;
         }
@@ -3006,6 +3011,13 @@ export class Game {
 
         // Multiplayer Update
         if (this.networkManager) {
+            // Interpolate Other Players
+            if (this.networkManager.otherPlayers) {
+                for (const rp of this.networkManager.otherPlayers.values()) {
+                    if (rp.update) rp.update(dt);
+                }
+            }
+
             this.networkManager.sendUpdate(this.x, this.y, this.rotation);
         }
     }
