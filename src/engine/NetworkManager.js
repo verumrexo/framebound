@@ -28,7 +28,8 @@ export class NetworkManager {
             return;
         }
 
-        this.socket = io({
+        const serverUrl = import.meta.env.VITE_SERVER_URL || undefined;
+        this.socket = io(serverUrl, {
             transports: ['websocket'],
             upgrade: false
         });
