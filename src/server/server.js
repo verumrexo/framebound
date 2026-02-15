@@ -90,6 +90,9 @@ import { Physics } from '../shared/Physics.js';
 // Physics Constants
 const PHYSICS_TICK_RATE = 60; // Updates per second
 const DT = 1 / PHYSICS_TICK_RATE;
+const NETWORK_TICK_RATE = 20;
+const NETWORK_DT = 1 / NETWORK_TICK_RATE;
+let networkAccumulator = 0;
 
 setInterval(() => {
     // Physics Loop
@@ -98,26 +101,8 @@ setInterval(() => {
         Physics.update(player, player.input, DT);
     });
 
-    // Broadcast State (Snapshot)
-    // Send lightweight updates for all players
-    const snapshot = [];
-    clients.forEach(p => {
-        snapshot.push({
-            id: p.id,
-            x: Math.round(p.x), // Round to save bandwidth
-            y: Math.round(p.y),
-            rotation: parseFloat(p.rotation.toFixed(2)),
-            input: p.input, // Echo input for prediction/visuals
-            hp: p.hp,
-            maxHp: p.maxHp
-        });
-    });
-
-    io.emit('world_update', snapshot);
-
     // --- ENEMY LOGIC ---
     const allPlayers = Array.from(clients.values());
-    const enemyUpdates = [];
     const generatedProjectiles = []; // Capture shots this frame
 
     serverEnemies.forEach(enemy => {
@@ -148,19 +133,45 @@ setInterval(() => {
         } catch (e) {
             console.error(`[Server] Enemy Update Error (ID: ${enemy.id}):`, e.message);
         }
-
-        // Prepare Update Packet
-        enemyUpdates.push({
-            id: enemy.id,
-            x: Math.round(enemy.x),
-            y: Math.round(enemy.y),
-            r: parseFloat(enemy.rotation.toFixed(2)),
-            hp: enemy.hp
-        });
     });
 
-    if (enemyUpdates.length > 0) {
-        io.emit('enemy_update', enemyUpdates);
+    // --- NETWORK BROADCAST (Throttled) ---
+    networkAccumulator += DT;
+    if (networkAccumulator >= NETWORK_DT) {
+        networkAccumulator -= NETWORK_DT;
+
+        // Broadcast Player State (Snapshot)
+        const snapshot = [];
+        clients.forEach(p => {
+            snapshot.push({
+                id: p.id,
+                x: Math.round(p.x), // Round to save bandwidth
+                y: Math.round(p.y),
+                rotation: parseFloat(p.rotation.toFixed(2)),
+                input: p.input, // Echo input for prediction/visuals
+                hp: p.hp,
+                maxHp: p.maxHp
+            });
+        });
+
+        io.emit('world_update', snapshot);
+
+        // Broadcast Enemy State (Snapshot)
+        const enemyUpdates = [];
+        serverEnemies.forEach(enemy => {
+            if (enemy.isDead) return;
+            enemyUpdates.push({
+                id: enemy.id,
+                x: Math.round(enemy.x),
+                y: Math.round(enemy.y),
+                r: parseFloat(enemy.rotation.toFixed(2)),
+                hp: enemy.hp
+            });
+        });
+
+        if (enemyUpdates.length > 0) {
+            io.emit('enemy_update', enemyUpdates);
+        }
     }
 
     if (generatedProjectiles.length > 0) {
