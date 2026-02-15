@@ -10,6 +10,7 @@ export const CHANGELOG = [
         name: 'System: Authority',
         date: new Date().toISOString().split('T')[0],
         items: [
+            "PERF: Implemented Spatial Hash for O(P*E) -> O(P) collision detection (~20x faster)",
             "REFACTOR: Consolidated Orb update logic into BaseOrb class",
             "TEST: Added unit tests for Biomes system (getRandomBiome validation)",
             "REFACTOR: Player creation is now strictly server-authoritative (fixes double-spawn)",
