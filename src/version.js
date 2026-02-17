@@ -10,6 +10,7 @@ export const CHANGELOG = [
         name: 'System: Authority',
         date: new Date().toISOString().split('T')[0],
         items: [
+            "NET: Fixed WebSocket connection error on GitHub Pages (static host detection)",
             "PERF: Implemented Spatial Hash for O(P*E) -> O(P) collision detection (~20x faster)",
             "FIX: Expose game instance to window to fix DevTools/MainMenu UI interactions",
             "PERF: Optimized audio engine to skip processing for silent sounds (volume < 0.001), significantly reducing CPU overhead when muted.",
