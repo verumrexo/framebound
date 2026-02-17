@@ -531,7 +531,7 @@ export class DevTools {
         this.game.hangar.hasInfiniteParts = true;
         for (const id of Object.keys(PartsLibrary)) {
             if (id !== 'core') {
-                this.game.hangar.inventory[id] = 99; // Give plenty
+                this.game.hangar.inventory[id] = 1; // Infinite use, so just 1 is enough
             }
         }
         this.game.hangar.updateUI();
