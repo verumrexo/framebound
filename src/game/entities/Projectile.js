@@ -157,7 +157,11 @@ export class Projectile {
 
     draw(renderer) {
         if (this.delay > 0) return;
-        const color = this.owner === 'enemy' ? '#ff4444' : '#26d426';
+        let color = this.owner === 'enemy' ? '#ff4444' : '#26d426';
+
+        if (this.owner === 'player' && (this.type === 'laser' || this.type === 'small_laser')) {
+            color = '#ffff00';
+        }
 
         if (this.type === 'laser' || this.type === 'small_laser' || this.type === 'railgun' || this.type === 'saber' || this.type === 'beam_freeze') {
             // Long thin beam
@@ -200,7 +204,11 @@ export class Projectile {
                 const isSaber = this.type === 'saber';
                 const isFreeze = this.type === 'beam_freeze';
 
-                const mainColor = isSaber ? '#88ffff' : (isFreeze ? '#00ccff' : '#ff4444'); // Railgun is RED
+                let mainColor = isSaber ? '#88ffff' : (isFreeze ? '#00ccff' : '#ff4444'); // Railgun is RED
+                if (this.owner === 'player' && (this.type === 'railgun' || this.type === 'saber')) {
+                    mainColor = '#ffff00';
+                }
+
                 const coreColor = '#ffffff';
                 const glowWidth = (isSaber ? 4 : (isFreeze ? 10 : 12)) * sizeScale;
                 const coreWidth = (isSaber ? 1.5 : (isFreeze ? 3 : 4)) * sizeScale;
