@@ -1995,8 +1995,9 @@ export class Game {
                                 const lastHit = p.targetHits.get(enemy) || 0;
                                 if (now - lastHit > 100) {
                                     enemy.takeDamage(p.damage, p.type);
-                                    const hX = p.x + Math.cos(p.angle) * bx;
-                                    const hY = p.y + Math.sin(p.angle) * bx;
+                                    const dist = Math.hypot(enemy.x - p.x, enemy.y - p.y);
+                                    const hX = p.x + Math.cos(p.angle) * dist;
+                                    const hY = p.y + Math.sin(p.angle) * dist;
                                     this.spawnDamageNumber(hX, hY, p.damage);
                                     p.targetHits.set(enemy, now);
                                     const isFreeze = p.type === 'beam_freeze';
