@@ -213,14 +213,14 @@ export class Projectile {
                 renderer.drawRect(-15, -2, 30, 4, color);
             }
             renderer.ctx.restore();
-        } else if (this.type === 'rocket' || this.type === 'rocket_le' || this.type === 'guided_rocket') {
-            // Rocket Visual
+        } else if (this.type === 'rocket' || this.type === 'guided_rocket') {
+            // Generic Rocket Visual
             renderer.ctx.save();
             renderer.ctx.translate(this.x, this.y);
             renderer.ctx.rotate(this.angle);
 
             // Body
-            const bodyColor = this.type === 'guided_rocket' ? '#44aaff' : (this.type === 'rocket_le' ? '#ff0000' : '#ffaa44');
+            const bodyColor = this.type === 'guided_rocket' ? '#44aaff' : '#ffaa44';
             renderer.drawRect(-10, -3, 20, 6, bodyColor);
             renderer.drawRect(4, -3, 6, 6, '#444');      // Nose cone
 
@@ -229,34 +229,49 @@ export class Projectile {
             renderer.drawRect(-14, -2, flameSize, 4, '#ffff00');
 
             renderer.ctx.restore();
-        } else if (this.type === 'rocket_he') {
-            // Rocket HE Visual - blue rockets
+        } else if (this.type === 'rocket_le') {
+            // Rocket LE Visual - Light Blue, Slightly Smaller
             renderer.ctx.save();
             renderer.ctx.translate(this.x, this.y);
             renderer.ctx.rotate(this.angle);
 
-            // Body - blue for HE
-            renderer.drawRect(-10, -3, 20, 6, '#44aaff');
-            renderer.drawRect(4, -3, 6, 6, '#224466');   // Darker blue nose cone
+            // Body - Light Blue (#4FC3F7)
+            renderer.drawRect(-9, -2.5, 18, 5, '#4FC3F7');
+            renderer.drawRect(3, -2.5, 5, 5, '#81D4FA');   // Lighter nose cone
 
-            // Thrust/Flame
+            // Thrust/Flame - Pale Cyan
+            const flameSize = 3 + Math.sin(Date.now() * 0.06) * 1.5;
+            renderer.drawRect(-12, -1.5, flameSize, 3, '#E0F7FA');
+
+            renderer.ctx.restore();
+        } else if (this.type === 'rocket_he') {
+            // Rocket HE Visual - Medium Blue, Standard Size
+            renderer.ctx.save();
+            renderer.ctx.translate(this.x, this.y);
+            renderer.ctx.rotate(this.angle);
+
+            // Body - Medium Blue (#2196F3)
+            renderer.drawRect(-10, -3, 20, 6, '#2196F3');
+            renderer.drawRect(4, -3, 6, 6, '#1976D2');   // Darker nose cone
+
+            // Thrust/Flame - Cyan
             const flameSize = 4 + Math.sin(Date.now() * 0.05) * 2;
-            renderer.drawRect(-14, -2, flameSize, 4, '#00ccff'); // Cyan flame
+            renderer.drawRect(-14, -2, flameSize, 4, '#00BCD4');
 
             renderer.ctx.restore();
         } else if (this.type === 'ggbm') {
-            // GGBM Visual
+            // GGBM Visual - Dark Blue, Largest
             renderer.ctx.save();
             renderer.ctx.translate(this.x, this.y);
             renderer.ctx.rotate(this.angle);
 
-            // Purple glowing missile
-            renderer.drawRect(-8, -4, 16, 8, '#aa00ff');
-            renderer.drawRect(4, -4, 4, 8, '#ffffff');
+            // Body - Dark Blue (#1565C0)
+            renderer.drawRect(-12, -4, 24, 8, '#1565C0');
+            renderer.drawRect(5, -4, 6, 8, '#E3F2FD'); // Light tip for contrast
 
-            // Thrust
+            // Thrust/Flame - Royal Blue
             const flameSize = 6 + Math.sin(Date.now() * 0.1) * 3;
-            renderer.drawRect(-14, -3, flameSize, 6, '#ff00ff');
+            renderer.drawRect(-16, -3, flameSize, 6, '#448AFF');
 
             renderer.ctx.restore();
         } else if (this.type === 'mini_grenade') {
