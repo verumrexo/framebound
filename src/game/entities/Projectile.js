@@ -210,8 +210,8 @@ export class Projectile {
                 }
 
                 const coreColor = '#ffffff';
-                const glowWidth = (isSaber ? 4 : (isFreeze ? 10 : 12)) * sizeScale;
-                const coreWidth = (isSaber ? 1.5 : (isFreeze ? 3 : 4)) * sizeScale;
+                const glowWidth = (isSaber ? 4 : (isFreeze ? 6 : 12)) * sizeScale;
+                const coreWidth = (isSaber ? 1.5 : (isFreeze ? 2 : 4)) * sizeScale;
 
                 renderer.drawRect(0, -glowWidth / 2, this.beamLength, glowWidth, mainColor);
                 renderer.drawRect(0, -coreWidth / 2, this.beamLength, coreWidth, coreColor);
