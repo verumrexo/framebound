@@ -10,6 +10,7 @@ export const CHANGELOG = [
         name: 'System: Authority',
         date: new Date().toISOString().split('T')[0],
         items: [
+            "TEST: Implemented unit tests for CollisionSystem logic",
             "REFACTOR: Player creation is now strictly server-authoritative (fixes double-spawn)",
             "REFACTOR: Physics logic migrated to shared module for consistency",
             "FIX: Input hygiene - removed client-side shooting prediction to prevent double projectiles",
