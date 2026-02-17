@@ -20,7 +20,17 @@ export class TrainingDummy {
         this.currentDps = 0;
         this.dpsWindow = 5; // Calculate over last 5 seconds or since start
 
-        // Visual (Handled by EntityRenderer)
+        // Visual
+        this.sprite = new Sprite([
+            0, 0, 1, 1, 1, 1, 0, 0,
+            0, 1, 2, 2, 2, 2, 1, 0,
+            1, 2, 1, 1, 1, 1, 2, 1,
+            1, 2, 1, 0, 0, 1, 2, 1,
+            1, 2, 1, 0, 0, 1, 2, 1,
+            1, 2, 1, 1, 1, 1, 2, 1,
+            0, 1, 2, 2, 2, 2, 1, 0,
+            0, 0, 1, 1, 1, 1, 0, 0
+        ], 8, 8, 6, { 1: '#ffffff', 2: '#ff0000' });
     }
 
     takeDamage(amount) {

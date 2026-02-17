@@ -32,7 +32,13 @@ export class Drone {
 
         // Visual
         // 3x4 pixel drone
-        // Visual (Handled by EntityRenderer)
+        // Visual
+        const palette = (this.owner === 'player') ? { 1: '#00ffff' } : { 1: '#ff00ff' }; // Cyan vs Magenta
+        this.sprite = new Sprite(
+            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            8, 8, 4,
+            palette
+        );
     }
 
     takeDamage(amount) {

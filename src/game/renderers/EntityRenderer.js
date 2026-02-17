@@ -1,6 +1,5 @@
 import { Assets } from '../../Assets.js';
 import { TILE_SIZE, PartsLibrary } from '../../shared/parts/Part.js';
-import { Sprite } from '../../engine/Sprite.js';
 
 export class EntityRenderer {
 
@@ -384,40 +383,10 @@ export class EntityRenderer {
         ctx.restore();
     }
 
-    static getDroneSprite(owner) {
-        if (!EntityRenderer.droneSprites) EntityRenderer.droneSprites = {};
-
-        if (!EntityRenderer.droneSprites[owner]) {
-            const palette = (owner === 'player') ? { 1: '#00ffff' } : { 1: '#ff00ff' };
-            EntityRenderer.droneSprites[owner] = new Sprite(
-                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-                8, 8, 4,
-                palette
-            );
-        }
-        return EntityRenderer.droneSprites[owner];
-    }
-
-    static getDummySprite() {
-        if (!EntityRenderer.dummySprite) {
-            EntityRenderer.dummySprite = new Sprite([
-                0, 0, 1, 1, 1, 1, 0, 0,
-                0, 1, 2, 2, 2, 2, 1, 0,
-                1, 2, 1, 1, 1, 1, 2, 1,
-                1, 2, 1, 0, 0, 1, 2, 1,
-                1, 2, 1, 0, 0, 1, 2, 1,
-                1, 2, 1, 1, 1, 1, 2, 1,
-                0, 1, 2, 2, 2, 2, 1, 0,
-                0, 0, 1, 1, 1, 1, 0, 0
-            ], 8, 8, 6, { 1: '#ffffff', 2: '#ff0000' });
-        }
-        return EntityRenderer.dummySprite;
-    }
-
     static drawDrone(renderer, drone) {
-        const sprite = EntityRenderer.getDroneSprite(drone.owner);
-        if (sprite) {
-             sprite.draw(renderer.ctx, drone.x, drone.y, drone.rotation + Math.PI/2, 0.5, 0.5);
+        // ... (Logic from Drone.js)
+        if (drone.sprite) {
+             drone.sprite.draw(renderer.ctx, drone.x, drone.y, drone.rotation + Math.PI/2, 0.5, 0.5);
         }
     }
 
