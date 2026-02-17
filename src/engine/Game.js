@@ -468,46 +468,65 @@ export class Game {
     }
 
     spawnAsteroidLoot(asteroid) {
-        if (asteroid.type === 'crystal_blue') {
-            const count = 3 + Math.floor(Math.random() * 3);
-            for (let k = 0; k < count; k++) {
-                const ox = asteroid.x + (Math.random() - 0.5) * 20;
-                const oy = asteroid.y + (Math.random() - 0.5) * 20;
-                this.xpOrbs.push(new XPOrb(ox, oy, 10));
+        if (asteroid.type === 'crystal_blue' || asteroid.type === 'crystal_gold') {
+            let count = 0;
+            // Size Category: small, medium, large
+            if (asteroid.sizeCategory === 'large') {
+                count = 5 + Math.floor(Math.random() * 2); // 5-6
+            } else if (asteroid.sizeCategory === 'medium') {
+                count = 3 + Math.floor(Math.random() * 2); // 3-4
+            } else {
+                count = 1 + Math.floor(Math.random() * 2); // 1-2 (Small)
             }
-        } else if (asteroid.type === 'crystal_gold') {
-            const count = 1 + Math.floor(Math.random() * 2);
+
             for (let k = 0; k < count; k++) {
                 const ox = asteroid.x + (Math.random() - 0.5) * 20;
                 const oy = asteroid.y + (Math.random() - 0.5) * 20;
-                this.goldOrbs.push(new GoldOrb(ox, oy, 1));
+
+                if (asteroid.type === 'crystal_blue') {
+                    this.xpOrbs.push(new XPOrb(ox, oy, 10));
+                } else {
+                    this.goldOrbs.push(new GoldOrb(ox, oy, 1));
+                }
             }
         }
         this.audio.play('asteroid_break', { volume: 0.5, randomizePitch: 0.2 });
     }
 
     spawnCrateLoot(crate) {
-        const count = 3 + Math.floor(Math.random() * 3);
-        // Variant 0 (Grey/Cyan) = XP
-        if (crate.variant === 0) {
-            for (let k = 0; k < count; k++) {
-                const ox = crate.x + (Math.random() - 0.5) * 20;
-                const oy = crate.y + (Math.random() - 0.5) * 20;
-                this.xpOrbs.push(new XPOrb(ox, oy, 10));
-            }
-        } else if (crate.variant === 1) {
-            // Variant 1 (Brown/Orange) = Gold Only
-            for (let k = 0; k < count; k++) {
-                const ox = crate.x + (Math.random() - 0.5) * 20;
-                const oy = crate.y + (Math.random() - 0.5) * 20;
-                this.goldOrbs.push(new GoldOrb(ox, oy, 1));
-            }
-        } else if (crate.variant === 2) {
-            // Variant 2 (Green) = HP
+        let count = 0;
+        const totalTiles = crate.wTiles * crate.hTiles;
+
+        // Variant 2 (Green) = HP (Special Logic)
+        if (crate.variant === 2) {
+            if (totalTiles >= 4) count = 3; // Large (2x2)
+            else if (totalTiles >= 2) count = 2; // Medium (1x2)
+            else count = 1; // Small (1x1)
+
             for (let k = 0; k < count; k++) {
                 const ox = crate.x + (Math.random() - 0.5) * 20;
                 const oy = crate.y + (Math.random() - 0.5) * 20;
                 this.hpOrbs.push(new HPOrb(ox, oy, 10));
+            }
+        } else {
+            // Variant 0 (XP) & 1 (Gold)
+            if (totalTiles >= 4) {
+                count = 5 + Math.floor(Math.random() * 2); // 5-6 (Large)
+            } else if (totalTiles >= 2) {
+                count = 3 + Math.floor(Math.random() * 2); // 3-4 (Medium)
+            } else {
+                count = 1 + Math.floor(Math.random() * 2); // 1-2 (Small)
+            }
+
+            for (let k = 0; k < count; k++) {
+                const ox = crate.x + (Math.random() - 0.5) * 20;
+                const oy = crate.y + (Math.random() - 0.5) * 20;
+
+                if (crate.variant === 0) {
+                     this.xpOrbs.push(new XPOrb(ox, oy, 10));
+                } else {
+                     this.goldOrbs.push(new GoldOrb(ox, oy, 1));
+                }
             }
         }
         this.audio.play('crate_break', { volume: 0.5, randomizePitch: 0.2 });
