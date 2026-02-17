@@ -1,40 +1,18 @@
-export class GoldOrb {
+import { BaseOrb } from './BaseOrb.js';
+
+export class GoldOrb extends BaseOrb {
     constructor(x, y, value = 1) {
-        this.x = x;
-        this.y = y;
-        this.value = value;
-        this.isDead = false;
+        super(x, y, value, 6);
 
         // Visual properties
         this.rotation = Math.random() * Math.PI * 2;
         this.color = '#ffd700'; // Gold
-        this.forced = false;
         this.spinSpeed = 8.0;
-        this.radius = 6;
     }
 
     update(dt, playerX, playerY) {
+        if (super.update(dt, playerX, playerY)) return true;
         if (this.isDead) return;
-
-        const dx = playerX - this.x;
-        const dy = playerY - this.y;
-        const distSq = dx * dx + dy * dy;
-        const dist = Math.sqrt(distSq);
-
-        const magnetRange = 300;
-        const collectRange = 40;
-
-        if (dist < collectRange) {
-            this.isDead = true;
-            return true; // Signal collection
-        }
-
-        if (this.forced || dist < magnetRange) {
-            // Stronger pull as it gets closer. If forced, we use a consistent high force.
-            const force = this.forced ? 1500 : (1 - dist / magnetRange) * 1200;
-            this.x += (dx / dist) * force * dt;
-            this.y += (dy / dist) * force * dt;
-        }
 
         this.rotation += dt * this.spinSpeed;
     }

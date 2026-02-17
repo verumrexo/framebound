@@ -24,3 +24,42 @@ congrats, you found the source code for the only space roguelike that won't make
 - **e**: talk to things / open chests
 - **tab**: look at your inventory (hangar)
 - **l**: dev terminal (you probably don't have the PIN anyway 🙄)
+
+## running a server (for you and your friends)
+
+want to host your own galaxy? fine. here's how you do it.
+
+### requirements
+- [Node.js](https://nodejs.org/) (v16+ because we aren't cavemen)
+- a terminal (cmd, bash, powershell, whatever)
+
+### instructions
+1. **clone the repo**: `git clone https://github.com/verumrexo/framebound.git`
+2. **install dependencies**: `npm install`
+3. **start the server**: `npm run server`
+
+the server will start on port `3000` by default. you should see something like:
+`Server running on port 3000`
+
+### connecting
+- **local play**: run `npm run dev` in another terminal. the game will automatically connect to `localhost:3000`.
+
+- **hosting for friends (advanced: port forwarding)**:
+    - forward port `3000` (TCP) on your router to your computer.
+    - friends join via the `direct connect` input in the lobby menu using your public IP (e.g., `ws://123.45.67.89:3000`).
+
+- **hosting for friends (easy: no port forwarding)**:
+    - if you are on a **mobile hotspot**, university wifi, or can't access your router, use a tunnel.
+    - **option 1: localtunnel (easiest)**
+        1. install global: `npm install -g localtunnel`
+        2. start your server: `npm run server`
+        3. in a new terminal, run: `lt --port 3000`
+        4. copy the url (e.g., `https://gorge-ous-ant.loca.lt`).
+        5. friends open the game (on github pages or locally), go to **online lobby**, and paste that url into the **direct connect** box.
+
+    - **option 2: ngrok**
+        1. download [ngrok](https://ngrok.com/).
+        2. run `ngrok http 3000`.
+        3. give the forwarding url to your friends for the **direct connect** box.
+
+- **deployment**: set the `VITE_SERVER_URL` environment variable in your frontend deployment (e.g., Vercel, Netlify) to your server's public URL (e.g., `wss://your-server.com`).
