@@ -43,5 +43,23 @@ the server will start on port `3000` by default. you should see something like:
 
 ### connecting
 - **local play**: run `npm run dev` in another terminal. the game will automatically connect to `localhost:3000`.
-- **hosting for friends**: you'll need to forward port `3000` on your router or use a service like [ngrok](https://ngrok.com/) to expose your local server to the internet.
+
+- **hosting for friends (advanced: port forwarding)**:
+    - forward port `3000` (TCP) on your router to your computer.
+    - friends join via the `direct connect` input in the lobby menu using your public IP (e.g., `ws://123.45.67.89:3000`).
+
+- **hosting for friends (easy: no port forwarding)**:
+    - if you are on a **mobile hotspot**, university wifi, or can't access your router, use a tunnel.
+    - **option 1: localtunnel (easiest)**
+        1. install global: `npm install -g localtunnel`
+        2. start your server: `npm run server`
+        3. in a new terminal, run: `lt --port 3000`
+        4. copy the url (e.g., `https://gorge-ous-ant.loca.lt`).
+        5. friends open the game (on github pages or locally), go to **online lobby**, and paste that url into the **direct connect** box.
+
+    - **option 2: ngrok**
+        1. download [ngrok](https://ngrok.com/).
+        2. run `ngrok http 3000`.
+        3. give the forwarding url to your friends for the **direct connect** box.
+
 - **deployment**: set the `VITE_SERVER_URL` environment variable in your frontend deployment (e.g., Vercel, Netlify) to your server's public URL (e.g., `wss://your-server.com`).
