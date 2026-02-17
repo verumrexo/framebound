@@ -1,15 +1,25 @@
 
 import { LevelGenerator } from '../game/environment/LevelGenerator.js';
-import { Physics } from '../shared/Physics.js';
+import { Ship } from '../shared/entities/Ship.js';
+import { Projectile } from '../shared/entities/Projectile.js';
+import { Collision } from '../shared/CollisionSystem.js';
+import { PartsLibrary } from '../shared/parts/Part.js';
 
 export class GameRoom {
     constructor(id, io, name = "Unknown Sector") {
         this.id = id;
-        this.io = io; // Socket.io Server instance
+        this.io = io;
         this.name = name;
-        this.clients = new Map(); // socket.id -> player object
+        this.clients = new Map(); // socket.id -> { socket, ship, input }
         this.seed = Math.floor(Math.random() * 2147483647);
+
         this.enemies = [];
+        this.projectiles = [];
+        this.asteroids = [];
+        this.lootCrates = [];
+        this.bosses = [];
+        this.shipwrecks = []; // Need to populate if generated
+
         this.running = false;
 
         console.log(`[Room ${this.id}] Created. Seed: ${this.seed}`);
@@ -18,243 +28,342 @@ export class GameRoom {
         this.levelGen = new LevelGenerator();
         this.rooms = this.levelGen.generate(15, this.seed);
 
-        // Spawn Enemies
-        this.spawnEnemies();
+        // Spawn Entities (Enemies, Asteroids, etc.)
+        this.spawnEntities();
 
         // Physics Loop
         this.running = true;
         this.interval = setInterval(() => this.update(), 1000 / 60);
+        this.lastTime = Date.now();
 
-        // Track event handlers to remove them later
-        this.socketHandlers = new Map(); // socket.id -> { event: handler }
+        this.socketHandlers = new Map();
     }
 
-    spawnEnemies() {
+    spawnEntities() {
         const mockGame = {
             enemies: [],
             asteroids: [],
             lootCrates: [],
-            bosses: []
+            bosses: [],
+            shipwrecks: []
         };
 
         this.rooms.forEach(room => {
             try {
-                room.spawnEnemies(mockGame);
+                // We use the room methods to populate our lists
+                // Room.js methods: spawnEnemies(game), spawnAsteroids(game), etc.
+                // These methods push to game.enemies etc.
+                if (room.gridX !== 0 || room.gridY !== 0) {
+                    const asteroidCount = room.spawnAsteroids(mockGame);
+                    room.spawnLootCrates(mockGame, asteroidCount);
+                    room.spawnShipwrecks(mockGame);
+                    room.spawnEnemies(mockGame);
+                }
             } catch (e) {
-                console.warn(`[Room ${this.id}] Failed to spawn in room ${room.gridX},${room.gridY}: ${e.message}`);
+                console.warn(`[Room ${this.id}] Spawn Error: ${e.message}`);
             }
         });
 
-        // Collect all
-        this.rooms.forEach(room => {
-            if (room.enemies) room.enemies.forEach(e => this.enemies.push(e));
-        });
-        mockGame.bosses.forEach(b => this.enemies.push(b));
+        this.enemies = mockGame.enemies;
+        this.asteroids = mockGame.asteroids;
+        this.lootCrates = mockGame.lootCrates;
+        this.bosses = mockGame.bosses;
+        this.shipwrecks = mockGame.shipwrecks;
 
-        console.log(`[Room ${this.id}] Spawning ${this.enemies.length} enemies.`);
+        // Merge bosses into enemies list for general updates?
+        // Or keep separate like Client? Client keeps separate.
+        // But Collision checks often iterate both.
+
+        console.log(`[Room ${this.id}] Spawned: ${this.enemies.length} Enemies, ${this.bosses.length} Bosses, ${this.asteroids.length} Asteroids`);
     }
 
     addPlayer(socket) {
         console.log(`[Room ${this.id}] Player joined: ${socket.id}`);
 
-        // Initialize Player Data
-        const player = {
+        // Create Ship Entity
+        const ship = new Ship();
+        ship.x = 1000; // Spawn point
+        ship.y = 1000;
+
+        const client = {
             id: socket.id,
             socket: socket,
-            x: 0, y: 0,
-            vx: 0, vy: 0,
-            rotation: 0,
-            parts: [],
-            input: {},
-            hp: 100,
-            maxHp: 100
+            ship: ship,
+            input: {}
         };
-        this.clients.set(socket.id, player);
+        this.clients.set(socket.id, client);
 
-        // Join Socket Room
         socket.join(this.id);
 
-        // Send Init Packet
+        // Send Init
         const deadEnemyIds = this.enemies.filter(e => e.isDead).map(e => e.id);
         socket.emit('init', {
             id: socket.id,
             seed: this.seed,
             deadEnemies: deadEnemyIds,
-            roomId: this.id
+            roomId: this.id,
+            x: ship.x,
+            y: ship.y
         });
 
-        // Setup Handlers
         this.setupSocketHandlers(socket);
     }
 
     removePlayer(socket) {
-        const socketId = socket.id;
-        console.log(`[Room ${this.id}] Player left: ${socketId}`);
-
-        if (this.clients.has(socketId)) {
-            this.clients.delete(socketId);
+        if (this.clients.has(socket.id)) {
+            this.clients.delete(socket.id);
             socket.leave(this.id);
-            this.io.to(this.id).emit('player_leave', { id: socketId });
-        }
-
-        // Cleanup Listeners
-        if (this.socketHandlers.has(socketId)) {
-            const handlers = this.socketHandlers.get(socketId);
-            for (const [event, handler] of Object.entries(handlers)) {
-                socket.off(event, handler);
-            }
-            this.socketHandlers.delete(socketId);
+            this.io.to(this.id).emit('player_leave', { id: socket.id });
         }
     }
 
     setupSocketHandlers(socket) {
-        const handlers = {};
-
-        handlers['join_game'] = (data) => {
-            const player = this.clients.get(socket.id);
-            if (player) {
-                player.parts = data.parts || [];
-
-                // Broadcast to ROOM
-                socket.to(this.id).emit('player_join', {
-                    id: socket.id,
-                    parts: player.parts
-                });
-
-                // Send existing players in ROOM to new player
-                const existingPlayers = Array.from(this.clients.values())
-                    .filter(p => p.id !== socket.id && p.parts)
-                    .map(p => ({
-                        id: p.id,
-                        x: p.x,
-                        y: p.y,
-                        rotation: p.rotation,
-                        parts: p.parts
-                    }));
-
-                socket.emit('players_list', existingPlayers);
+        socket.on('player_input', (inputState) => {
+            const client = this.clients.get(socket.id);
+            if (client) {
+                client.input = inputState;
+                // If client sends rotation, update ship immediately or let update() handle it via input?
+                // Ship.update() handles rotation lerp towards input.aimAngle.
+                // But client might send 'rotation' directly if it's authoritative on mouse angle.
+                // Let's assume inputState has { up, down..., aimAngle, rotation }
+                // We'll store it and let Ship.update use it.
             }
-        };
+        });
 
-        handlers['player_input'] = (inputState) => {
-             const player = this.clients.get(socket.id);
-             if (player) {
-                 player.x = inputState.x;
-                 player.y = inputState.y;
-                 player.rotation = inputState.rotation;
-                 player.input = inputState;
+        socket.on('player_shoot', (data) => {
+            // data: { partId, x, y, angle }
+            // Authoritative Shooting: We assume client checked cooldown visually,
+            // but we SHOULD verify cooldown here.
+            // For now, trust client trigger, but spawn projectile on server.
+            const client = this.clients.get(socket.id);
+            if (!client) return;
 
-                 socket.to(this.id).emit('player_update', {
-                     id: socket.id,
-                     x: player.x,
-                     y: player.y,
-                     rotation: player.rotation,
-                     input: inputState
-                 });
-             }
-        };
+            const def = PartsLibrary[data.partId];
+            if (def) {
+                // Spawn Projectile
+                // Logic mirrored from Game.js spawnProjectile
+                const speed = def.stats.projectileSpeed || 600; // Simplified
+                // Note: Missing rocket speed mult logic from ship stats here
 
-        handlers['player_shoot'] = (data) => {
-            this.io.to(this.id).emit('player_shoot', {
-                id: socket.id,
-                ...data
-            });
-        };
+                const p = new Projectile(data.x, data.y, data.angle, def.stats.projectileType || 'bullet', speed, 'player', def.stats.damage || 10, def.stats.lifetime);
 
-        handlers['enemy_hit'] = (data) => {
-            socket.to(this.id).emit('enemy_hit', data);
+                if (def.stats.projectileType === 'railgun' || def.stats.projectileType === 'beam_freeze') p.isBeam = true;
 
-             const enemy = this.enemies.find(e => e.id === data.id);
-             if (enemy) {
-                 enemy.takeDamage(data.damage);
-                 if (data.killed && !enemy.isDead) {
-                     enemy.hp = 0;
-                     enemy.isDead = true;
+                // Add to list
+                this.projectiles.push(p);
+
+                // Broadcast shoot event so other clients see it/hear it
+                socket.to(this.id).emit('player_shoot', { id: socket.id, ...data });
+            }
+        });
+
+        socket.on('join_game', (data) => {
+             const client = this.clients.get(socket.id);
+             if (client && data.parts) {
+                 // Reconstruct ship parts
+                 client.ship.parts.clear();
+                 for (const p of data.parts) {
+                     client.ship.addPart(p.x, p.y, p.partId, p.rotation);
                  }
+                 client.ship.recalculateStats();
+
+                 // Broadcast appearance
+                 socket.to(this.id).emit('player_join', {
+                     id: socket.id,
+                     parts: data.parts
+                 });
+
+                 // Send existing players
+                 const others = [];
+                 for (const [oid, oc] of this.clients) {
+                     if (oid === socket.id) continue;
+                     const oparts = [];
+                     for (const p of oc.ship.getUniqueParts()) {
+                         oparts.push({ x: p.x, y: p.y, partId: p.partId, rotation: p.rotation });
+                     }
+                     others.push({
+                         id: oid,
+                         x: oc.ship.x,
+                         y: oc.ship.y,
+                         rotation: oc.ship.rotation,
+                         parts: oparts
+                     });
+                 }
+                 socket.emit('players_list', others);
              }
-        };
-
-        handlers['update_state'] = (data) => {
-            const player = this.clients.get(socket.id);
-            if (player) {
-                player.x = data.x;
-                player.y = data.y;
-                player.rotation = data.rotation;
-                socket.to(this.id).emit('player_update', {
-                    id: socket.id,
-                     x: data.x,
-                     y: data.y,
-                     rotation: data.rotation
-                });
-            }
-        };
-
-        // Bind and store
-        for (const [event, handler] of Object.entries(handlers)) {
-            socket.on(event, handler);
-        }
-        this.socketHandlers.set(socket.id, handlers);
+        });
     }
 
     update() {
         if (!this.running) return;
-        const DT = 1 / 60;
+        const now = Date.now();
+        const dt = (now - this.lastTime) / 1000;
+        this.lastTime = now;
 
-        // Physics Loop
-        this.clients.forEach(player => {
-            if (!player.input) return;
-            Physics.update(player, player.input, DT);
-        });
+        // 1. Update Players
+        const playerSnapshots = [];
+        for (const client of this.clients.values()) {
+            // Apply Input
+            client.ship.update(dt, client.input);
 
-        // Snapshot (Lightweight)
-        const snapshot = [];
-        this.clients.forEach(p => {
-            snapshot.push({
-                id: p.id,
-                x: Math.round(p.x),
-                y: Math.round(p.y),
-                rotation: parseFloat(p.rotation.toFixed(2)),
-                input: p.input,
-                hp: p.hp,
-                maxHp: p.maxHp
-            });
-        });
+            // Wall Collision & Room Constraints
+            const room = this.levelGen.getRoomAtWorldPos(client.ship.x, client.ship.y);
+            if (room) {
+                // Determine if room is locked (enemies alive in this room)
+                // Optimization: Room could cache "cleared" status on server
+                // For now, check alive enemies in room bounds
+                // Note: this.enemies contains ALL enemies.
+                let isLocked = false;
+                if (room.gridX !== 0 || room.gridY !== 0) { // Start room never locked
+                    // Simple check: Is there any enemy in this room?
+                    // Ideally we track room.enemies list on server, but we flattened it to this.enemies.
+                    // We can check room bounds.
+                    const hasEnemies = this.enemies.some(e => !e.isDead && room.contains(e.x, e.y));
+                    const hasBosses = this.bosses.some(b => !b.isDead && room.contains(b.x, b.y));
+                    if (hasEnemies || hasBosses) isLocked = true;
+                }
 
-        if (snapshot.length > 0) {
-            this.io.to(this.id).emit('world_update', snapshot);
-        }
+                const margin = 30; // buffer from wall
 
-        // Enemy Logic
-        const allPlayers = Array.from(this.clients.values());
-        const enemyUpdates = [];
-        const generatedProjectiles = [];
+                if (isLocked) {
+                    // Strict Lockdown (Cannot exit room)
+                    if (client.ship.x < room.x + margin) { client.ship.x = room.x + margin; client.ship.vx = 0; }
+                    else if (client.ship.x > room.x + room.width - margin) { client.ship.x = room.x + room.width - margin; client.ship.vx = 0; }
 
-        this.enemies.forEach(enemy => {
-            if (enemy.isDead) return;
+                    if (client.ship.y < room.y + margin) { client.ship.y = room.y + margin; client.ship.vy = 0; }
+                    else if (client.ship.y > room.y + room.height - margin) { client.ship.y = room.y + room.height - margin; client.ship.vy = 0; }
+                } else {
+                    // World Bounds Check (Cannot flow into void)
+                    // Check Left
+                    if (client.ship.x < room.x + margin) {
+                        const neighbor = this.levelGen.getRoomAtWorldPos(room.x - 10, client.ship.y);
+                        if (!neighbor) { client.ship.x = room.x + margin; client.ship.vx = 0; }
+                    }
+                    // Check Right
+                    else if (client.ship.x > room.x + room.width - margin) {
+                        const neighbor = this.levelGen.getRoomAtWorldPos(room.x + room.width + 10, client.ship.y);
+                        if (!neighbor) { client.ship.x = room.x + room.width - margin; client.ship.vx = 0; }
+                    }
 
-            let nearestPlayer = null;
-            let minDistSq = Infinity;
-
-            if (allPlayers.length > 0) {
-                for (const p of allPlayers) {
-                    const dx = p.x - enemy.x;
-                    const dy = p.y - enemy.y;
-                    const dSq = dx * dx + dy * dy;
-                    if (dSq < minDistSq) {
-                        minDistSq = dSq;
-                        nearestPlayer = p;
+                    // Check Top
+                    if (client.ship.y < room.y + margin) {
+                        const neighbor = this.levelGen.getRoomAtWorldPos(client.ship.x, room.y - 10);
+                        if (!neighbor) { client.ship.y = room.y + margin; client.ship.vy = 0; }
+                    }
+                    // Check Bottom
+                    else if (client.ship.y > room.y + room.height - margin) {
+                        const neighbor = this.levelGen.getRoomAtWorldPos(client.ship.x, room.y + room.height + 10);
+                        if (!neighbor) { client.ship.y = room.y + room.height - margin; client.ship.vy = 0; }
                     }
                 }
             }
 
-            try {
-                if (nearestPlayer) {
-                    enemy.update(DT, nearestPlayer.x, nearestPlayer.y, generatedProjectiles, [], [], this.enemies);
-                } else {
-                    enemy.update(DT, undefined, undefined, generatedProjectiles, [], [], this.enemies);
+            playerSnapshots.push({
+                id: client.id,
+                x: Math.round(client.ship.x),
+                y: Math.round(client.ship.y),
+                rotation: parseFloat(client.ship.rotation.toFixed(2)),
+                hp: client.ship.hp,
+                maxHp: client.ship.maxHp,
+                input: client.input // Echo input for prediction correction?
+            });
+        }
+
+        // 2. Update Projectiles & Collisions
+        for (let i = this.projectiles.length - 1; i >= 0; i--) {
+            const p = this.projectiles[i];
+
+            // Mock 'game' object for update(dt, game) if needed by homing missiles
+            // We need a way to pass enemies list
+            const gameContext = { enemies: this.enemies, bosses: this.bosses };
+            p.update(dt, gameContext);
+
+            if (p.owner === 'player') {
+                // Vs Enemies
+                for (const enemy of this.enemies) {
+                    if (enemy.isDead) continue;
+                    // Simple collision check (Radius based for server perf)
+                    const distSq = (p.x - enemy.x)**2 + (p.y - enemy.y)**2;
+                    const hitDist = (p.radius || 4) + (enemy.radius || 20);
+                    if (distSq < hitDist * hitDist) {
+                        enemy.takeDamage(p.damage, p.type);
+                        if (!p.isBeam) p.isDead = true;
+
+                        // Notify clients of hit?
+                        // They usually predict it.
+                        // But for health sync, we send enemy updates.
+                    }
                 }
-            } catch (e) {
-                 // console.error(`[Room ${this.id}] Enemy Update Error: ${e.message}`);
+                // Vs Bosses
+                for (const boss of this.bosses) {
+                    if (boss.isDead) continue;
+                    const distSq = (p.x - boss.x)**2 + (p.y - boss.y)**2;
+                    const hitDist = (p.radius || 4) + (boss.radius || 60);
+                    if (distSq < hitDist * hitDist) {
+                        boss.takeDamage(p.damage, p.type);
+                        if (!p.isBeam) p.isDead = true;
+                    }
+                }
+            } else {
+                // Enemy Projectile vs Players
+                for (const client of this.clients.values()) {
+                    if (client.ship.isDead) continue;
+                    // Precise check using Ship.checkCollision
+                    const col = client.ship.checkCollision(client.ship.x, client.ship.y, client.ship.rotation, p.x, p.y, p.radius || 4, p.isBeam, { angle: p.angle, length: p.beamLength });
+                    if (col.hit) {
+                        if (!col.blocked) {
+                            client.ship.takeDamage(p.damage);
+                        }
+                        if (!p.isBeam) p.isDead = true;
+                    }
+                }
+            }
+
+            if (p.isDead || p.life <= 0) {
+                this.projectiles.splice(i, 1);
+            }
+        }
+
+        // 3. Update Enemies
+        const enemyUpdates = [];
+        const enemyShoots = [];
+
+        for (const enemy of this.enemies) {
+            if (enemy.isDead) continue;
+
+            // Find nearest player
+            let nearest = null;
+            let minDist = Infinity;
+            for (const client of this.clients.values()) {
+                if (client.ship.isDead) continue;
+                const d = (client.ship.x - enemy.x)**2 + (client.ship.y - enemy.y)**2;
+                if (d < minDist) {
+                    minDist = d;
+                    nearest = client.ship;
+                }
+            }
+
+            if (nearest) {
+                // Pass a mock 'projectiles' array to capture shots
+                const generatedShots = [];
+                enemy.update(dt, nearest.x, nearest.y, generatedShots, this.asteroids, this.lootCrates, this.enemies);
+
+                // Handle generated shots
+                for (const shot of generatedShots) {
+                    // shot is Projectile instance
+                    this.projectiles.push(shot);
+                    enemyShoots.push({
+                        x: Math.round(shot.x),
+                        y: Math.round(shot.y),
+                        angle: parseFloat(shot.angle.toFixed(4)),
+                        type: shot.type,
+                        speed: Math.round(Math.hypot(shot.vx, shot.vy)),
+                        damage: shot.damage
+                    });
+                }
+            } else {
+                // Idle update
+                enemy.update(dt, undefined, undefined, [], this.asteroids, this.lootCrates, this.enemies);
             }
 
             enemyUpdates.push({
@@ -264,35 +373,23 @@ export class GameRoom {
                 r: parseFloat(enemy.rotation.toFixed(2)),
                 hp: enemy.hp
             });
-        });
+        }
 
+        // 4. Broadcast
+        if (playerSnapshots.length > 0) {
+            this.io.to(this.id).emit('world_update', playerSnapshots);
+        }
         if (enemyUpdates.length > 0) {
             this.io.to(this.id).emit('enemy_update', enemyUpdates);
         }
-
-        if (generatedProjectiles.length > 0) {
-            generatedProjectiles.forEach(p => {
-                 const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
-                 this.io.to(this.id).emit('enemy_shoot', {
-                    x: Math.round(p.x),
-                    y: Math.round(p.y),
-                    angle: parseFloat(p.angle.toFixed(4)),
-                    type: p.type,
-                    speed: Math.round(speed),
-                    damage: p.damage
-                 });
-            });
+        if (enemyShoots.length > 0) {
+            this.io.to(this.id).emit('enemy_shoots', enemyShoots);
         }
     }
 
     destroy() {
         this.running = false;
         clearInterval(this.interval);
-
-        // Kick all players?
-        // this.clients.forEach(p => p.socket.disconnect());
-
-        console.log(`[Room ${this.id}] Destroyed.`);
     }
 
     getPlayerCount() {

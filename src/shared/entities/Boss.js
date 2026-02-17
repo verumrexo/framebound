@@ -333,8 +333,4 @@ export class Boss extends Enemy {
     }
 
     // Override Draw to add HP Bar
-    draw(renderer) {
-        // Standard Enemy Draw (Parts, Effects, and Standard HP Bar)
-        super.draw(renderer);
-    }
 }

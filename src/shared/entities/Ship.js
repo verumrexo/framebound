@@ -1,9 +1,14 @@
 import { PartsLibrary, PartType, TILE_SIZE } from '../parts/Part.js';
-import { Collision } from '../systems/CollisionSystem.js';
-import { Assets } from '../../Assets.js';
+import { Collision } from '../CollisionSystem.js';
 
 export class Ship {
     constructor() {
+        this.x = 0;
+        this.y = 0;
+        this.vx = 0;
+        this.vy = 0;
+        this.rotation = 0;
+
         this.parts = new Map(); // key: "x,y", value: PartInstance
         this.stats = {
             totalHp: 0,
@@ -15,7 +20,8 @@ export class Ship {
             rocketCount: 0,
             velocityCount: 0,
             rocketBayCount: 0,
-            boosterCount: 0
+            boosterCount: 0,
+            turnSpeed: 0
         };
 
         // Permanent Upgrades (Level Up System)
@@ -33,6 +39,13 @@ export class Ship {
         this.maxHp = 0;
         this.isDead = false;
 
+        // Dash State
+        this.dashCooldown = 0;
+        this.dashMaxCooldown = 10;
+        this.dashActiveTimer = 0;
+        this.dashDuration = 1.5;
+        this.dashPower = 4000;
+
         // Default Loadout (Core at 0,0) - Orientation Fixed
         this.addPart(0, 0, 'core');
         this.addPart(0, -1, 'rocketle', 1); // Front (Up) - Rot 1
@@ -43,132 +56,130 @@ export class Ship {
         this.hp = this.maxHp;
     }
 
-    draw(renderer, x, y, rotation, targetX, targetY) {
+    update(dt, input) {
         if (this.isDead) return;
 
-        const ctx = renderer.ctx;
-        const CELL_STRIDE = TILE_SIZE;
+        // --- Dash Logic ---
+        const boosterCount = this.stats.boosterCount || 0;
+        if (this.dashCooldown > 0) {
+            this.dashCooldown -= dt;
+        }
 
-        const shipCos = Math.cos(rotation);
-        const shipSin = Math.sin(rotation);
+        // Input handling for Dash
+        // Server receives 'shift' flag
+        if (boosterCount > 0 && input && input.shift && this.dashCooldown <= 0) {
+            const actualMaxCooldown = Math.max(1.0, this.dashMaxCooldown / boosterCount);
+            this.dashActiveTimer = this.dashDuration;
+            this.dashCooldown = actualMaxCooldown;
+            // Event hook for sound could be returned or emitted
+        }
 
-        for (const partRef of this.getUniqueParts()) {
-            const def = PartsLibrary[partRef.partId];
-            if (!def) continue;
+        if (this.dashActiveTimer > 0) {
+            this.dashActiveTimer -= dt;
+        }
 
-            const isRotated = ((partRef.rotation || 0) % 2 !== 0);
-            const w = isRotated ? def.height : def.width;
-            const h = isRotated ? def.width : def.height;
+        // --- Movement Physics ---
+        // Base Stats
+        const perm = this.permanentStats;
+        const baseThrust = (this.stats.thrust !== undefined) ? this.stats.thrust : 0;
+        const thrustMultiplier = 1 + (baseThrust * 0.05);
 
-            const localCX = (partRef.x + (w - 1) / 2) * CELL_STRIDE;
-            const localCY = (partRef.y + (h - 1) / 2) * CELL_STRIDE;
+        // Combat Boost (Logic requires knowing room state - usually handled by Game/Room)
+        // For pure shared entity, we might accept an 'environmentBoost' param?
+        // Or assume standard 1.0 for now to keep it simple.
+        const combatBoost = 1.0;
+        const levelBonus = 1.0; // Pass level?
 
-            const worldPartX = x + (localCX * shipCos - localCY * shipSin);
-            const worldPartY = y + (localCX * shipSin + localCY * shipCos);
+        const currentAccel = 2500 * thrustMultiplier * levelBonus * combatBoost * (perm.speedMul || 1.0);
 
-            if (def.type === 'weapon') {
-                // Draw base
-                if (def.baseSprite) {
-                    def.baseSprite.draw(ctx, worldPartX, worldPartY, rotation + (partRef.rotation || 0) * (Math.PI / 2), 0.5, 0.5);
-                } else if ((w === 1 && h === 2) || (w === 2 && h === 1)) {
-                    // Long Hull (1x2)
-                    if (Assets.LongHull) Assets.LongHull.draw(ctx, worldPartX, worldPartY, rotation + (partRef.rotation || 0) * (Math.PI / 2), 0.5, 0.5);
-                } else {
-                    // Standard Base
-                    if (Assets.PlayerBase) Assets.PlayerBase.draw(ctx, worldPartX, worldPartY, rotation, 0.5, 0.5);
-                }
+        // Max VELOCITY
+        let maxSpeed = 150 * thrustMultiplier * levelBonus * combatBoost * (perm.speedMul || 1.0);
+        if (this.dashActiveTimer > 0) {
+            maxSpeed *= 2.5;
+        }
 
-                // Draw turret (aimed at target)
-                const angle = Math.atan2(targetY - worldPartY, targetX - worldPartX);
-                const baseAngle = rotation + (partRef.rotation || 0) * (Math.PI / 2);
+        let ax = 0;
+        let ay = 0;
 
-                let offsetX = 0;
-                let offsetY = 0;
+        if (input) {
+            if (input.up) ay = -1;
+            if (input.down) ay = 1;
+            if (input.left) ax = -1;
+            if (input.right) ax = 1;
 
-                // Turret Offset Logic
-                if (def.turretDrawOffset) {
-                    if (typeof def.turretDrawOffset === 'object') {
-                        const ox = def.turretDrawOffset.x || 0;
-                        const oy = def.turretDrawOffset.y || 0;
-                        offsetX = Math.cos(baseAngle) * ox - Math.sin(baseAngle) * oy;
-                        offsetY = Math.sin(baseAngle) * ox + Math.cos(baseAngle) * oy;
-                    } else {
-                        offsetX = Math.cos(angle) * def.turretDrawOffset;
-                        offsetY = Math.sin(angle) * def.turretDrawOffset;
-                    }
-                }
+            // Analog support (if provided)
+            if (input.analogX !== undefined) ax = input.analogX;
+            if (input.analogY !== undefined) ay = input.analogY;
+        }
 
-                if (partRef.recoil) {
-                    offsetX -= Math.cos(angle) * partRef.recoil;
-                    offsetY -= Math.sin(angle) * partRef.recoil;
-                }
-
-                if (def.baseSprite && (def.baseSprite.anchorX !== 0.5 || def.baseSprite.anchorY !== 0.5)) {
-                    const bpx = (def.baseSprite.anchorX - 0.5) * def.baseSprite.width * def.baseSprite.scale;
-                    const bpy = (def.baseSprite.anchorY - 0.5) * def.baseSprite.height * def.baseSprite.scale;
-                    offsetX += Math.cos(baseAngle) * bpx - Math.sin(baseAngle) * bpy;
-                    offsetY += Math.sin(baseAngle) * bpx + Math.cos(baseAngle) * bpy;
-                }
-
-                const drawX = worldPartX + offsetX;
-                const drawY = worldPartY + offsetY;
-
-                def.sprite.draw(ctx, drawX, drawY, angle + (def.rotationOffset || 0), null, null, 'rgba(255,255,255,0.4)');
-
-                // Charge Effect (Railway/Saber)
-                if ((partRef.chargeLeft > 0 || partRef.chargeReady) && (def.stats.projectileType === 'railgun' || def.stats.projectileType === 'saber')) {
-                    const pct = partRef.chargeReady ? 1.0 : (1.0 - (partRef.chargeLeft / def.stats.chargeTime));
-                    let barrelLen = (h > 1.5) ? CELL_STRIDE * 1.3 : CELL_STRIDE * 0.6;
-                    barrelLen += (def.turretDrawOffset || 0);
-                    const tipX = worldPartX + Math.cos(angle) * barrelLen;
-                    const tipY = worldPartY + Math.sin(angle) * barrelLen;
-
-                    const isSaber = def.stats.projectileType === 'saber';
-                    const baseRadius = isSaber ? 5 : 15;
-                    const radius = 5 + pct * baseRadius + Math.sin(Date.now() * 0.01) * 2;
-                    ctx.save();
-                    ctx.globalAlpha = 0.5 + Math.random() * 0.3;
-                    renderer.drawCircle(tipX, tipY, radius, '#00ffff'); // Helper from Renderer? No, Renderer has drawCircle but ctx is raw.
-                    // Renderer.drawCircle uses ctx.arc
-                    ctx.beginPath();
-                    ctx.arc(tipX, tipY, radius, 0, Math.PI * 2);
-                    ctx.fillStyle = '#00ffff';
-                    ctx.fill();
-
-                    ctx.globalAlpha = 0.8;
-                    ctx.beginPath();
-                    ctx.arc(tipX, tipY, radius * 0.5, 0, Math.PI * 2);
-                    ctx.fillStyle = '#ffffff';
-                    ctx.fill();
-                    ctx.restore();
-                }
-            } else {
-                // Static Part
-                def.sprite.draw(ctx, worldPartX, worldPartY, rotation + (partRef.rotation || 0) * (Math.PI / 2), 0.5, 0.5);
-
-                // Shield
-                if (def.type === 'shield' && (!partRef.shieldCooldown || partRef.shieldCooldown <= 0)) {
-                    const pulse = 1.0 + Math.sin(Date.now() * 0.005) * 0.1;
-                    const scale = def.stats.shieldRadiusScale || 1.4;
-                    const radius = (CELL_STRIDE / 2) * scale * pulse;
-
-                    ctx.save();
-                    ctx.fillStyle = 'rgba(0, 200, 255, 0.15)';
-                    ctx.strokeStyle = 'rgba(0, 255, 255, 0.4)';
-                    ctx.lineWidth = 2;
-                    ctx.beginPath();
-                    ctx.arc(worldPartX, worldPartY, radius, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.stroke();
-                    ctx.restore();
-                }
+        // Normalize
+        if (ax !== 0 || ay !== 0) {
+            const len = Math.sqrt(ax * ax + ay * ay);
+            if (len > 1) {
+                ax /= len;
+                ay /= len;
             }
+        }
 
-            // Core Effect (spinning energy core)
-            if (def.id === 'core' && def.coreEffectSprite) {
-                // Use modulo to avoid floating point precision issues with large Date.now() values
-                const spin = rotation + ((Date.now() % 10000) * 0.003);
-                def.coreEffectSprite.draw(ctx, worldPartX, worldPartY, spin);
+        // Apply Acceleration
+        if (ax !== 0 || ay !== 0) {
+            this.vx += ax * currentAccel * dt;
+            this.vy += ay * currentAccel * dt;
+        }
+
+        // Apply Dash Force
+        if (this.dashActiveTimer > 0) {
+            const angle = this.rotation - Math.PI / 2;
+            this.vx += Math.cos(angle) * this.dashPower * dt;
+            this.vy += Math.sin(angle) * this.dashPower * dt;
+        }
+
+        // Friction
+        const friction = (ax === 0 && ay === 0) ? 0.92 : 0.96;
+        this.vx *= friction;
+        this.vy *= friction;
+
+        // Speed Cap
+        const vSq = this.vx * this.vx + this.vy * this.vy;
+        if (vSq > maxSpeed * maxSpeed) {
+            const vLen = Math.sqrt(vSq);
+            this.vx = (this.vx / vLen) * maxSpeed;
+            this.vy = (this.vy / vLen) * maxSpeed;
+        }
+
+        this.x += this.vx * dt;
+        this.y += this.vy * dt;
+
+        // --- Rotation Logic ---
+        let targetRotation = null;
+
+        // Aim Angle from input
+        if (input && input.aimAngle !== undefined) {
+            targetRotation = input.aimAngle;
+        } else {
+            // Fallback: Move direction if fast enough
+            const speed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+            if (speed > 50) {
+                targetRotation = Math.atan2(this.vy, this.vx) + Math.PI / 2;
+            }
+        }
+
+        if (targetRotation !== null) {
+            let diff = targetRotation - this.rotation;
+            while (diff < -Math.PI) diff += Math.PI * 2;
+            while (diff > Math.PI) diff -= Math.PI * 2;
+
+            const baseTurnRate = 5.0;
+            const currentMass = this.stats.totalMass || 5;
+            let turnRate = (Math.max(0.5, baseTurnRate * (5 / currentMass)) + (this.stats.turnSpeed || 0));
+            turnRate *= (perm.turnMul || 1.0);
+
+            const maxStep = turnRate * dt;
+
+            if (Math.abs(diff) > maxStep) {
+                this.rotation += Math.sign(diff) * maxStep;
+            } else {
+                this.rotation = targetRotation;
             }
         }
     }
@@ -367,7 +378,7 @@ export class Ship {
 
     /**
      * Checks if a point/circle/beam hits any part of the ship
-     * @param {number} sx - Ship X
+     * @param {number} sx - Ship X (Now uses this.x if not provided, but CollisionSystem passes it)
      * @param {number} sy - Ship Y
      * @param {number} sRot - Ship Rotation
      * @param {number} ox - Object X (Projectile/Collider)
@@ -378,6 +389,11 @@ export class Ship {
      * @returns {{ hit: boolean, blocked: boolean, damage: number, shieldHit: boolean, worldX: number, worldY: number }}
      */
     checkCollision(sx, sy, sRot, ox, oy, radius, isBeam = false, beamProps = {}) {
+        // Fallback if called without ship coords (using internal state)
+        if (sx === undefined) sx = this.x;
+        if (sy === undefined) sy = this.y;
+        if (sRot === undefined) sRot = this.rotation;
+
         const CELL_STRIDE = TILE_SIZE;
         const shipCos = Math.cos(sRot);
         const shipSin = Math.sin(sRot);

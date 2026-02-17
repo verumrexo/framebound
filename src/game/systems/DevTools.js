@@ -1,13 +1,13 @@
-import { Asteroid } from '../entities/Asteroid.js';
-import { LootCrate } from '../entities/LootCrate.js';
-import { XPOrb } from '../entities/XPOrb.js';
-import { GoldOrb } from '../entities/GoldOrb.js';
-import { TrainingDummy } from '../entities/TrainingDummy.js';
-import { Boss } from '../entities/Boss.js';
-import { Enemy } from '../entities/Enemy.js';
-import { TreasureChest } from '../entities/TreasureChest.js';
-import { PartsLibrary } from '../parts/Part.js';
-import { Shipwreck } from '../entities/Shipwreck.js';
+import { Asteroid } from '../shared/entities/Asteroid.js';
+import { LootCrate } from '../shared/entities/LootCrate.js';
+import { XPOrb } from '../shared/entities/XPOrb.js';
+import { GoldOrb } from '../shared/entities/GoldOrb.js';
+import { TrainingDummy } from '../shared/entities/TrainingDummy.js';
+import { Boss } from '../shared/entities/Boss.js';
+import { Enemy } from '../shared/entities/Enemy.js';
+import { TreasureChest } from '../shared/entities/TreasureChest.js';
+import { PartsLibrary } from '../../shared/parts/Part.js';
+import { Shipwreck } from '../shared/entities/Shipwreck.js';
 
 export class DevTools {
     constructor(game) {
