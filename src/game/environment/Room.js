@@ -233,7 +233,14 @@ export class Room {
             let type = 'basic';
             const r = this.random();
 
-            if (floor >= 4) {
+            if (floor >= 5) {
+                if (r < 0.1) type = 'hive_carrier';
+                else if (r < 0.2) type = 'rocketeer';
+                else if (r < 0.4) type = 'sniper';
+                else if (r < 0.6) type = 'circler';
+                else if (r < 0.9) type = 'striker';
+                else type = 'basic';
+            } else if (floor >= 4) {
                 if (r < 0.1) type = 'rocketeer';
                 else if (r < 0.3) type = 'sniper';
                 else if (r < 0.5) type = 'circler';
