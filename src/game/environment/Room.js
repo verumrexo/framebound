@@ -1,8 +1,8 @@
-import { Enemy } from '../entities/Enemy.js';
-import { Boss } from '../entities/Boss.js';
-import { Asteroid } from '../entities/Asteroid.js';
-import { LootCrate } from '../entities/LootCrate.js';
-import { Shipwreck } from '../entities/Shipwreck.js';
+import { Enemy } from '../../shared/entities/Enemy.js';
+import { Boss } from '../../shared/entities/Boss.js';
+import { Asteroid } from '../../shared/entities/Asteroid.js';
+import { LootCrate } from '../../shared/entities/LootCrate.js';
+import { Shipwreck } from '../../shared/entities/Shipwreck.js';
 import { RoomType } from './RoomType.js';
 
 export class Room {
@@ -88,8 +88,8 @@ export class Room {
         if (this.shopItems) return; // Already generated
 
         // Import ShopItem and parts synchronously
-        import('../entities/ShopItem.js').then(({ ShopItem }) => {
-            import('../parts/Part.js').then(({ PartsLibrary: PL }) => {
+        import('../../shared/entities/ShopItem.js').then(({ ShopItem }) => {
+            import('../../shared/parts/Part.js').then(({ PartsLibrary: PL }) => {
                 const allParts = [];
                 for (const id of Object.keys(PL)) {
                     if (id !== 'core') allParts.push({ id, def: PL[id] });

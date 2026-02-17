@@ -1,6 +1,5 @@
 import { PartsLibrary } from '../parts/Part.js';
 import { TILE_SIZE } from '../parts/PartDefinitions.js';
-import { Assets } from '../../Assets.js';
 
 export class ItemPickup {
     constructor(x, y, partId, randomGen = null) {
@@ -55,36 +54,4 @@ export class ItemPickup {
         this.y += this.vy * dt;
     }
 
-    draw(renderer) {
-        const ctx = renderer.ctx;
-        const CELL = TILE_SIZE; // 24
-
-        const bob = Math.sin(this.life * 5 + this.bobOffset) * 4;
-
-        ctx.save();
-        ctx.translate(this.x, this.y + bob);
-
-        // Glow
-        ctx.shadowColor = '#ffff00';
-        // ctx.shadowBlur = 10;
-
-        // Draw Part Sprite Scaled
-        if (this.def) {
-            // Scale down slightly to look like a "drop"
-            const scale = 0.6;
-            ctx.scale(scale, scale);
-
-            if (this.def.baseSprite) {
-                this.def.baseSprite.draw(ctx, 0, 0, 0);
-            } else {
-                if (this.def.sprite) this.def.sprite.draw(ctx, 0, 0, 0);
-            }
-        } else {
-            // Fallback
-            ctx.fillStyle = '#ff00ff';
-            ctx.fillRect(-6, -6, 12, 12);
-        }
-
-        ctx.restore();
-    }
 }

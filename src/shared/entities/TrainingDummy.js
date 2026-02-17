@@ -1,4 +1,3 @@
-import { Sprite } from '../../engine/Sprite.js';
 import { TILE_SIZE } from '../parts/PartDefinitions.js';
 
 export class TrainingDummy {
@@ -21,17 +20,7 @@ export class TrainingDummy {
         this.currentDps = 0;
         this.dpsWindow = 5; // Calculate over last 5 seconds or since start
 
-        // Visual
-        this.sprite = new Sprite([
-            0, 0, 1, 1, 1, 1, 0, 0,
-            0, 1, 2, 2, 2, 2, 1, 0,
-            1, 2, 1, 1, 1, 1, 2, 1,
-            1, 2, 1, 0, 0, 1, 2, 1,
-            1, 2, 1, 0, 0, 1, 2, 1,
-            1, 2, 1, 1, 1, 1, 2, 1,
-            0, 1, 2, 2, 2, 2, 1, 0,
-            0, 0, 1, 1, 1, 1, 0, 0
-        ], 8, 8, 6, { 1: '#ffffff', 2: '#ff0000' });
+        // Visual (Handled by EntityRenderer)
     }
 
     takeDamage(amount) {
@@ -81,19 +70,4 @@ export class TrainingDummy {
         return { hit: false };
     }
 
-    draw(renderer) {
-        this.sprite.draw(renderer.ctx, this.x, this.y, this.rotation);
-
-        // UI
-        renderer.ctx.fillStyle = '#fff';
-        renderer.ctx.font = "12px 'Press Start 2P'";
-        renderer.ctx.textAlign = 'center';
-        renderer.ctx.fillText(`training dummy`, this.x, this.y - (this.radius + 30));
-
-        renderer.ctx.fillStyle = '#0f0';
-        renderer.ctx.font = "24px 'Press Start 2P'";
-        renderer.ctx.fillText(`${this.currentDps} dps`, this.x, this.y - (this.radius + 5));
-
-        renderer.ctx.textAlign = 'start'; // Reset
-    }
 }

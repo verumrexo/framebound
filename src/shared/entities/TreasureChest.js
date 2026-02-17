@@ -1,5 +1,4 @@
 import { PartsLibrary, TILE_SIZE } from '../parts/Part.js';
-import { Assets } from '../../Assets.js';
 
 export class TreasureChest {
     constructor(x, y, randomGen = null) {
@@ -20,34 +19,6 @@ export class TreasureChest {
         this.life += dt;
     }
 
-    draw(renderer) {
-        if (this.opened) return;
-
-        const ctx = renderer.ctx;
-        const bobY = this.y + Math.sin(this.life * 1.5 + this.bobOffset) * 8;
-
-        ctx.save();
-        ctx.translate(this.x, bobY);
-
-        // Glow effect
-        ctx.shadowBlur = 25;
-        ctx.shadowColor = '#ffd700';
-
-        // Draw the chest sprite
-        if (this.sprite) {
-            this.sprite.draw(ctx, 0, 0, this.rotation);
-        } else {
-            // Fallback if sprite not found
-            ctx.fillStyle = '#ffd700';
-            ctx.fillRect(-30, -30, 60, 60);
-            ctx.strokeStyle = '#8b4513';
-            ctx.lineWidth = 3;
-            ctx.strokeRect(-30, -30, 60, 60);
-        }
-
-        ctx.shadowBlur = 0;
-        ctx.restore();
-    }
 
     drawTooltip(renderer, canOpen) {
         if (this.opened) return;

@@ -1,5 +1,5 @@
 import { Assets } from '../../Assets.js';
-import { PartsLibrary, TILE_SIZE } from '../parts/Part.js';
+import { PartsLibrary, TILE_SIZE } from '../../shared/parts/Part.js';
 
 export class Hangar {
     constructor(game) {

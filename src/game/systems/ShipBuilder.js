@@ -1,6 +1,6 @@
 import { Assets } from '../../Assets.js';
-import { PartsLibrary, TILE_SIZE } from '../parts/Part.js';
-import { Ship } from '../entities/Ship.js';
+import { PartsLibrary, TILE_SIZE } from '../../shared/parts/Part.js';
+import { Ship } from '../shared/entities/Ship.js';
 import { Hangar } from './Hangar.js';
 
 export class ShipBuilder {

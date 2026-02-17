@@ -1,6 +1,6 @@
 
-import { Projectile } from '../entities/Projectile.js';
-import { PartsLibrary, TILE_SIZE } from '../parts/Part.js';
+import { Projectile } from '../shared/entities/Projectile.js';
+import { PartsLibrary, TILE_SIZE } from '../../shared/parts/Part.js';
 
 export class WeaponSystem {
     constructor() {

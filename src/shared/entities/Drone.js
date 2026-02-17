@@ -1,4 +1,3 @@
-import { Sprite } from "../../engine/Sprite.js";
 import { Projectile } from "./Projectile.js";
 
 export class Drone {
@@ -33,13 +32,7 @@ export class Drone {
 
         // Visual
         // 3x4 pixel drone
-        // Visual
-        const palette = (this.owner === 'player') ? { 1: '#00ffff' } : { 1: '#ff00ff' }; // Cyan vs Magenta
-        this.sprite = new Sprite(
-            [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-            8, 8, 4,
-            palette
-        );
+        // Visual (Handled by EntityRenderer)
     }
 
     takeDamage(amount) {
@@ -263,15 +256,4 @@ export class Drone {
         game.audio.play('shoot_dart', { volume: 0.3, pitch: 1.5 });
     }
 
-    draw(renderer) {
-        // Debug: Log once per second
-        if (!this.lastDebug || Date.now() - this.lastDebug > 1000) {
-            this.lastDebug = Date.now();
-            console.log(`[Drone] Draw at ${Math.round(this.x)}, ${Math.round(this.y)} Rotation: ${this.rotation} Owner: ${this.owner} `);
-        }
-
-        // Draw relative to camera handled by renderer if we pass world coords
-        // Sprite draw takes x,y
-        this.sprite.draw(renderer.ctx, this.x, this.y, this.rotation + Math.PI / 2, 0.5, 0.5);
-    }
 }
