@@ -19,6 +19,7 @@ export class Shipwreck {
         // Generate random wreckage using Boss logic
         this.generate();
 
+        this.radius = 400; // Radius for spatial partitioning
         this.itemsDropped = 0;
         this.maxItems = 2 + Math.floor(this.random() * 2); // 2 to 3 items max
     }

@@ -41,6 +41,7 @@ import { Collision } from '../game/systems/CollisionSystem.js';
 import { Biomes, getRandomBiome } from '../game/environment/Biomes.js';
 import { NetworkManager } from './NetworkManager.js';
 import { Physics } from '../shared/Physics.js';
+import { SpatialHash } from '../game/systems/SpatialHash.js';
 
 export class Game {
     constructor(canvas) {
@@ -235,6 +236,7 @@ export class Game {
 
         // Multiplayer
         this.network = this.networkManager;
+        this.spatialHash = new SpatialHash(200);
     }
 
     startOffline(seed, isLoad = false) {
@@ -512,244 +514,324 @@ export class Game {
     }
 
     updateProjectiles(dt) {
+        // Rebuild Spatial Hash
+        this.spatialHash.clear();
+        for (const enemy of this.enemies) this.spatialHash.add(enemy);
+        for (const boss of this.bosses) this.spatialHash.add(boss);
+        for (const wreck of this.shipwrecks) this.spatialHash.add(wreck);
+        for (const asteroid of this.asteroids) this.spatialHash.add(asteroid);
+        for (const crate of this.lootCrates) this.spatialHash.add(crate);
+        for (const drone of this.drones) this.spatialHash.add(drone);
+
         // Update Projectiles
         for (let i = this.projectiles.length - 1; i >= 0; i--) {
             const p = this.projectiles[i];
             p.update(dt, this);
 
+            // Query Candidates
+            let candidates;
+            if (p.isBeam) {
+                // Approximate AABB for beam
+                const bx = p.x + Math.cos(p.angle) * p.beamLength;
+                const by = p.y + Math.sin(p.angle) * p.beamLength;
+                const minX = Math.min(p.x, bx) - 50; // Padding
+                const maxX = Math.max(p.x, bx) + 50;
+                const minY = Math.min(p.y, by) - 50;
+                const maxY = Math.max(p.y, by) + 50;
+                candidates = this.spatialHash.queryAABB(minX, minY, maxX, maxY);
+            } else {
+                candidates = this.spatialHash.query(p.x, p.y, p.radius || 10);
+            }
+
             if (p.owner === 'player') {
                 if (!p.isVisualOnly) { // High-rate visual beams don't do collision
-                    // Enemy Collision
-                    for (const enemy of this.enemies) {
-                        if (enemy.isDead) continue;
 
-                        // Check shields first (non-beam projectiles only)
-                        if (!p.isBeam) {
-                            const shieldResult = enemy.checkShieldHit(p.x, p.y);
-                            if (shieldResult.hit) {
-                                p.isDead = true;
-                                if (p.type === 'rocket' || p.type === 'mini_grenade' || p.type === 'cluster_grenade') p.shouldExplode = true;
-                                this.audio.play('shield_hit', { volume: 0.5, pitch: 1.2 });
-                                // Spawn shield hit effect
-                                this.spawnExplosion(shieldResult.shieldX, shieldResult.shieldY, 15, 0.3, '#00ffff');
-                                continue; // Skip body collision for this enemy
-                            }
-                        }
+                    // Iterate Candidates
+                    for (const entity of candidates) {
+                        if (!p.isBeam && p.isDead) break;
 
-                        if (p.isBeam) {
-                            if (Collision.beamCircle(p.x, p.y, p.angle, p.beamLength, p.radius || 10, enemy.x, enemy.y, enemy.radius || 20)) {
-                                const now = Date.now();
-                                const lastHit = p.targetHits.get(enemy) || 0;
-                                if (now - lastHit > 100) {
-                                    enemy.takeDamage(p.damage, p.type);
-                                    this.spawnDamageNumber(enemy.x, enemy.y, p.damage);
-                                    p.targetHits.set(enemy, now);
-                                    const isFreeze = p.type === 'beam_freeze';
-                                    const hitVol = isFreeze ? 0.05 : 0.3;
-                                    this.audio.play('hit', { volume: hitVol, pitch: 1.3, randomizePitch: 0.1, isSpammy: isFreeze });
+                        // Boss Collision (Must check before Enemy because Boss extends Enemy)
+                        if (entity instanceof Boss) {
+                            const boss = entity;
+                            if (boss.isDead) continue;
+                            if (p.isBeam) {
+                                if (Collision.beamCircle(p.x, p.y, p.angle, p.beamLength, p.radius || 10, boss.x, boss.y, boss.radius || 60)) {
+                                    const now = Date.now();
+                                    const lastHit = p.targetHits.get(boss) || 0;
+                                    if (now - lastHit > 100) {
+                                        boss.takeDamage(p.damage, p.type);
+                                        this.spawnDamageNumber(boss.x, boss.y, p.damage);
+                                        p.targetHits.set(boss, now);
+                                        const isFreeze = p.type === 'beam_freeze';
+                                        const hitVol = isFreeze ? 0.08 : 0.4;
+                                        this.audio.play('hit', { volume: hitVol, pitch: 0.7, isSpammy: isFreeze });
+                                    }
                                 }
-                            }
-                        } else {
-                            // Per-part collision check
-                            const hitResult = enemy.checkPartHit(p.x, p.y, p.radius || 4);
-                            if (hitResult.hit) {
-                                enemy.takeDamage(p.damage, p.type);
-                                this.spawnDamageNumber(p.x, p.y, p.damage);
-                                this.audio.play('hit', { volume: 0.5, pitch: 1.3, randomizePitch: 0.1 });
-                                p.isDead = true;
-                                if (p.type === 'rocket' || p.type === 'mini_grenade' || p.type === 'cluster_grenade') p.shouldExplode = true;
-                            }
-                        }
-                    }
-
-                    // Boss Collision
-                    for (const boss of this.bosses) {
-                        if (boss.isDead) continue;
-                        if (p.isBeam) {
-                            if (Collision.beamCircle(p.x, p.y, p.angle, p.beamLength, p.radius || 10, boss.x, boss.y, boss.radius || 60)) {
-                                const now = Date.now();
-                                const lastHit = p.targetHits.get(boss) || 0;
-                                if (now - lastHit > 100) {
-                                    boss.takeDamage(p.damage, p.type);
-                                    this.spawnDamageNumber(boss.x, boss.y, p.damage);
-                                    p.targetHits.set(boss, now);
-                                    const isFreeze = p.type === 'beam_freeze';
-                                    const hitVol = isFreeze ? 0.08 : 0.4;
-                                    this.audio.play('hit', { volume: hitVol, pitch: 0.7, isSpammy: isFreeze });
-                                }
-                            }
-                        } else {
-                            // Check Boss Shields
-                            const shieldResult = boss.checkShieldHit(p.x, p.y);
-                            if (shieldResult.hit) {
-                                this.audio.play('shield_hit', { volume: 0.8, pitch: 0.8 });
-                                p.isDead = true;
-                                if (p.type === 'rocket') p.shouldExplode = true;
-                                break;
-                            }
-
-                            const hitResult = boss.checkPartHit(p.x, p.y, p.radius || 4);
-                            if (hitResult.hit) {
-                                boss.takeDamage(p.damage, p.type);
-                                this.spawnDamageNumber(p.x, p.y, p.damage);
-                                this.audio.play('hit', { volume: 0.8, pitch: 0.8 });
-                                p.isDead = true;
-                                if (p.type === 'rocket') p.shouldExplode = true;
-                                break;
-                            }
-                        }
-                    }
-
-                    // Shipwreck Collision
-                    for (let j = this.shipwrecks.length - 1; j >= 0; j--) {
-                        const wreck = this.shipwrecks[j];
-                        if (wreck.isDead) continue;
-                        const dx = p.x - wreck.x;
-                        const dy = p.y - wreck.y;
-                        if (dx * dx + dy * dy > 400 * 400) continue;
-
-                        if (p.isBeam) {
-                            // Beam vs Wreck parts
-                            if (Collision.beamCircle(p.x, p.y, p.angle, p.beamLength, p.radius || 10, wreck.x, wreck.y, wreck.radius || 60)) {
-                                const now = Date.now();
-                                const lastHit = p.targetHits.get(wreck) || 0;
-                                if (now - lastHit > 100) {
-                                    const hitResult = wreck.takeDamage(p.damage, wreck.x, wreck.y);
-                                    p.targetHits.set(wreck, now);
-                                    const isFreeze = p.type === 'beam_freeze';
-                                    this.audio.play('hit', { volume: isFreeze ? 0.05 : 0.3, pitch: 0.8, isSpammy: isFreeze });
-                                    if (hitResult && hitResult.destroyed && hitResult.shouldDrop) {
-                                        this.itemPickups.push(new ItemPickup(hitResult.x, hitResult.y, hitResult.partId));
-                                        this.audio.play('explosion', { volume: 0.4, pitch: 1.2 });
+                            } else {
+                                // Check Boss Shields
+                                const shieldResult = boss.checkShieldHit(p.x, p.y);
+                                if (shieldResult.hit) {
+                                    this.audio.play('shield_hit', { volume: 0.8, pitch: 0.8 });
+                                    p.isDead = true;
+                                    if (p.type === 'rocket') p.shouldExplode = true;
+                                    // break; // Can't break loop in shared candidates loop unless we want to stop ALL collision for this proj
+                                } else {
+                                    const hitResult = boss.checkPartHit(p.x, p.y, p.radius || 4);
+                                    if (hitResult.hit) {
+                                        boss.takeDamage(p.damage, p.type);
+                                        this.spawnDamageNumber(p.x, p.y, p.damage);
+                                        this.audio.play('hit', { volume: 0.8, pitch: 0.8 });
+                                        p.isDead = true;
+                                        if (p.type === 'rocket') p.shouldExplode = true;
                                     }
                                 }
                             }
-                        } else {
-                            const hitResult = wreck.takeDamage(p.damage, p.x, p.y);
-                            if (hitResult && hitResult.destroyed !== undefined) {
-                                p.isDead = true;
-                                if (p.type === 'rocket') p.shouldExplode = true;
-                                this.audio.play('hit', { volume: 0.4, pitch: 0.8 });
-                                if (hitResult.destroyed && hitResult.shouldDrop) {
-                                    this.itemPickups.push(new ItemPickup(hitResult.x, hitResult.y, hitResult.partId));
-                                    this.audio.play('explosion', { volume: 0.4, pitch: 1.2 });
-                                } else if (hitResult.destroyed) {
-                                    this.audio.play('explosion', { volume: 0.3, pitch: 1.5 });
+                        }
+
+                        // Enemy Collision
+                        else if (entity instanceof Enemy) {
+                            const enemy = entity;
+                            if (enemy.isDead) continue;
+
+                            // Check shields first (non-beam projectiles only)
+                            if (!p.isBeam) {
+                                const shieldResult = enemy.checkShieldHit(p.x, p.y);
+                                if (shieldResult.hit) {
+                                    p.isDead = true;
+                                    if (p.type === 'rocket' || p.type === 'mini_grenade' || p.type === 'cluster_grenade') p.shouldExplode = true;
+                                    this.audio.play('shield_hit', { volume: 0.5, pitch: 1.2 });
+                                    // Spawn shield hit effect
+                                    this.spawnExplosion(shieldResult.shieldX, shieldResult.shieldY, 15, 0.3, '#00ffff');
+                                    continue; // Skip body collision for this enemy
+                                }
+                            }
+
+                            if (p.isBeam) {
+                                if (Collision.beamCircle(p.x, p.y, p.angle, p.beamLength, p.radius || 10, enemy.x, enemy.y, enemy.radius || 20)) {
+                                    const now = Date.now();
+                                    const lastHit = p.targetHits.get(enemy) || 0;
+                                    if (now - lastHit > 100) {
+                                        enemy.takeDamage(p.damage, p.type);
+                                        this.spawnDamageNumber(enemy.x, enemy.y, p.damage);
+                                        p.targetHits.set(enemy, now);
+                                        const isFreeze = p.type === 'beam_freeze';
+                                        const hitVol = isFreeze ? 0.05 : 0.3;
+                                        this.audio.play('hit', { volume: hitVol, pitch: 1.3, randomizePitch: 0.1, isSpammy: isFreeze });
+                                    }
+                                }
+                            } else {
+                                // Per-part collision check
+                                const hitResult = enemy.checkPartHit(p.x, p.y, p.radius || 4);
+                                if (hitResult.hit) {
+                                    enemy.takeDamage(p.damage, p.type);
+                                    this.spawnDamageNumber(p.x, p.y, p.damage);
+                                    this.audio.play('hit', { volume: 0.5, pitch: 1.3, randomizePitch: 0.1 });
+                                    p.isDead = true;
+                                    if (p.type === 'rocket' || p.type === 'mini_grenade' || p.type === 'cluster_grenade') p.shouldExplode = true;
                                 }
                             }
                         }
-                        if (wreck.isDead) this.shipwrecks.splice(j, 1);
-                    }
 
-                    // Asteroid Collision
-                    for (const asteroid of this.asteroids) {
-                        if (asteroid.isDead || asteroid.isBroken) continue;
-                        if (p.isBeam) {
-                            if (Collision.beamCircle(p.x, p.y, p.angle, p.beamLength, p.radius || 10, asteroid.x, asteroid.y, asteroid.radius)) {
-                                const now = Date.now();
-                                const lastHit = p.targetHits.get(asteroid) || 0;
-                                if (now - lastHit > 100) {
+                        // Shipwreck Collision
+                        else if (entity instanceof Shipwreck) {
+                            const wreck = entity;
+                            if (wreck.isDead) continue;
+                            // Pre-check dist
+                            const dx = p.x - wreck.x;
+                            const dy = p.y - wreck.y;
+                            if (dx * dx + dy * dy > 400 * 400) continue;
+
+                            if (p.isBeam) {
+                                // Beam vs Wreck parts
+                                if (Collision.beamCircle(p.x, p.y, p.angle, p.beamLength, p.radius || 10, wreck.x, wreck.y, wreck.radius || 60)) {
+                                    const now = Date.now();
+                                    const lastHit = p.targetHits.get(wreck) || 0;
+                                    if (now - lastHit > 100) {
+                                        const hitResult = wreck.takeDamage(p.damage, wreck.x, wreck.y);
+                                        p.targetHits.set(wreck, now);
+                                        const isFreeze = p.type === 'beam_freeze';
+                                        this.audio.play('hit', { volume: isFreeze ? 0.05 : 0.3, pitch: 0.8, isSpammy: isFreeze });
+                                        if (hitResult && hitResult.destroyed && hitResult.shouldDrop) {
+                                            this.itemPickups.push(new ItemPickup(hitResult.x, hitResult.y, hitResult.partId));
+                                            this.audio.play('explosion', { volume: 0.4, pitch: 1.2 });
+                                        }
+                                    }
+                                }
+                            } else {
+                                const hitResult = wreck.takeDamage(p.damage, p.x, p.y);
+                                if (hitResult && hitResult.destroyed !== undefined) {
+                                    p.isDead = true;
+                                    if (p.type === 'rocket') p.shouldExplode = true;
+                                    this.audio.play('hit', { volume: 0.4, pitch: 0.8 });
+                                    if (hitResult.destroyed && hitResult.shouldDrop) {
+                                        this.itemPickups.push(new ItemPickup(hitResult.x, hitResult.y, hitResult.partId));
+                                        this.audio.play('explosion', { volume: 0.4, pitch: 1.2 });
+                                    } else if (hitResult.destroyed) {
+                                        this.audio.play('explosion', { volume: 0.3, pitch: 1.5 });
+                                    }
+                                }
+                            }
+                            if (wreck.isDead) {
+                                // Remove from array, but it's fine since we are iterating a Set snapshot/array snapshot
+                                const idx = this.shipwrecks.indexOf(wreck);
+                                if (idx > -1) this.shipwrecks.splice(idx, 1);
+                            }
+                        }
+
+                        // Asteroid Collision
+                        else if (entity instanceof Asteroid) {
+                            const asteroid = entity;
+                            if (asteroid.isDead || asteroid.isBroken) continue;
+                            if (p.isBeam) {
+                                if (Collision.beamCircle(p.x, p.y, p.angle, p.beamLength, p.radius || 10, asteroid.x, asteroid.y, asteroid.radius)) {
+                                    const now = Date.now();
+                                    const lastHit = p.targetHits.get(asteroid) || 0;
+                                    if (now - lastHit > 100) {
+                                        if (asteroid.takeDamage(p.damage)) this.spawnAsteroidLoot(asteroid);
+                                        p.targetHits.set(asteroid, now);
+                                        const isFreeze = p.type === 'beam_freeze';
+                                        const hitVol = isFreeze ? 0.05 : 0.3;
+                                        this.audio.play('hit', { volume: hitVol, pitch: 0.5, isSpammy: isFreeze });
+                                    }
+                                }
+                            } else {
+                                const dx = asteroid.x - p.x;
+                                const dy = p.y - asteroid.y;
+                                const distSq = dx * dx + dy * dy;
+                                const minDist = (p.radius || 4) + asteroid.radius;
+                                if (distSq < minDist * minDist) {
                                     if (asteroid.takeDamage(p.damage)) this.spawnAsteroidLoot(asteroid);
-                                    p.targetHits.set(asteroid, now);
-                                    const isFreeze = p.type === 'beam_freeze';
-                                    const hitVol = isFreeze ? 0.05 : 0.3;
-                                    this.audio.play('hit', { volume: hitVol, pitch: 0.5, isSpammy: isFreeze });
+                                    p.isDead = true;
+                                    if (p.type === 'rocket') p.shouldExplode = true;
+                                    this.audio.play('hit', { volume: 0.4, pitch: 0.5 });
                                 }
                             }
-                        } else {
-                            const dx = asteroid.x - p.x;
-                            const dy = p.y - asteroid.y;
-                            const distSq = dx * dx + dy * dy;
-                            const minDist = (p.radius || 4) + asteroid.radius;
-                            if (distSq < minDist * minDist) {
-                                if (asteroid.takeDamage(p.damage)) this.spawnAsteroidLoot(asteroid);
-                                p.isDead = true;
-                                if (p.type === 'rocket') p.shouldExplode = true;
-                                this.audio.play('hit', { volume: 0.4, pitch: 0.5 });
-                            }
                         }
-                    }
 
-                    // Loot Crate Collision
-                    for (const crate of this.lootCrates) {
-                        if (crate.isOpened) continue;
-                        if (p.isBeam) {
-                            if (Collision.beamCircle(p.x, p.y, p.angle, p.beamLength, p.radius || 10, crate.x, crate.y, crate.radius)) {
-                                const now = Date.now();
-                                const lastHit = p.targetHits.get(crate) || 0;
-                                if (now - lastHit > 100) {
+                        // Loot Crate Collision
+                        else if (entity instanceof LootCrate) {
+                            const crate = entity;
+                            if (crate.isOpened) continue;
+                            if (p.isBeam) {
+                                if (Collision.beamCircle(p.x, p.y, p.angle, p.beamLength, p.radius || 10, crate.x, crate.y, crate.radius)) {
+                                    const now = Date.now();
+                                    const lastHit = p.targetHits.get(crate) || 0;
+                                    if (now - lastHit > 100) {
+                                        if (crate.takeDamage(p.damage)) this.spawnCrateLoot(crate);
+                                        p.targetHits.set(crate, now);
+                                        const isFreeze = p.type === 'beam_freeze';
+                                        const hitVol = isFreeze ? 0.05 : 0.3;
+                                        this.audio.play('hit', { volume: hitVol, pitch: 1.2, isSpammy: isFreeze });
+                                    }
+                                }
+                            } else {
+                                const dx = crate.x - p.x;
+                                const dy = crate.y - p.y;
+                                const distSq = dx * dx + dy * dy;
+                                const minDist = (p.radius || 4) + crate.radius;
+                                if (distSq < minDist * minDist) {
                                     if (crate.takeDamage(p.damage)) this.spawnCrateLoot(crate);
-                                    p.targetHits.set(crate, now);
-                                    const isFreeze = p.type === 'beam_freeze';
-                                    const hitVol = isFreeze ? 0.05 : 0.3;
-                                    this.audio.play('hit', { volume: hitVol, pitch: 1.2, isSpammy: isFreeze });
+                                    else crate.rotSpeed += (Math.random() - 0.5) * 3;
+                                    p.isDead = true;
+                                    if (p.type === 'rocket') p.shouldExplode = true;
+                                    this.audio.play('hit', { volume: 0.3, pitch: 1.2 });
                                 }
-                            }
-                        } else {
-                            const dx = crate.x - p.x;
-                            const dy = crate.y - p.y;
-                            const distSq = dx * dx + dy * dy;
-                            const minDist = (p.radius || 4) + crate.radius;
-                            if (distSq < minDist * minDist) {
-                                if (crate.takeDamage(p.damage)) this.spawnCrateLoot(crate);
-                                else crate.rotSpeed += (Math.random() - 0.5) * 3;
-                                p.isDead = true;
-                                if (p.type === 'rocket') p.shouldExplode = true;
-                                this.audio.play('hit', { volume: 0.3, pitch: 1.2 });
                             }
                         }
-                    }
 
-                    // Player projectile hitting Enemy Drones
-                    for (const drone of this.drones) {
-                        if (drone.isDead || drone.owner !== 'enemy') continue;
-                        if (p.isBeam) {
-                            if (Collision.beamCircle(p.x, p.y, p.angle, p.beamLength, p.radius || 10, drone.x, drone.y, drone.radius || 8)) {
-                                const now = Date.now();
-                                const lastHit = p.targetHits.get(drone) || 0;
-                                if (now - lastHit > 100) {
-                                    drone.takeDamage(p.damage);
-                                    p.targetHits.set(drone, now);
-                                    const isFreeze = p.type === 'beam_freeze';
-                                    this.audio.play('hit', { volume: isFreeze ? 0.1 : 0.3, pitch: 1.5, isSpammy: isFreeze });
+                        // Player projectile hitting Enemy Drones
+                        else if (entity instanceof Drone) {
+                            const drone = entity;
+                            if (drone.isDead || drone.owner !== 'enemy') continue;
+                            if (p.isBeam) {
+                                if (Collision.beamCircle(p.x, p.y, p.angle, p.beamLength, p.radius || 10, drone.x, drone.y, drone.radius || 8)) {
+                                    const now = Date.now();
+                                    const lastHit = p.targetHits.get(drone) || 0;
+                                    if (now - lastHit > 100) {
+                                        drone.takeDamage(p.damage);
+                                        p.targetHits.set(drone, now);
+                                        const isFreeze = p.type === 'beam_freeze';
+                                        this.audio.play('hit', { volume: isFreeze ? 0.1 : 0.3, pitch: 1.5, isSpammy: isFreeze });
+                                    }
                                 }
-                            }
-                        } else {
-                            const dx = drone.x - p.x;
-                            const dy = drone.y - p.y;
-                            const distSq = dx * dx + dy * dy;
-                            const minDist = (p.radius || 4) + (drone.radius || 8);
-                            if (distSq < minDist * minDist) {
-                                drone.takeDamage(p.damage);
-                                p.isDead = true;
-                                if (p.type === 'rocket' || p.type === 'mini_grenade' || p.type === 'cluster_grenade') p.shouldExplode = true;
-                                this.audio.play('hit', { volume: 0.3, pitch: 1.5 });
-                                break;
+                            } else {
+                                const dx = drone.x - p.x;
+                                const dy = drone.y - p.y;
+                                const distSq = dx * dx + dy * dy;
+                                const minDist = (p.radius || 4) + (drone.radius || 8);
+                                if (distSq < minDist * minDist) {
+                                    drone.takeDamage(p.damage);
+                                    p.isDead = true;
+                                    if (p.type === 'rocket' || p.type === 'mini_grenade' || p.type === 'cluster_grenade') p.shouldExplode = true;
+                                    this.audio.play('hit', { volume: 0.3, pitch: 1.5 });
+                                    // break;
+                                }
                             }
                         }
                     }
                 }
             } else {
                 let hitResult = false;
-                // Enemy projectile hitting Drones
-                for (const drone of this.drones) {
-                    if (drone.isDead) continue;
-                    const dx = drone.x - p.x;
-                    const dy = drone.y - p.y;
-                    const distSq = dx * dx + dy * dy;
-                    const minDist = (drone.radius || 8) + (p.radius || 4);
+                // Enemy projectile collision
 
-                    if (distSq < minDist * minDist) {
-                        drone.takeDamage(p.damage);
-                        p.isDead = true;
-                        if (p.type === 'rocket' || p.type === 'mini_grenade' || p.type === 'cluster_grenade') p.shouldExplode = true;
-                        hitResult = false; // Projectile consumed by drone
-                        this.audio.play('hit', { volume: 0.2, pitch: 1.8 });
-                        break; // One projectile hits one drone
+                // Iterate Candidates for Enemy Projectiles
+                for (const entity of candidates) {
+
+                    // Enemy projectile hitting Drones
+                    if (entity instanceof Drone) {
+                        const drone = entity;
+                        if (drone.isDead) continue;
+                        const dx = drone.x - p.x;
+                        const dy = drone.y - p.y;
+                        const distSq = dx * dx + dy * dy;
+                        const minDist = (drone.radius || 8) + (p.radius || 4);
+
+                        if (distSq < minDist * minDist) {
+                            drone.takeDamage(p.damage);
+                            p.isDead = true;
+                            if (p.type === 'rocket' || p.type === 'mini_grenade' || p.type === 'cluster_grenade') p.shouldExplode = true;
+                            hitResult = false; // Projectile consumed by drone
+                            this.audio.play('hit', { volume: 0.2, pitch: 1.8 });
+                            break; // One projectile hits one drone, stop checking other candidates
+                        }
+                    }
+
+                    // Enemy projectile vs Asteroids
+                    else if (entity instanceof Asteroid) {
+                        const asteroid = entity;
+                        if (asteroid.isDead || asteroid.isBroken) continue;
+                        const dx = asteroid.x - p.x;
+                        const dy = asteroid.y - p.y;
+                        const distSq = dx * dx + dy * dy;
+                        const minDist = (p.radius || 4) + asteroid.radius;
+                        if (distSq < minDist * minDist) {
+                            if (asteroid.takeDamage(p.damage || 5)) {
+                                this.spawnAsteroidLoot(asteroid);
+                            }
+                            p.isDead = true;
+                            break;
+                        }
+                    }
+
+                    // Enemy projectile vs Loot Crates
+                    else if (entity instanceof LootCrate) {
+                        const crate = entity;
+                        if (crate.isOpened) continue;
+                        const dx = crate.x - p.x;
+                        const dy = crate.y - p.y;
+                        const distSq = dx * dx + dy * dy;
+                        const minDist = (p.radius || 4) + crate.radius;
+                        if (distSq < minDist * minDist) {
+                            if (crate.takeDamage(p.damage || 5)) {
+                                this.spawnCrateLoot(crate);
+                            }
+                            p.isDead = true;
+                            break;
+                        }
                     }
                 }
 
-                if (!p.isDead) {
+                if (!p.isDead) { // WRAPPED: Removed 'continue' that skipped cleanup
                     // Enemy projectile hitting player (using sophisticated part collision)
                     hitResult = false; // Reset for player check
                     const CELL_STRIDE = TILE_SIZE;
