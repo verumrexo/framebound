@@ -10,6 +10,7 @@ export const CHANGELOG = [
         name: 'System: Authority',
         date: new Date().toISOString().split('T')[0],
         items: [
+            "TEST: Implemented unit tests for CollisionSystem logic",
             "CONTENT: Added 'Hive Carrier' enemy type to Floor 5+ spawn pool (Vault Ambush)",
             "VAULT: Scaling costs (1.5x/floor) and enemy variety (Floor 2: Circler, 3: Sniper, 4: Rocketeer)",
             "BALANCE: Loot drops (XP, Gold, HP) now scale with asteroid and crate size (larger = more loot)",
