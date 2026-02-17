@@ -42,6 +42,7 @@ import { Biomes, getRandomBiome } from '../game/environment/Biomes.js';
 import { NetworkManager } from './NetworkManager.js';
 import { Physics } from '../shared/Physics.js';
 import { SpatialHash } from '../game/systems/SpatialHash.js';
+import { ModuleHUD } from '../game/ui/ModuleHUD.js';
 
 export class Game {
     constructor(canvas) {
@@ -237,6 +238,7 @@ export class Game {
         // Multiplayer
         this.network = this.networkManager;
         this.spatialHash = new SpatialHash(200);
+        this.moduleHUD = new ModuleHUD(this);
     }
 
     startOffline(seed, isLoad = false) {
@@ -1378,6 +1380,7 @@ export class Game {
             const actualMaxCooldown = Math.max(1.0, this.dashMaxCooldown / boosterCount);
             this.dashActiveTimer = this.dashDuration;
             this.dashCooldown = actualMaxCooldown;
+            this.dashTotalCooldown = actualMaxCooldown;
             this.showNotification("dash system pulse", "#00ffff");
             this.audio.play('dash', { volume: 0.7 });
         }
@@ -2334,6 +2337,7 @@ export class Game {
                                 if (!partRef.shieldCooldown || partRef.shieldCooldown <= 0) {
                                     // BLOCK!
                                     partRef.shieldCooldown = def.stats.shieldCooldown || 3.0;
+                                    partRef.maxShieldCooldown = partRef.shieldCooldown;
                                     this.audio.play('shield_hit', { volume: 0.8 }); // Assuming sound exists or standard hit
                                     if (!this.audio.sounds.shield_hit) this.audio.play('hit', { pitch: 1.5 }); // Fallback
 
@@ -3769,6 +3773,10 @@ export class Game {
             this.renderer.ctx.font = "20px 'Press Start 2P'";
             this.renderer.ctx.fillText("press r to restart", this.renderer.width / 2, this.renderer.height / 2 + 60);
             this.renderer.ctx.textAlign = 'left';
+        }
+
+        if (this.moduleHUD) {
+            this.moduleHUD.draw(this.renderer);
         }
 
         // --- TOOLTIP LOGIC ---
