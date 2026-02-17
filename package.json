@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "server": "node src/server/server.js",
+    "test": "node test/CollisionSystem.test.js"
     "test": "node --test"
     "test": "node tests/CollisionSystem.test.js"
     "test": "node src/tests/prepare.js && node --experimental-test-module-mocks --test src/**/*.test.js src/game/**/*.test.js",
