@@ -11,6 +11,8 @@ export const CHANGELOG = [
         date: new Date().toISOString().split('T')[0],
         items: [
             "PERF: Implemented Spatial Hash for O(P*E) -> O(P) collision detection (~20x faster)",
+            "FIX: Expose game instance to window to fix DevTools/MainMenu UI interactions",
+            "PERF: Optimized audio engine to skip processing for silent sounds (volume < 0.001), significantly reducing CPU overhead when muted.",
             "REFACTOR: Consolidated Orb update logic into BaseOrb class",
             "TEST: Added unit tests for Biomes system (getRandomBiome validation)",
             "REFACTOR: Player creation is now strictly server-authoritative (fixes double-spawn)",
