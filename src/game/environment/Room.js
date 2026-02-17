@@ -141,7 +141,7 @@ export class Room {
     spawnTreasureChests(game) {
         if (this.treasureChests) return; // Already spawned
 
-        import('../entities/TreasureChest.js').then(({ TreasureChest }) => {
+        import('../../shared/entities/TreasureChest.js').then(({ TreasureChest }) => {
             // Spawn 1-2 chests
             const chestCount = 1 + Math.floor(this.random() * 2);
             const centerX = this.x + this.width / 2;
@@ -171,7 +171,7 @@ export class Room {
         const goldCost = Math.floor(100 * costMultiplier);
         const hpCost = Math.floor(50 * costMultiplier);
 
-        import('../entities/VaultChest.js').then(({ VaultChest }) => {
+        import('../../shared/entities/VaultChest.js').then(({ VaultChest }) => {
             const centerX = this.x + this.width / 2;
             const centerY = this.y + this.height / 2;
             const spacing = 200;
