@@ -33,7 +33,8 @@ function generateRoomId() {
 io.on('connection', (socket) => {
     console.log(`[Connect] ${socket.id}`);
 
-    // Lobby Management Events
+    // --- LOBBY MANAGEMENT ---
+
     socket.on('create_lobby', (data) => {
         // Leave any existing room first
         rooms.forEach(r => {
@@ -45,86 +46,16 @@ io.on('connection', (socket) => {
 
         console.log(`[Server] Creating Lobby: ${roomName} (${roomId})`);
 
-// Physics Constants
-const PHYSICS_TICK_RATE = 60; // Updates per second
-const DT = 1 / PHYSICS_TICK_RATE;
-const NETWORK_TICK_RATE = 20;
-const NETWORK_DT = 1 / NETWORK_TICK_RATE;
-let networkAccumulator = 0;
         const room = new GameRoom(roomId, io, roomName);
         rooms.set(roomId, room);
 
         room.addPlayer(socket);
         socket.emit('lobby_created', { roomId, name: roomName });
+
+        // Broadcast new lobby to everyone browsing
+        io.emit('lobby_list_update', getLobbyList());
     });
 
-    // --- ENEMY LOGIC ---
-    const allPlayers = Array.from(clients.values());
-    const generatedProjectiles = []; // Capture shots this frame
-
-    serverEnemies.forEach(enemy => {
-        if (enemy.isDead) return;
-
-        // Find nearest player
-        let nearestPlayer = null;
-        let minDistSq = Infinity;
-
-        for (const p of allPlayers) {
-            const dx = p.x - enemy.x;
-            const dy = p.y - enemy.y;
-            const dSq = dx * dx + dy * dy;
-            if (dSq < minDistSq) {
-                minDistSq = dSq;
-                nearestPlayer = p;
-            }
-        }
-
-        // Update Enemy
-        try {
-            if (nearestPlayer) {
-                enemy.update(DT, nearestPlayer.x, nearestPlayer.y, generatedProjectiles, [], [], serverEnemies);
-            } else {
-                // Idle update if no players
-                enemy.update(DT, undefined, undefined, generatedProjectiles, [], [], serverEnemies);
-            }
-        } catch (e) {
-            console.error(`[Server] Enemy Update Error (ID: ${enemy.id}):`, e.message);
-        }
-    });
-
-    // --- NETWORK BROADCAST (Throttled) ---
-    networkAccumulator += DT;
-    if (networkAccumulator >= NETWORK_DT) {
-        networkAccumulator -= NETWORK_DT;
-
-        // Broadcast Player State (Snapshot)
-        const snapshot = [];
-        clients.forEach(p => {
-            snapshot.push({
-                id: p.id,
-                x: Math.round(p.x), // Round to save bandwidth
-                y: Math.round(p.y),
-                rotation: parseFloat(p.rotation.toFixed(2)),
-                input: p.input, // Echo input for prediction/visuals
-                hp: p.hp,
-                maxHp: p.maxHp
-            });
-        });
-
-        io.emit('world_update', snapshot);
-
-        // Broadcast Enemy State (Snapshot)
-        const enemyUpdates = [];
-        serverEnemies.forEach(enemy => {
-            if (enemy.isDead) return;
-            enemyUpdates.push({
-                id: enemy.id,
-                x: Math.round(enemy.x),
-                y: Math.round(enemy.y),
-                r: parseFloat(enemy.rotation.toFixed(2)),
-                hp: enemy.hp
-            });
-        });
     socket.on('join_lobby', (roomId) => {
         // Leave any existing room
         rooms.forEach(r => {
@@ -141,89 +72,8 @@ let networkAccumulator = 0;
         }
     });
 
-        if (enemyUpdates.length > 0) {
-            io.emit('enemy_update', enemyUpdates);
-        }
-    }
-
-    if (generatedProjectiles.length > 0) {
-        const shoots = generatedProjectiles.map(p => {
-            const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
-            return {
-                x: Math.round(p.x),
-                y: Math.round(p.y),
-                angle: parseFloat(p.angle.toFixed(4)),
-                type: p.type,
-                speed: Math.round(speed),
-                damage: p.damage
-            };
-        });
-        io.emit('enemy_shoots', shoots);
-    }
-}, 1000 / PHYSICS_TICK_RATE);
-
-io.on('connection', (socket) => {
-    console.log(`[Connect] ${socket.id}`);
-    clients.set(socket.id, {
-        id: socket.id,
-        x: 0, y: 0,
-        vx: 0, vy: 0,
-        rotation: 0, map: 'default',
-        parts: [], // Ship structure
-        input: {},
-        hp: 100,
-        maxHp: 100
-    });
-
-    // Notify client of their ID and the Game Seed
-    const deadEnemyIds = [];
-    serverEnemies.forEach(e => {
-        if (e.isDead) deadEnemyIds.push(e.id);
-    });
-
-    socket.emit('init', {
-        id: socket.id,
-        seed: GAME_SEED,
-        deadEnemies: deadEnemyIds
-    });
-
-    // Wait for join_game to broadcast
-    socket.on('join_game', (data) => {
-        const player = clients.get(socket.id);
-        if (player) {
-            player.parts = data.parts || [];
-
-            // Broadcast new player join with parts
-            socket.broadcast.emit('player_join', {
-                id: socket.id,
-                parts: player.parts
-            });
-
-            // Send existing players to new player
-            const existingPlayers = Array.from(clients.values()).filter(p => p.id !== socket.id && p.parts);
-            socket.emit('players_list', existingPlayers);
-        }
-    });
-
-    socket.on('update_state', (data) => {
-        const player = clients.get(socket.id);
-        if (player) {
-            player.x = data.x;
-            player.y = data.y;
-            player.rotation = data.rotation;
-            // We can still do server-side validation here if needed
-        }
     socket.on('list_lobbies', () => {
-        const list = [];
-        rooms.forEach(r => {
-            list.push({
-                id: r.id,
-                name: r.name,
-                players: r.getPlayerCount(),
-                maxPlayers: 8
-            });
-        });
-        socket.emit('lobby_list', list);
+        socket.emit('lobby_list', getLobbyList());
     });
 
     socket.on('leave_lobby', () => {
@@ -238,6 +88,7 @@ io.on('connection', (socket) => {
                 }
             }
         });
+        // Send updated list? Or just let clients refresh
     });
 
     socket.on('disconnect', () => {
@@ -255,6 +106,19 @@ io.on('connection', (socket) => {
         });
     });
 });
+
+function getLobbyList() {
+    const list = [];
+    rooms.forEach(r => {
+        list.push({
+            id: r.id,
+            name: r.name,
+            players: r.getPlayerCount(),
+            maxPlayers: 8
+        });
+    });
+    return list;
+}
 
 httpServer.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
