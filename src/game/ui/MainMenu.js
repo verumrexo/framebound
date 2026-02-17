@@ -190,18 +190,41 @@ export class MainMenu {
                 <div style="color: #666; text-align: center; padding: 20px;">waiting for server response...</div>
             </div>
 
-            <div style="display: flex; gap: 10px; align-items: center; margin-bottom: 20px;">
-                 <span style="font-size: 12px; color: #aaa;">join id:</span>
-                 <input id="input-lobby-id" type="text" maxlength="6" style="
-                    background: rgba(0,0,0,0.5);
-                    border: 1px solid #666;
-                    color: white;
-                    padding: 10px;
-                    font-family: 'Press Start 2P';
-                    width: 100px;
-                    text-transform: uppercase;
-                 ">
-                 <button id="btn-join-id" class="menu-btn" style="padding: 10px;">join</button>
+            <div style="display: flex; gap: 20px; align-items: flex-start; margin-bottom: 20px; width: 600px; justify-content: space-between;">
+
+                <div style="display: flex; flex-direction: column; gap: 5px;">
+                    <span style="font-size: 10px; color: #aaa;">join by id:</span>
+                    <div style="display: flex; gap: 5px;">
+                        <input id="input-lobby-id" type="text" maxlength="6" style="
+                            background: rgba(0,0,0,0.5);
+                            border: 1px solid #666;
+                            color: white;
+                            padding: 10px;
+                            font-family: 'Press Start 2P';
+                            width: 80px;
+                            text-transform: uppercase;
+                            font-size: 12px;
+                        ">
+                        <button id="btn-join-id" class="menu-btn" style="padding: 10px; font-size: 10px;">join</button>
+                    </div>
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 5px;">
+                     <span style="font-size: 10px; color: #aaa;">direct connect (wss://...):</span>
+                     <div style="display: flex; gap: 5px;">
+                        <input id="input-server-url" type="text" placeholder="wss://your-tunnel.url" style="
+                            background: rgba(0,0,0,0.5);
+                            border: 1px solid #666;
+                            color: white;
+                            padding: 10px;
+                            font-family: 'Press Start 2P';
+                            width: 200px;
+                            font-size: 8px;
+                        ">
+                        <button id="btn-connect-url" class="menu-btn" style="padding: 10px; font-size: 10px;">connect</button>
+                     </div>
+                </div>
+
             </div>
 
             <button id="btn-back" class="menu-btn" style="width: 200px;">back</button>
@@ -212,8 +235,15 @@ export class MainMenu {
             const btnCreate = document.getElementById('btn-create');
             const btnRefresh = document.getElementById('btn-refresh');
             const btnJoinId = document.getElementById('btn-join-id');
+            const btnConnectUrl = document.getElementById('btn-connect-url');
             const btnBack = document.getElementById('btn-back');
             const inputId = document.getElementById('input-lobby-id');
+            const inputUrl = document.getElementById('input-server-url');
+
+            // Pre-fill URL input if a custom one is set
+            if (this.game.network.customServerUrl && inputUrl) {
+                inputUrl.value = this.game.network.customServerUrl;
+            }
 
             if (btnCreate) btnCreate.onclick = () => {
                 if (!this.game.network.isConnected) return;
@@ -236,6 +266,19 @@ export class MainMenu {
                 if (id.length === 6) {
                     this.game.network.joinLobby(id);
                     document.getElementById('lobby-status').innerText = `joining ${id}...`;
+                }
+            };
+
+            if (btnConnectUrl) btnConnectUrl.onclick = () => {
+                const url = inputUrl.value.trim();
+                if (url) {
+                    document.getElementById('lobby-status').innerText = `connecting to ${url}...`;
+                    this.game.network.setServerUrl(url);
+                    this.game.network.connect();
+                    // Force refresh list to trigger connection
+                    setTimeout(() => {
+                        if (this.game.network.isConnected) this.game.network.listLobbies();
+                    }, 1000);
                 }
             };
 

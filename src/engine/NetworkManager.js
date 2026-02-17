@@ -16,8 +16,20 @@ export class NetworkManager {
         this.onLobbyJoined = null;
         this.onLobbyError = null;
 
+        this.customServerUrl = null;
+
         // Do NOT connect automatically
         // this.connect();
+    }
+
+    setServerUrl(url) {
+        this.customServerUrl = url;
+        // If we were already connected, disconnect first
+        if (this.socket && this.socket.connected) {
+            this.socket.disconnect();
+        }
+        // Force new connection creation
+        this.socket = null;
     }
 
     connect() {
@@ -28,7 +40,7 @@ export class NetworkManager {
             return;
         }
 
-        const serverUrl = import.meta.env.VITE_SERVER_URL || undefined;
+        const serverUrl = this.customServerUrl || import.meta.env.VITE_SERVER_URL || undefined;
 
         // In production (e.g. GitHub Pages), if no server URL is set, do not attempt to connect.
         // This prevents the client from trying to connect to the static host as a WebSocket server.
