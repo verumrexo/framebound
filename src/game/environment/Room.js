@@ -161,6 +161,16 @@ export class Room {
     spawnVaultChests(game) {
         if (this.vaultChests) return;
 
+        const floor = game.floor || 1;
+        // Cost Scaling: 1.5x per floor
+        // Floor 1: 100
+        // Floor 2: 150
+        // Floor 3: 225
+        const costMultiplier = Math.pow(1.5, floor - 1);
+
+        const goldCost = Math.floor(100 * costMultiplier);
+        const hpCost = Math.floor(50 * costMultiplier);
+
         import('../entities/VaultChest.js').then(({ VaultChest }) => {
             const centerX = this.x + this.width / 2;
             const centerY = this.y + this.height / 2;
@@ -169,13 +179,13 @@ export class Room {
             this.vaultChests = [];
 
             // Chest 1: Gold Cost (High Gold)
-            const goldChest = new VaultChest(centerX - spacing / 2, centerY, 'gold', 100, this.random);
+            const goldChest = new VaultChest(centerX - spacing / 2, centerY, 'gold', goldCost, this.random);
             this.vaultChests.push(goldChest);
             game.vaultChests = game.vaultChests || [];
             game.vaultChests.push(goldChest);
 
             // Chest 2: HP Cost (High HP)
-            const hpChest = new VaultChest(centerX + spacing / 2, centerY, 'hp', 50, this.random);
+            const hpChest = new VaultChest(centerX + spacing / 2, centerY, 'hp', hpCost, this.random);
             this.vaultChests.push(hpChest);
             game.vaultChests.push(hpChest);
         });
@@ -220,7 +230,29 @@ export class Room {
             const roomX = Math.max(this.x + 50, Math.min(this.x + this.width - 50, ex));
             const roomY = Math.max(this.y + 50, Math.min(this.y + this.height - 50, ey));
 
-            const type = this.random() > 0.6 ? 'striker' : 'basic';
+            let type = 'basic';
+            const r = this.random();
+
+            if (floor >= 4) {
+                if (r < 0.1) type = 'rocketeer';
+                else if (r < 0.3) type = 'sniper';
+                else if (r < 0.5) type = 'circler';
+                else if (r < 0.8) type = 'striker';
+                else type = 'basic';
+            } else if (floor >= 3) {
+                if (r < 0.2) type = 'sniper';
+                else if (r < 0.4) type = 'circler';
+                else if (r < 0.7) type = 'striker';
+                else type = 'basic';
+            } else if (floor >= 2) {
+                if (r < 0.2) type = 'circler';
+                else if (r < 0.6) type = 'striker';
+                else type = 'basic';
+            } else {
+                if (r < 0.5) type = 'striker';
+                else type = 'basic';
+            }
+
             // Deterministic ID for ambush: rX_rY_ambush_W_I
             const enemyId = `e_${this.gridX}_${this.gridY}_amb_${this.waveCount}_${i}`;
             const enemy = new Enemy(roomX, roomY, type, floor, this.random, enemyId);

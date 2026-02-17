@@ -10,6 +10,7 @@ export const CHANGELOG = [
         name: 'System: Authority',
         date: new Date().toISOString().split('T')[0],
         items: [
+            "VAULT: Scaling costs (1.5x/floor) and enemy variety (Floor 2: Circler, 3: Sniper, 4: Rocketeer)",
             "NET: Fixed WebSocket connection error on GitHub Pages (static host detection)",
             "PERF: Implemented Spatial Hash for O(P*E) -> O(P) collision detection (~20x faster)",
             "FIX: Expose game instance to window to fix DevTools/MainMenu UI interactions",
