@@ -1,6 +1,6 @@
 
 import { strict as assert } from 'node:assert';
-import { Collision } from '../src/game/systems/CollisionSystem.js';
+import { Collision } from '../src/shared/CollisionSystem.js';
 
 console.log('Running CollisionSystem tests...');
 
