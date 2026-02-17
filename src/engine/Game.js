@@ -1554,13 +1554,24 @@ export class Game {
         let worldMouseX = (mouse.x / zoom) + this.camera.x;
         let worldMouseY = (mouse.y / zoom) + this.camera.y;
 
-        // Mobile Aiming Override (Update Loop)
         if (this.input.joysticks && this.input.joysticks.right.active) {
             const v = this.input.joysticks.right.vector;
-            const farDist = 2000;
-            worldMouseX = this.x + v.x * farDist;
-            worldMouseY = this.y + v.y * farDist;
+            inputState.aimAngle = Math.atan2(v.y, v.x) + Math.PI / 2;
+        } else {
+            // Check for 'Cursor Tracker' part
+            const hasTracker = Array.from(this.playerShip.parts.values()).some(p => p.partId === 'custom_1768410456823');
+            if (hasTracker) {
+                inputState.aimAngle = Math.atan2(worldMouseY - this.y, worldMouseX - this.x) + Math.PI / 2;
+            } else {
+                // Default: Face movement direction if moving fast enough
+                const currentSpeedWrapper = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+                if (currentSpeedWrapper > 50) {
+                    inputState.aimAngle = Math.atan2(this.vy, this.vx) + Math.PI / 2;
+                }
+            }
         }
+
+        // Rotation is handled by Ship.update()
 
         // Rotation is handled by Ship.update()
 
