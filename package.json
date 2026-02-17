@@ -1,7 +1,7 @@
 {
   "name": "framebound",
   "private": true,
-  "version": "0.2.2.3",
+  "version": "1.1.0 (beta)",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -9,6 +9,10 @@
     "preview": "vite preview",
     "server": "node src/server/server.js",
     "test": "node --test"
+    "test": "node tests/CollisionSystem.test.js"
+    "test": "node src/tests/prepare.js && node --experimental-test-module-mocks --test src/**/*.test.js src/game/**/*.test.js",
+    "test:random": "node src/utils/random.test.js",
+    "test:biomes": "node --test src/game/environment/Biomes.test.js"
   },
   "devDependencies": {
     "vite": "^7.2.4"

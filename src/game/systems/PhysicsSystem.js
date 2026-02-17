@@ -37,7 +37,6 @@ export class PhysicsSystem {
                     asteroid.vy -= ny * push * 0.5 * dt;
 
                     game.camera.shake = 5;
-                    console.log("Part Collision Detected!");
                 }
             }
 
