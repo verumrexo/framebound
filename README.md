@@ -24,3 +24,24 @@ congrats, you found the source code for the only space roguelike that won't make
 - **e**: talk to things / open chests
 - **tab**: look at your inventory (hangar)
 - **l**: dev terminal (you probably don't have the PIN anyway 🙄)
+
+## running a server (for you and your friends)
+
+want to host your own galaxy? fine. here's how you do it.
+
+### requirements
+- [Node.js](https://nodejs.org/) (v16+ because we aren't cavemen)
+- a terminal (cmd, bash, powershell, whatever)
+
+### instructions
+1. **clone the repo**: `git clone https://github.com/verumrexo/framebound.git`
+2. **install dependencies**: `npm install`
+3. **start the server**: `npm run server`
+
+the server will start on port `3000` by default. you should see something like:
+`Server running on port 3000`
+
+### connecting
+- **local play**: run `npm run dev` in another terminal. the game will automatically connect to `localhost:3000`.
+- **hosting for friends**: you'll need to forward port `3000` on your router or use a service like [ngrok](https://ngrok.com/) to expose your local server to the internet.
+- **deployment**: set the `VITE_SERVER_URL` environment variable in your frontend deployment (e.g., Vercel, Netlify) to your server's public URL (e.g., `wss://your-server.com`).
