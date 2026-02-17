@@ -8,6 +8,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "server": "node src/server/server.js",
+    "test": "node --test tests/*.test.js"
     "test": "node test/CollisionSystem.test.js"
     "test": "node --test"
     "test": "node tests/CollisionSystem.test.js"
