@@ -1,6 +1,6 @@
 
-import { Collision } from './CollisionSystem.js';
-import { PartsLibrary, TILE_SIZE } from '../parts/Part.js';
+import { Collision } from '../../shared/CollisionSystem.js';
+import { PartsLibrary, TILE_SIZE } from '../../shared/parts/Part.js';
 
 export class PhysicsSystem {
     update(game, dt) {

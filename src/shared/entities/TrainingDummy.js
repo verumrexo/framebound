@@ -1,4 +1,3 @@
-import { Sprite } from '../../engine/Sprite.js';
 import { TILE_SIZE } from '../parts/PartDefinitions.js';
 
 export class TrainingDummy {
@@ -81,19 +80,4 @@ export class TrainingDummy {
         return { hit: false };
     }
 
-    draw(renderer) {
-        this.sprite.draw(renderer.ctx, this.x, this.y, this.rotation);
-
-        // UI
-        renderer.ctx.fillStyle = '#fff';
-        renderer.ctx.font = "12px 'Press Start 2P'";
-        renderer.ctx.textAlign = 'center';
-        renderer.ctx.fillText(`training dummy`, this.x, this.y - (this.radius + 30));
-
-        renderer.ctx.fillStyle = '#0f0';
-        renderer.ctx.font = "24px 'Press Start 2P'";
-        renderer.ctx.fillText(`${this.currentDps} dps`, this.x, this.y - (this.radius + 5));
-
-        renderer.ctx.textAlign = 'start'; // Reset
-    }
 }

@@ -1,6 +1,6 @@
 
 import { Assets, AssetsData } from '../../Assets.js';
-import { PartsLibrary, PartDef, PartType, TILE_SIZE } from '../parts/Part.js';
+import { PartsLibrary, PartDef, PartType, TILE_SIZE } from '../../shared/parts/Part.js';
 import { Sprite } from '../../engine/Sprite.js';
 
 export class Designer {

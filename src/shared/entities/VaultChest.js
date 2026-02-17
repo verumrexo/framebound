@@ -1,5 +1,4 @@
 import { PartsLibrary, TILE_SIZE } from '../parts/Part.js';
-import { Assets } from '../../Assets.js';
 
 export class VaultChest {
     constructor(x, y, costType, costAmount, randomGen = null) {
@@ -30,35 +29,6 @@ export class VaultChest {
         }
     }
 
-    draw(renderer) {
-        if (this.opened) return; // Disappear when looted
-
-        const ctx = renderer.ctx;
-        const bobY = this.y + Math.sin(this.life * 1.5 + this.bobOffset) * 8;
-
-        ctx.save();
-        ctx.translate(this.x, bobY);
-        ctx.rotate(this.rotation);
-
-        // Glow effect
-        ctx.shadowBlur = this.ambushActive ? 40 : 25;
-        ctx.shadowColor = this.costType === 'hp' ? '#ff0000' : '#ffd700';
-
-        // Draw the chest sprite
-        if (this.sprite) {
-            this.sprite.draw(ctx, 0, 0, 0); // Rotation handle by container
-        } else {
-            // Fallback
-            ctx.fillStyle = this.costType === 'hp' ? '#800000' : '#ffd700';
-            ctx.fillRect(-30, -30, 60, 60);
-            ctx.strokeStyle = '#fff';
-            ctx.lineWidth = 3;
-            ctx.strokeRect(-30, -30, 60, 60);
-        }
-
-        ctx.shadowBlur = 0;
-        ctx.restore();
-    }
 
     drawTooltip(renderer, player) {
         if (this.opened || this.ambushActive) return;

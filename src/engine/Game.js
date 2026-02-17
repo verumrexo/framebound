@@ -3,14 +3,14 @@ import { GameLoop } from './GameLoop.js';
 import { Input } from './Input.js';
 import { Camera } from './Camera.js';
 import { Assets } from '../Assets.js';
-import { Projectile } from '../game/entities/Projectile.js';
-import { Ship } from '../game/entities/Ship.js';
-import { Enemy } from '../game/entities/Enemy.js';
-import { PartsLibrary, TILE_SIZE } from '../game/parts/Part.js';
+import { Projectile } from '../shared/entities/Projectile.js';
+import { Ship } from '../shared/entities/Ship.js';
+import { Enemy } from '../shared/entities/Enemy.js';
+import { PartsLibrary, TILE_SIZE } from '../shared/parts/Part.js';
 import { Hangar } from '../game/systems/Hangar.js';
 import { Designer } from '../game/systems/Designer.js';
 import { DevTools } from '../game/systems/DevTools.js';
-import { Drone } from '../game/entities/Drone.js';
+import { Drone } from '../shared/entities/Drone.js';
 
 import { Starfield } from '../game/environment/Starfield.js';
 import { Grid } from '../game/environment/Grid.js';
@@ -18,16 +18,16 @@ import { LevelGenerator } from '../game/environment/LevelGenerator.js';
 import { RoomType } from '../game/environment/RoomType.js';
 import { Minimap } from '../game/ui/Minimap.js';
 import { FullscreenMap } from '../game/ui/FullscreenMap.js';
-import { XPOrb } from '../game/entities/XPOrb.js';
-import { TrainingDummy } from '../game/entities/TrainingDummy.js';
-import { Boss } from '../game/entities/Boss.js';
-import { Portal } from '../game/entities/Portal.js';
-import { GoldOrb } from '../game/entities/GoldOrb.js';
-import { HPOrb } from '../game/entities/HPOrb.js';
-import { Asteroid } from '../game/entities/Asteroid.js';
-import { LootCrate } from '../game/entities/LootCrate.js';
-import { ItemPickup } from '../game/entities/ItemPickup.js';
-import { Shipwreck } from '../game/entities/Shipwreck.js';
+import { XPOrb } from '../shared/entities/XPOrb.js';
+import { TrainingDummy } from '../shared/entities/TrainingDummy.js';
+import { Boss } from '../shared/entities/Boss.js';
+import { Portal } from '../shared/entities/Portal.js';
+import { GoldOrb } from '../shared/entities/GoldOrb.js';
+import { HPOrb } from '../shared/entities/HPOrb.js';
+import { Asteroid } from '../shared/entities/Asteroid.js';
+import { LootCrate } from '../shared/entities/LootCrate.js';
+import { ItemPickup } from '../shared/entities/ItemPickup.js';
+import { Shipwreck } from '../shared/entities/Shipwreck.js';
 import { SaveManager } from '../game/systems/SaveManager.js';
 import { LevelUpManager } from '../game/systems/LevelUpManager.js';
 
@@ -37,12 +37,12 @@ import { MainMenu } from '../game/ui/MainMenu.js';
 import { HighScoreManager } from '../game/systems/HighScoreManager.js';
 import { VERSION, VERSION_NAME } from '../version.js';
 import { Settings as GameSettings } from '../game/systems/Settings.js';
-import { Collision } from '../game/systems/CollisionSystem.js';
+import { Collision } from '../shared/CollisionSystem.js';
 import { Biomes, getRandomBiome } from '../game/environment/Biomes.js';
 import { NetworkManager } from './NetworkManager.js';
 import { Physics } from '../shared/Physics.js';
 import { SpatialHash } from '../game/systems/SpatialHash.js';
-import { ModuleHUD } from '../game/ui/ModuleHUD.js';
+import { EntityRenderer } from '../game/renderers/EntityRenderer.js';
 
 export class Game {
     constructor(canvas) {
@@ -238,7 +238,6 @@ export class Game {
         // Multiplayer
         this.network = this.networkManager;
         this.spatialHash = new SpatialHash(200);
-        this.moduleHUD = new ModuleHUD(this);
     }
 
     startOffline(seed, isLoad = false) {
@@ -1380,7 +1379,6 @@ export class Game {
             const actualMaxCooldown = Math.max(1.0, this.dashMaxCooldown / boosterCount);
             this.dashActiveTimer = this.dashDuration;
             this.dashCooldown = actualMaxCooldown;
-            this.dashTotalCooldown = actualMaxCooldown;
             this.showNotification("dash system pulse", "#00ffff");
             this.audio.play('dash', { volume: 0.7 });
         }
@@ -1492,24 +1490,64 @@ export class Game {
 
         this.eKeyLastFrame = this.input.isKeyDown('KeyE');
 
-        // Apply Physics (Client Prediction)
-        Physics.update(this, { x: inputX, y: inputY }, dt, physOptions);
+        // Input State Construction
+        const inputState = {
+            up: this.input.isKeyDown('KeyW') || this.input.isKeyDown('ArrowUp') || inputY < -0.1,
+            down: this.input.isKeyDown('KeyS') || this.input.isKeyDown('ArrowDown') || inputY > 0.1,
+            left: this.input.isKeyDown('KeyA') || this.input.isKeyDown('ArrowLeft') || inputX < -0.1,
+            right: this.input.isKeyDown('KeyD') || this.input.isKeyDown('ArrowRight') || inputX > 0.1,
+            shift: this.input.isKeyDown('ShiftLeft'),
+            analogX: inputX,
+            analogY: inputY,
+            aimAngle: null // Will be calculated below
+        };
 
-        // Network Sync - Send Inputs instead of Position
+        // Aiming Logic (Calculated early for input state)
+        const zoom = this.camera.zoom || 1;
+        let worldMouseX = (mouse.x / zoom) + this.camera.x;
+        let worldMouseY = (mouse.y / zoom) + this.camera.y;
+
+        if (this.input.joysticks && this.input.joysticks.right.active) {
+            const v = this.input.joysticks.right.vector;
+            inputState.aimAngle = Math.atan2(v.y, v.x) + Math.PI / 2;
+        } else {
+            // Check for 'Cursor Tracker' part
+            const hasTracker = Array.from(this.playerShip.parts.values()).some(p => p.partId === 'custom_1768410456823');
+            if (hasTracker) {
+                inputState.aimAngle = Math.atan2(worldMouseY - this.y, worldMouseX - this.x) + Math.PI / 2;
+            } else {
+                // Default: Face movement direction if moving fast enough
+                const currentSpeedWrapper = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
+                if (currentSpeedWrapper > 50) {
+                    inputState.aimAngle = Math.atan2(this.vy, this.vx) + Math.PI / 2;
+                }
+            }
+        }
+
+        // Apply Physics (Client Prediction using Shared Logic)
+        // Sync Game state to Ship state before update
+        this.playerShip.x = this.x;
+        this.playerShip.y = this.y;
+        this.playerShip.vx = this.vx;
+        this.playerShip.vy = this.vy;
+        this.playerShip.rotation = this.rotation;
+
+        this.playerShip.update(dt, inputState);
+
+        // Sync Ship state back to Game state
+        this.x = this.playerShip.x;
+        this.y = this.playerShip.y;
+        this.vx = this.playerShip.vx;
+        this.vy = this.playerShip.vy;
+        this.rotation = this.playerShip.rotation;
+
+        // Network Sync
         if (this.network && this.network.isConnected) {
-            const inputState = {
-                up: this.input.isKeyDown('KeyW') || this.input.isKeyDown('ArrowUp'),
-                down: this.input.isKeyDown('KeyS') || this.input.isKeyDown('ArrowDown'),
-                left: this.input.isKeyDown('KeyA') || this.input.isKeyDown('ArrowLeft'),
-                right: this.input.isKeyDown('KeyD') || this.input.isKeyDown('ArrowRight'),
-                rotation: this.rotation, // We still send rotation as it's mouse-dependent
-                x: this.x, // Send pos for verification/lerp (optional, but good for hybrid)
-                y: this.y
-            };
+            // Send full input state including aim
             this.network.sendInput(inputState);
         }
 
-        // Turret Aiming
+        // Turret Aiming (Visuals)
         // mouse is already defined at top of update
         // Adjust for Zoom: World = (Screen / Zoom) + CameraPos
         const zoom = this.camera.zoom || 1;
@@ -1524,54 +1562,7 @@ export class Game {
             worldMouseY = this.y + v.y * farDist;
         }
 
-        // Calculate Ship Rotation based on movement
-        const currentSpeedWrapper = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
-
-        let targetRotation = null;
-
-        // Mobile Right Stick Aiming
-        if (this.input.joysticks && this.input.joysticks.right.active) {
-            const v = this.input.joysticks.right.vector;
-            // + PI/2 because ship sprite faces 'Up' at 0 deg, but 0 deg in trig is Right
-            targetRotation = Math.atan2(v.y, v.x) + Math.PI / 2;
-        }
-
-        // Check for 'Cursor Tracker' part
-        const hasTracker = Array.from(this.playerShip.parts.values()).some(p => p.partId === 'custom_1768410456823');
-
-        if (targetRotation !== null) {
-            // Already set by joystick
-        } else if (hasTracker) {
-            targetRotation = Math.atan2(worldMouseY - this.y, worldMouseX - this.x) + Math.PI / 2;
-        } else if (currentSpeedWrapper > 50) { // Threshold to prevent jitter
-            // 0 is Up for the ship sprite, but atan2 0 is Right.
-            // movement East (vx>0, vy=0) -> atan2=0. Ship should rot -90? 
-            // Wait, previous code was atan2 + PI/2. 
-            // East -> 0 + 1.57 = 1.57 (Down?). 
-            // Let's trust the old code: atan2(vy, vx) + Math.PI / 2
-
-            // Allow smooth turning
-            targetRotation = Math.atan2(this.vy, this.vx) + Math.PI / 2;
-        }
-
-        if (targetRotation !== null) {
-            // Shortest path
-            let diff = targetRotation - this.rotation;
-            while (diff < -Math.PI) diff += Math.PI * 2;
-            while (diff > Math.PI) diff -= Math.PI * 2;
-
-            // Turn Rate scales with mass (Core mass = 5)
-            const baseTurnRate = 5.0;
-            const currentMass = this.playerShip.stats.totalMass || 5;
-            const turnRate = Math.max(0.5, baseTurnRate * (5 / currentMass)) + (this.playerShip.stats.turnSpeed || 0);
-            const maxStep = turnRate * dt;
-
-            if (Math.abs(diff) > maxStep) {
-                this.rotation += Math.sign(diff) * maxStep;
-            } else {
-                this.rotation = targetRotation;
-            }
-        }
+        // Rotation is handled by Ship.update()
 
         // Room / Level Logic
         if (this.currentRoom) {
@@ -2337,7 +2328,6 @@ export class Game {
                                 if (!partRef.shieldCooldown || partRef.shieldCooldown <= 0) {
                                     // BLOCK!
                                     partRef.shieldCooldown = def.stats.shieldCooldown || 3.0;
-                                    partRef.maxShieldCooldown = partRef.shieldCooldown;
                                     this.audio.play('shield_hit', { volume: 0.8 }); // Assuming sound exists or standard hit
                                     if (!this.audio.sounds.shield_hit) this.audio.play('hit', { pitch: 1.5 }); // Fallback
 
@@ -3219,62 +3209,45 @@ export class Game {
             }
 
             // Environment (drawn first, behind entities)
-            this.asteroids.forEach(a => a.draw(this.renderer));
-            this.lootCrates.forEach(c => c.draw(this.renderer));
-            this.shipwrecks.forEach(s => s.draw(this.renderer));
-            this.portals.forEach(p => p.draw(this.renderer));
+            this.asteroids.forEach(a => EntityRenderer.drawAsteroid(this.renderer, a));
+            this.lootCrates.forEach(c => EntityRenderer.drawLootCrate(this.renderer, c));
+            this.shipwrecks.forEach(s => EntityRenderer.drawShipwreck(this.renderer, s));
+            this.portals.forEach(p => EntityRenderer.drawPortal(this.renderer, p)); // Wait, drawPortal implementation needed?
 
             // Pickups (small, behind ships)
-            this.xpOrbs.forEach(o => o.draw(this.renderer));
-            this.goldOrbs.forEach(o => o.draw(this.renderer));
-            this.hpOrbs.forEach(o => o.draw(this.renderer));
-            this.itemPickups.forEach(i => i.draw(this.renderer));
+            this.xpOrbs.forEach(o => EntityRenderer.drawOrb(this.renderer, o));
+            this.goldOrbs.forEach(o => EntityRenderer.drawOrb(this.renderer, o));
+            this.hpOrbs.forEach(o => EntityRenderer.drawOrb(this.renderer, o));
+            this.itemPickups.forEach(i => EntityRenderer.drawItemPickup(this.renderer, i)); // Need this too
 
             // Ships (on top of environment)
-            this.enemies.forEach(e => e.draw(this.renderer));
-            this.bosses.forEach(b => b.draw(this.renderer));
+            this.enemies.forEach(e => EntityRenderer.drawEnemy(this.renderer, e));
+            this.bosses.forEach(b => EntityRenderer.drawEnemy(this.renderer, b)); // Boss uses drawEnemy too
 
             // Draw Other Players
             if (this.network && this.network.otherPlayers) {
                 for (const [id, p] of this.network.otherPlayers) {
-                    if (p.draw) {
-                        p.draw(this.renderer);
-                    } else {
-                        // Fallback if draw not available (e.g. raw object)
-                        this.renderer.ctx.save();
-                        this.renderer.ctx.translate(p.x, p.y);
-                        this.renderer.ctx.rotate(p.rotation);
-                        this.renderer.ctx.strokeStyle = '#00ffff';
-                        this.renderer.ctx.lineWidth = 2;
-                        this.renderer.ctx.beginPath();
-                        this.renderer.ctx.moveTo(20, 0);
-                        this.renderer.ctx.lineTo(-15, 15);
-                        this.renderer.ctx.lineTo(-5, 0);
-                        this.renderer.ctx.lineTo(-15, -15);
-                        this.renderer.ctx.closePath();
-                        this.renderer.ctx.stroke();
-                        this.renderer.ctx.restore();
-                    }
+                    EntityRenderer.drawShip(this.renderer, p);
                 }
             }
 
-            this.shopItems.forEach(s => { if (!s.purchased) { s.update(0.016); s.draw(this.renderer); } });
+            this.shopItems.forEach(s => { if (!s.purchased) { s.update(0.016); EntityRenderer.drawShopItem(this.renderer, s); } });
             if (this.hoveredShopItem && !this.hoveredShopItem.purchased) {
-                this.hoveredShopItem.drawTooltip(this.renderer, this.gold >= this.hoveredShopItem.data.price);
+                this.hoveredShopItem.drawTooltip(this.renderer, this.gold >= this.hoveredShopItem.data.price); // Tooltip logic stays on object for now?
             }
 
-            this.treasureChests.forEach(chest => { if (!chest.opened) { chest.update(0.016); chest.draw(this.renderer); } });
+            this.treasureChests.forEach(chest => { if (!chest.opened) { chest.update(0.016); EntityRenderer.drawTreasureChest(this.renderer, chest); } });
             if (this.hoveredTreasureChest && !this.hoveredTreasureChest.opened) this.hoveredTreasureChest.drawTooltip(this.renderer, true);
 
             if (this.vaultChests) {
-                this.vaultChests.forEach(chest => { chest.update(0.016); chest.draw(this.renderer); });
+                this.vaultChests.forEach(chest => { chest.update(0.016); EntityRenderer.drawVaultChest(this.renderer, chest); });
             }
             if (this.hoveredVaultChest && !this.hoveredVaultChest.opened) {
                 this.hoveredVaultChest.drawTooltip(this.renderer, this.playerShip);
             }
 
-            this.projectiles.forEach(p => p.draw(this.renderer));
-            this.drones.forEach(d => d.draw(this.renderer));
+            this.projectiles.forEach(p => EntityRenderer.drawProjectile(this.renderer, p));
+            this.drones.forEach(d => EntityRenderer.drawDrone(this.renderer, d));
 
             // Debug Hitboxes
             if (this.devTools && this.devTools.showHitboxes) {
@@ -3349,119 +3322,8 @@ export class Game {
 
             // Draw Player Ship (On top of debris/crates/asteroids, but below explosions maybe?)
             if (!this.playerShip.isDead) {
-                for (const partRef of this.playerShip.getUniqueParts()) {
-                    const def = PartsLibrary[partRef.partId];
-                    if (!def) continue;
-
-                    const isRotated = ((partRef.rotation || 0) % 2 !== 0);
-                    const w = isRotated ? def.height : def.width;
-                    const h = isRotated ? def.width : def.height;
-
-                    const localCX = (partRef.x + (w - 1) / 2) * CELL_STRIDE;
-                    const localCY = (partRef.y + (h - 1) / 2) * CELL_STRIDE;
-
-                    const worldPartX = this.x + (localCX * shipCos - localCY * shipSin);
-                    const worldPartY = this.y + (localCX * shipSin + localCY * shipCos);
-
-                    if (def.type === 'weapon') {
-                        // Draw base
-                        if (def.baseSprite) {
-                            def.baseSprite.draw(this.renderer.ctx, worldPartX, worldPartY, this.rotation + (partRef.rotation || 0) * (Math.PI / 2), 0.5, 0.5);
-                        } else if ((w === 1 && h === 2) || (w === 2 && h === 1)) {
-                            Assets.LongHull.draw(this.renderer.ctx, worldPartX, worldPartY, this.rotation + (partRef.rotation || 0) * (Math.PI / 2), 0.5, 0.5);
-                        } else {
-                            Assets.PlayerBase.draw(this.renderer.ctx, worldPartX, worldPartY, this.rotation, 0.5, 0.5);
-                        }
-
-                        // Draw turret (aimed)
-                        const angle = Math.atan2(worldMouseY - worldPartY, worldMouseX - worldPartX);
-                        const baseAngle = this.rotation + (partRef.rotation || 0) * (Math.PI / 2);
-
-                        let offsetX = 0;
-                        let offsetY = 0;
-
-                        // Calculate Turret Pivot Offset
-                        if (def.turretDrawOffset) {
-                            if (typeof def.turretDrawOffset === 'object') {
-                                // Vector Offset (Fixed to Hull)
-                                const ox = def.turretDrawOffset.x || 0;
-                                const oy = def.turretDrawOffset.y || 0;
-                                offsetX = Math.cos(baseAngle) * ox - Math.sin(baseAngle) * oy;
-                                offsetY = Math.sin(baseAngle) * ox + Math.cos(baseAngle) * oy;
-                            } else {
-                                // Scalar Offset (Along Aim Vector - Legacy/recoil-like)
-                                offsetX = Math.cos(angle) * def.turretDrawOffset;
-                                offsetY = Math.sin(angle) * def.turretDrawOffset;
-                            }
-                        }
-
-                        // Apply Recoil (always against aim)
-                        if (partRef.recoil) {
-                            offsetX -= Math.cos(angle) * partRef.recoil;
-                            offsetY -= Math.sin(angle) * partRef.recoil;
-                        }
-
-                        // Base Pivot Mount Offset (where turret attaches on base)
-                        if (def.baseSprite && (def.baseSprite.anchorX !== 0.5 || def.baseSprite.anchorY !== 0.5)) {
-                            const bpx = (def.baseSprite.anchorX - 0.5) * def.baseSprite.width * def.baseSprite.scale;
-                            const bpy = (def.baseSprite.anchorY - 0.5) * def.baseSprite.height * def.baseSprite.scale;
-                            offsetX += Math.cos(baseAngle) * bpx - Math.sin(baseAngle) * bpy;
-                            offsetY += Math.sin(baseAngle) * bpx + Math.cos(baseAngle) * bpy;
-                        }
-
-                        const drawX = worldPartX + offsetX;
-                        const drawY = worldPartY + offsetY;
-
-                        def.sprite.draw(this.renderer.ctx, drawX, drawY, angle + (def.rotationOffset || 0), null, null, 'rgba(255,255,255,0.4)');
-
-                        // Railgun & Saber Charge Effect
-                        if ((partRef.chargeLeft > 0 || partRef.chargeReady) && (def.stats.projectileType === 'railgun' || def.stats.projectileType === 'saber')) {
-                            const pct = partRef.chargeReady ? 1.0 : (1.0 - (partRef.chargeLeft / def.stats.chargeTime));
-                            let barrelLen = (h > 1.5) ? CELL_STRIDE * 1.3 : CELL_STRIDE * 0.6;
-                            barrelLen += (def.turretDrawOffset || 0);
-                            const tipX = worldPartX + Math.cos(angle) * barrelLen;
-                            const tipY = worldPartY + Math.sin(angle) * barrelLen;
-
-                            const isSaber = def.stats.projectileType === 'saber';
-                            const baseRadius = isSaber ? 5 : 15;
-                            const radius = 5 + pct * baseRadius + Math.sin(Date.now() * 0.01) * 2;
-                            this.renderer.ctx.save();
-                            this.renderer.ctx.globalAlpha = 0.5 + Math.random() * 0.3;
-                            this.renderer.drawCircle(tipX, tipY, radius, '#00ffff');
-                            this.renderer.ctx.globalAlpha = 0.8;
-                            this.renderer.drawCircle(tipX, tipY, radius * 0.5, '#ffffff');
-                            this.renderer.ctx.restore();
-                        }
-                    } else {
-                        // Draw static part
-                        def.sprite.draw(this.renderer.ctx, worldPartX, worldPartY, this.rotation + (partRef.rotation || 0) * (Math.PI / 2), 0.5, 0.5);
-
-                        // Shield Visual
-                        if (def.type === 'shield' && (!partRef.shieldCooldown || partRef.shieldCooldown <= 0)) {
-                            // Draw nice pulsing blue shield overlay
-                            const pulse = 1.0 + Math.sin(Date.now() * 0.005) * 0.1;
-                            const scale = def.stats.shieldRadiusScale || 1.4;
-                            const radius = (CELL_STRIDE / 2) * scale * pulse;
-
-                            this.renderer.ctx.save();
-                            this.renderer.ctx.fillStyle = 'rgba(0, 200, 255, 0.15)'; // Dim blue
-                            this.renderer.ctx.strokeStyle = 'rgba(0, 255, 255, 0.4)';
-                            this.renderer.ctx.lineWidth = 2; // Pixelized look
-
-                            // Pixelated circle (approx) or Rect? User said "round, but pixelized"
-                            this.renderer.ctx.beginPath();
-                            this.renderer.ctx.arc(worldPartX, worldPartY, radius, 0, Math.PI * 2);
-                            this.renderer.ctx.fill();
-                            this.renderer.ctx.stroke();
-                            this.renderer.ctx.restore();
-                        }
-                    }
-
-                    // Special Core Effect
-                    if (def.id === 'core' && def.coreEffectSprite) {
-                        def.coreEffectSprite.draw(this.renderer.ctx, worldPartX, worldPartY, this.coreSpinAngle);
-                    }
-                }
+                // Pass target aim coords (mouse pos) to renderer for correct turret aiming
+                EntityRenderer.drawShip(this.renderer, this.playerShip, worldMouseX, worldMouseY);
             }
 
             // Draw Explosions
@@ -3773,10 +3635,6 @@ export class Game {
             this.renderer.ctx.font = "20px 'Press Start 2P'";
             this.renderer.ctx.fillText("press r to restart", this.renderer.width / 2, this.renderer.height / 2 + 60);
             this.renderer.ctx.textAlign = 'left';
-        }
-
-        if (this.moduleHUD) {
-            this.moduleHUD.draw(this.renderer);
         }
 
         // --- TOOLTIP LOGIC ---

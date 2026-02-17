@@ -1,10 +1,25 @@
 // Single source of truth for version info
 // UPDATE THIS FILE when making changes to the game
 
-export const VERSION = '1.0.2 (beta)';
+export const VERSION = '1.1.0 (beta)';
 export const VERSION_NAME = 'System: Authority';
 
 export const CHANGELOG = [
+    {
+        ver: '1.1.0 (beta)',
+        name: 'System: Authority',
+        date: new Date().toISOString().split('T')[0],
+        items: [
+            "CORE: Complete architecture refactor to Server-Authoritative model.",
+            "NET: Logic moved to shared/ directory for parity.",
+            "NET: GameRoom.js now runs the full physics simulation (walls, collisions, entities).",
+            "CLIENT: Rendering logic isolated in EntityRenderer.js.",
+            "CLIENT: Implemented Client-Side Prediction and Interpolation.",
+            "FIX: Wall collisions are now enforced by the server.",
+            "DEV: Added server-side DOM mocks to support shared assets.",
+            "REFACTOR: Cleaned up Game.js and stripped draw logic from entities."
+        ]
+    },
     {
         ver: '1.0.2 (beta)',
         name: 'System: Authority',

@@ -1,7 +1,6 @@
 import { Ship } from './Ship.js';
 import { PartsLibrary, TILE_SIZE } from '../parts/Part.js';
 import { ItemPickup } from './ItemPickup.js';
-import { Assets } from '../../Assets.js';
 
 export class Shipwreck {
     constructor(x, y, level = 1, randomGen = null) {
@@ -330,47 +329,4 @@ export class Shipwreck {
         }
     }
 
-    draw(renderer) {
-        const ctx = renderer.ctx;
-        const CELL = TILE_SIZE;
-
-        // Draw parts tinted red
-        for (const part of this.ship.getUniqueParts()) {
-            const def = PartsLibrary[part.partId];
-            if (!def) continue;
-
-            const isRotated = ((part.rotation || 0) % 2 !== 0);
-            const w = isRotated ? def.height : def.width;
-            const h = isRotated ? def.width : def.height;
-
-            const localCX = (part.x + (w - 1) / 2) * CELL;
-            const localCY = (part.y + (h - 1) / 2) * CELL;
-
-            const worldPartX = this.x + (localCX * Math.cos(this.rotation) - localCY * Math.sin(this.rotation));
-            const worldPartY = this.y + (localCX * Math.sin(this.rotation) + localCY * Math.cos(this.rotation));
-
-            ctx.save();
-            ctx.translate(worldPartX, worldPartY);
-            ctx.rotate(this.rotation + (part.rotation || 0) * (Math.PI / 2));
-
-            if (def.baseSprite) def.baseSprite.draw(ctx, 0, 0, 0);
-            else if (def.sprite) def.sprite.draw(ctx, 0, 0, 0);
-
-            // Tint
-            ctx.globalCompositeOperation = 'source-atop';
-            ctx.fillStyle = 'rgba(100, 0, 0, 0.6)'; // Dark Red tint
-
-            // Use actual dimensions in local space (unrotated since context is already rotated)
-            const sw = def.width * CELL;
-            const sh = def.height * CELL;
-            ctx.fillRect(-sw / 2, -sh / 2, sw, sh);
-
-            ctx.restore();
-        }
-
-        // Check if empty
-        if (this.ship.getUniqueParts().size === 0) {
-            this.isDead = true;
-        }
-    }
 }

@@ -1,4 +1,3 @@
-import { Sprite } from '../../engine/Sprite.js';
 
 export class Portal {
     constructor(x, y) {
@@ -24,14 +23,4 @@ export class Portal {
         this.rotation += 2.0 * dt;
     }
 
-    draw(renderer) {
-        // Draw glow
-        renderer.ctx.save();
-        renderer.ctx.globalAlpha = 0.5 + Math.sin(Date.now() * 0.005) * 0.2;
-        renderer.drawCircle(this.x, this.y, this.radius + 10, '#aa00ff');
-        renderer.drawCircle(this.x, this.y, this.radius, '#ffffff');
-        renderer.ctx.restore();
-
-        this.sprite.draw(renderer.ctx, this.x, this.y, this.rotation);
-    }
 }

@@ -1,7 +1,7 @@
 
 import { io } from "socket.io-client";
 import { RemotePlayer } from "./RemotePlayer.js";
-import { PartsLibrary } from "../game/parts/Part.js";
+import { PartsLibrary } from "../shared/parts/Part.js";
 
 export class NetworkManager {
     constructor(game) {
