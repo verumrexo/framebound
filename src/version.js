@@ -10,6 +10,7 @@ export const CHANGELOG = [
         name: 'System: Authority',
         date: new Date().toISOString().split('T')[0],
         items: [
+            "BALANCE: Loot drops (XP, Gold, HP) now scale with asteroid and crate size (larger = more loot)",
             "NET: Fixed WebSocket connection error on GitHub Pages (static host detection)",
             "PERF: Implemented Spatial Hash for O(P*E) -> O(P) collision detection (~20x faster)",
             "FIX: Expose game instance to window to fix DevTools/MainMenu UI interactions",
