@@ -29,6 +29,14 @@ export class NetworkManager {
         }
 
         const serverUrl = import.meta.env.VITE_SERVER_URL || undefined;
+
+        // In production (e.g. GitHub Pages), if no server URL is set, do not attempt to connect.
+        // This prevents the client from trying to connect to the static host as a WebSocket server.
+        if (import.meta.env.PROD && !serverUrl) {
+            console.warn("[Network] Offline Mode: No server URL configured (static host detected).");
+            return;
+        }
+
         this.socket = io(serverUrl, {
             transports: ['websocket'],
             upgrade: false
