@@ -243,19 +243,13 @@ export class NetworkManager {
                         enemy.hp = update.hp;
                     }
 
+                    if (update.w !== undefined) enemy.isWarpingIn = update.w;
+
                     // Server is authoritative, so we don't need to predict movement
                     // But we might want some smoothing if updates are slow
                     // For now: Snap.
-                } else {
-                    // Enemy doesn't exist? Might be out of sync or just spawned?
-                    // Level generation *should* be deterministic, so it should exist.
-                    // Unless it's a dynamic spawn (not implemented yet).
-                    // Snap position (naive interpolation later)
-                    enemy.x = update.x;
-                    enemy.y = update.y;
-                    enemy.rotation = update.r;
-                    enemy.hp = update.hp;
                 }
+                // Ignore unknown enemies to prevent crash or erratic behavior
             }
         });
 

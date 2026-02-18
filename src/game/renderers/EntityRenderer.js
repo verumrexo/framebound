@@ -151,6 +151,13 @@ export class EntityRenderer {
         const frozenTimer = enemy.frozenTimer || 0;
         const freezeMeter = enemy.freezeMeter || 0;
 
+        if (enemy.isWarpingIn) {
+            renderer.ctx.save();
+            renderer.ctx.globalAlpha = 0.3 + Math.sin(Date.now() * 0.01) * 0.3; // 0.0 to 0.6 opacity
+            renderer.ctx.shadowColor = '#00ffff';
+            renderer.ctx.shadowBlur = 20;
+        }
+
         // Render ship parts if available
         if (enemy.shipParts && enemy.shipParts.length > 0) {
             const ctx = renderer.ctx;
@@ -248,6 +255,11 @@ export class EntityRenderer {
              // Fallback sprite
              const color = (frozenTimer > 0) ? '#00ffff' : undefined;
              enemy.sprite.draw(renderer.ctx, enemy.x, enemy.y, enemy.rotation + (enemy.rotationOffset || 0), 0.5, 0.5, null, color);
+        }
+
+        if (enemy.isWarpingIn) {
+            renderer.ctx.restore();
+            return; // Skip health bar while warping
         }
 
         // Draw Health Bar
