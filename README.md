@@ -36,13 +36,19 @@ want to host your own galaxy? fine. here's how you do it.
 ### instructions
 1. **clone the repo**: `git clone https://github.com/verumrexo/framebound.git`
 2. **install dependencies**: `npm install`
-3. **start the server**: `npm run server`
+3. **start everything**: `npm start`
+
+this command runs both the backend server and the frontend client concurrently.
+
+### running a standalone server
+if you only want to run the server (e.g. for hosting):
+`npm run server`
 
 the server will start on port `3000` by default. you should see something like:
 `Server running on port 3000`
 
 ### connecting
-- **local play**: run `npm run dev` in another terminal. the game will automatically connect to `localhost:3000`.
+- **local play**: use `npm start`. the game will automatically connect to `localhost:3000`.
 
 - **hosting for friends (advanced: port forwarding)**:
     - forward port `3000` (TCP) on your router to your computer.
