@@ -116,7 +116,7 @@ export class GameRoom {
                 this.projectiles.push(p);
 
                 // Broadcast shoot event so other clients see it/hear it
-                socket.to(this.id).emit('player_shoot', { id: socket.id, ...data });
+                this.io.to(this.id).emit('player_shoot', { id: socket.id, ...data });
             }
         });
 
