@@ -69,3 +69,6 @@ the server will start on port `3000` by default. you should see something like:
         3. give the forwarding url to your friends for the **direct connect** box.
 
 - **deployment**: set the `VITE_SERVER_URL` environment variable in your frontend deployment (e.g., Vercel, Netlify) to your server's public URL (e.g., `wss://your-server.com`).
+
+## Troubleshooting
+If you encounter 'ERR_MODULE_NOT_FOUND', ensure you run 'npm install' to install dependencies before starting the server.
