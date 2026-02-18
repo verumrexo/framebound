@@ -19,6 +19,10 @@ export class GameRoom {
         this.lootCrates = [];
         this.bosses = [];
         this.shipwrecks = []; // Need to populate if generated
+        this.xpOrbs = [];
+        this.goldOrbs = [];
+        this.hpOrbs = [];
+        this.floor = 1;
 
         this.running = false;
 
@@ -28,53 +32,12 @@ export class GameRoom {
         this.levelGen = new LevelGenerator();
         this.rooms = this.levelGen.generate(15, this.seed);
 
-        // Spawn Entities (Enemies, Asteroids, etc.)
-        this.spawnEntities();
-
         // Physics Loop
         this.running = true;
         this.interval = setInterval(() => this.update(), 1000 / 60);
         this.lastTime = Date.now();
 
         this.socketHandlers = new Map();
-    }
-
-    spawnEntities() {
-        const mockGame = {
-            enemies: [],
-            asteroids: [],
-            lootCrates: [],
-            bosses: [],
-            shipwrecks: []
-        };
-
-        this.rooms.forEach(room => {
-            try {
-                // We use the room methods to populate our lists
-                // Room.js methods: spawnEnemies(game), spawnAsteroids(game), etc.
-                // These methods push to game.enemies etc.
-                if (room.gridX !== 0 || room.gridY !== 0) {
-                    const asteroidCount = room.spawnAsteroids(mockGame);
-                    room.spawnLootCrates(mockGame, asteroidCount);
-                    room.spawnShipwrecks(mockGame);
-                    room.spawnEnemies(mockGame);
-                }
-            } catch (e) {
-                console.warn(`[Room ${this.id}] Spawn Error: ${e.message}`);
-            }
-        });
-
-        this.enemies = mockGame.enemies;
-        this.asteroids = mockGame.asteroids;
-        this.lootCrates = mockGame.lootCrates;
-        this.bosses = mockGame.bosses;
-        this.shipwrecks = mockGame.shipwrecks;
-
-        // Merge bosses into enemies list for general updates?
-        // Or keep separate like Client? Client keeps separate.
-        // But Collision checks often iterate both.
-
-        console.log(`[Room ${this.id}] Spawned: ${this.enemies.length} Enemies, ${this.bosses.length} Bosses, ${this.asteroids.length} Asteroids`);
     }
 
     addPlayer(socket) {
@@ -206,8 +169,14 @@ export class GameRoom {
             // Apply Input
             client.ship.update(dt, client.input);
 
+            // Lazy Room Activation
+            const currentRoom = this.levelGen.getRoomAtWorldPos(client.ship.x, client.ship.y);
+            if (currentRoom && !currentRoom.visited) {
+                currentRoom.onEnter(this);
+            }
+
             // Wall Collision & Room Constraints
-            const room = this.levelGen.getRoomAtWorldPos(client.ship.x, client.ship.y);
+            const room = currentRoom;
             if (room) {
                 // Determine if room is locked (enemies alive in this room)
                 // Optimization: Room could cache "cleared" status on server
@@ -371,7 +340,8 @@ export class GameRoom {
                 x: Math.round(enemy.x),
                 y: Math.round(enemy.y),
                 r: parseFloat(enemy.rotation.toFixed(2)),
-                hp: enemy.hp
+                hp: enemy.hp,
+                w: enemy.isWarpingIn
             });
         }
 

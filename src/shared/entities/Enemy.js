@@ -18,6 +18,9 @@ export class Enemy {
         this.frozenTimer = 0;
         this.lastFreezeTick = 0;
 
+        this.isWarpingIn = true;
+        this.warpTimer = 1.0 + (this.random() * 1.0);
+
         if (type === 'striker') {
             // Striker uses user-designed ship with weapon turrets
             this.rotationOffset = 0;
@@ -272,7 +275,9 @@ export class Enemy {
     }
 
     addSnapshot(data) {
-        // data: { x, y, r, hp }
+        // data: { x, y, r, hp, w }
+        if (data.w !== undefined) this.isWarpingIn = data.w;
+
         this.interpolationBuffer.push({
             timestamp: Date.now(),
             x: data.x,
@@ -480,6 +485,16 @@ export class Enemy {
 
     update(dt, playerX, playerY, projectiles, asteroids = [], lootCrates = [], allEnemies = [], room = null) {
         if (this.isDead) return;
+
+        if (this.warpTimer > 0) {
+            this.warpTimer -= dt;
+            if (this.warpTimer > 0) {
+                this.isWarpingIn = true;
+                return;
+            } else {
+                this.isWarpingIn = false;
+            }
+        }
 
         // DEBUG: Catch NaN entry
         if (isNaN(this.x) || isNaN(this.y) || isNaN(this.rotation)) {
