@@ -92,7 +92,7 @@ function assertHealth(value) {
 
 async function connectClient(url) {
     const client = io(url.origin, {
-        transports: ['websocket'],
+        transports: ['polling', 'websocket'],
         forceNew: true,
         reconnection: false,
         timeout: 30_000

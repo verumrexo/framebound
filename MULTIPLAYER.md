@@ -3,10 +3,9 @@
 date approved: 2026-07-25  
 status: protocol, host authority, signaling, webrtc, reconnect tokens,
 full-resync, the host/join-code menu, and the approved co-op contract are
-implemented locally; public signaling deployment and second-device packaged
-proof remain open. the public relay now has a free render blueprint and a
-real hosted-service smoke command; account approval and the assigned url remain
-open
+implemented locally; the public render signaling relay is live and passed the
+real health, host, join, and signal-relay smoke. second-device packaged proof
+remains open
 
 ## the simple version
 
@@ -125,9 +124,9 @@ half-open channels while normal, paused, delayed, dropped, and out-of-order
 traffic has deterministic convergence coverage.
 the main menu now exposes **host game** and **join game** and waits for
 authoritative synchronization before starting either side. the signaling
-service has a free render blueprint plus a health, host/join, and relay smoke
-command. public builds still need render's assigned `VITE_SIGNALING_URL`; full
-gameplay parity and the second-device native route proof are still open.
+service has a free render blueprint and its public health, host/join, and relay
+smoke passes. production builds use the deployed url; full gameplay parity and
+the second-device native route proof are still open.
 
 the packaged macos smoke now proves that two native instances reach the
 signaling service, exchange offer/answer messages, and exchange bounded ice

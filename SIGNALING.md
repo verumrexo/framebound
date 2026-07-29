@@ -3,6 +3,18 @@
 this service only exchanges short-lived webrtc connection metadata. it does not
 run combat, rooms, rewards, saves, or any other game simulation.
 
+## current deployment
+
+the public relay is:
+
+```text
+https://framebound-signaling.onrender.com
+```
+
+its signaling-only health response, host code, guest join, and signal relay
+passed the hosted smoke test. production browser and desktop builds use this
+exact url.
+
 ## deploy the free public relay
 
 [`render.yaml`](./render.yaml) defines one free, signaling-only websocket

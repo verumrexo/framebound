@@ -35,8 +35,7 @@ export class SocketIOSignalingClient {
             return;
         }
         this.socket = this.socketFactory(this.serverUrl, {
-            transports: ['websocket'],
-            upgrade: false
+            transports: ['polling', 'websocket']
         });
         this.socket.on('connect', () => {
             this.connected = true;

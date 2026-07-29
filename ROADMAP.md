@@ -602,9 +602,8 @@ team transitions, host pause, guest movement/combat parity, drone ownership,
 nearest-player aggro, death/spectating, and boss-kill resurrection. health orbs
 heal their collector, and shared xp now gives every player a private upgrade
 choice while the team waits. a public signaling deployment url and
-second-device packaged route proof remain open. a free render blueprint and
-hosted relay smoke command are ready; the render account approval and assigned
-url remain account-bound.
+second-device packaged route proof remain open. the free render signaling
+service is live and its public health, host, join, and relay smoke passes.
 
 ### protocol foundation
 
@@ -632,7 +631,7 @@ url remain account-bound.
 - do not require a paid turn relay for the zero-cost first version.
 - expire abandoned signaling sessions and never store authoritative game state there.
 - replace the lobby browser with explicit **host game** and **join game** flows.
-  (implemented locally; public builds still need `VITE_SIGNALING_URL`.)
+  (implemented; production builds use the deployed render signaling url.)
 - keep the legacy socket.io transport only until peer-to-peer parity and migration tests pass.
 
 ### tests

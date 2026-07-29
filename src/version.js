@@ -39,6 +39,7 @@ export const CHANGELOG = [
             'online: host heartbeats and guest watchdogs now recover silent half-open links, including while gameplay is paused.',
             'online: delayed, dropped, and out-of-order host snapshots now have explicit newest-state convergence coverage.',
             'online: added a free public signaling blueprint and an end-to-end hosted relay smoke test.',
+            'online: production builds now use the live public signaling relay with polling fallback and websocket upgrade.',
             'online: native hosts keep networking alive while their window is in the background.',
             'stability: hardened saves, multiplayer packets, settings, audio, collisions, and desktop signing.',
             'security: leaderboard reads now request only displayed fields and reject scores outside the safe integer range.',

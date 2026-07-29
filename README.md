@@ -47,13 +47,13 @@ transport/resync flow and host/join-code menu pass locally. the approved co-op
 contract is implemented locally: shared xp/gold, private builds, buyer-owned
 shop rewards, team transitions, four players, host pause, guest combat parity,
 nearest-player aggro, spectating, and boss-kill resurrection. health-orb and
-level-up ownership still need the final rule, and public builds still need a
-deployed signaling url. yeah, honesty in a readme. disgusting.
+level-up ownership follow the approved collector-owned and private-choice rules.
+the public signaling relay is live; second-device direct-route proof remains.
 
 the tiny websocket handshake service has a signaling-only production mode and
-health endpoint documented in [`SIGNALING.md`](./SIGNALING.md). a render
-blueprint and hosted-relay smoke test are included; connecting the render
-account and copying its assigned url are the remaining account-bound steps.
+health endpoint documented in [`SIGNALING.md`](./SIGNALING.md). production
+builds point to the public render relay, and its health, host, join, and
+signal-relay path passed the hosted smoke test.
 
 ## development
 

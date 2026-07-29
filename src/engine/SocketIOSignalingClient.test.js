@@ -32,8 +32,12 @@ class FakeSocket {
 
 test('signaling client hosts, joins, and relays bounded signals', () => {
     const socket = new FakeSocket();
+    let connectionOptions = null;
     const client = new SocketIOSignalingClient({
-        socketFactory: () => socket,
+        socketFactory: (_url, options) => {
+            connectionOptions = options;
+            return socket;
+        },
         serverUrl: 'http://signal.test'
     });
     const calls = [];
@@ -42,6 +46,9 @@ test('signaling client hosts, joins, and relays bounded signals', () => {
     client.onSignal = data => calls.push(['signal', data]);
     client.connect();
 
+    assert.deepEqual(connectionOptions, {
+        transports: ['polling', 'websocket']
+    });
     client.host();
     socket.trigger('p2p_hosted', {
         code: 'abc123',
