@@ -122,7 +122,7 @@ completed on 2026-07-25:
 - passed 237 node tests, `git diff --check`, the production build, and a live turret-toggle, `m`-close, visible-canvas, and console-error smoke after the editor/ship hardening batch.
 - blocked gameplay shortcuts before a local ship exists and while pause, hangar, level-up, game-over, or editor state owns input, preventing main-menu `tab` crashes and competing modal overlays.
 - passed the final 239-test suite against the exact source packaged into the current macos app.
-- archived the superseded `task2.md` as historical, explicitly unapproved ideas after confirming all approved technical work is already represented here.
+- restored `task2.md` as the active idea and feature backlog after the user confirmed its unfinished items still matter.
 - compared the shipped entity renderer paths with their pre-migration entity draw sources and restored the missing treasure/vault fallback borders.
 - added a deterministic `?visual-gallery` proof surface covering player, enemy, remote player, boss bounds, projectile families, asteroid, crate, orbs, portal, pickup, wreck, chests, shops, drone, and training dummy without changing normal startup.
 - visually inspected the rendered gallery at normal play scale with zero browser errors, confirmed normal menu startup still works, passed 240 node tests, `git diff --check`, and the production build.
@@ -430,7 +430,7 @@ addresses: a-013 and a-016.
 - consolidate duplicate biome and collision suites into one test topology.
 - document the supported node version and one canonical command for tests.
 - add small game-harness helpers so lifecycle tests do not need a real browser for every assertion.
-- archive the old notes as `docs/archive/task2-historical.md` after moving only confirmed work into this roadmap.
+- keep the original idea backlog active in `task2.md` while tracking approved technical execution in this roadmap.
 
 ### exit gate
 
@@ -729,4 +729,7 @@ the next concrete batches, in order:
 9. host-authoritative peer-to-peer multiplayer, after the co-op design checkpoint;
 10. signed macos and windows release packaging after desktop multiplayer parity.
 
-content ideas from `docs/archive/task2-historical.md` stay parked. warp gates, mines, extra drones, stealth, meta progression, balance changes, new rooms, achievements, and daily challenges are creative work and are not approved by this technical roadmap.
+content ideas from `task2.md` remain active backlog. warp gates, mines, extra
+drones, stealth, meta progression, balance changes, new rooms, achievements,
+and daily challenges stay preserved and will be designed with the user before
+implementation.

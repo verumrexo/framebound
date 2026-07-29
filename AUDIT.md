@@ -289,8 +289,7 @@ the client can submit arbitrary scores, and `clearScores()` attempts a broad del
 
 - the production entry chunk is above vite's 500 kb warning threshold;
 - dynamic imports for `Part.js` and `TreasureChest.js` cannot split because the same modules are statically imported elsewhere;
-- `docs/archive/task2-historical.md` preserves the old malformed escaped roadmap as historical input; completed work moved to `ROADMAP.md`, and its unchecked creative ideas remain unapproved;
-- readme and package versions disagree;
+- `task2.md` is restored as the active idea and feature backlog; its unchecked items remain preserved until completed or explicitly removed;
 - a 4,088-line `Game.js.bak` is tracked beside the live file and can be mistaken for source;
 - no single document currently defines the authoritative architecture or online/offline ownership boundary.
 
