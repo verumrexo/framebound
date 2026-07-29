@@ -34,6 +34,7 @@ export class Settings {
         };
 
         this.updateInterval = null;
+        this.setupTimeout = null;
         this.load();
     }
 
@@ -42,15 +43,9 @@ export class Settings {
         try {
             const saved = localStorage.getItem('framebound_cursor_settings');
             if (saved) {
-                const parsed = JSON.parse(saved);
-                this.game.cursorSettings = {
-                    shape: parsed.shape || this.defaults.cursorShape,
-                    thickness: parsed.thickness || this.defaults.cursorThickness,
-                    length: parsed.length || this.defaults.cursorLength,
-                    gap: parsed.gap ?? this.defaults.cursorGap,
-                    color: parsed.color || this.defaults.cursorColor,
-                    outline: parsed.outline ?? this.defaults.cursorOutline
-                };
+                this.game.cursorSettings = this.normalizeCursorSettings(
+                    JSON.parse(saved)
+                );
                 // Sync slider states
                 this.sliderStates.cursorThickness.current = this.sliderStates.cursorThickness.target = this.game.cursorSettings.thickness;
                 this.sliderStates.cursorLength.current = this.sliderStates.cursorLength.target = this.game.cursorSettings.length;
@@ -64,9 +59,9 @@ export class Settings {
         try {
             const saved = localStorage.getItem('framebound_game_settings');
             if (saved) {
-                const parsed = JSON.parse(saved);
-                this.game.showDamageNumbers = parsed.showDamageNumbers ?? this.defaults.showDamageNumbers;
-                this.game.damageNumberMode = parsed.damageNumberMode || this.defaults.damageNumberMode;
+                const parsed = this.normalizeGameSettings(JSON.parse(saved));
+                this.game.showDamageNumbers = parsed.showDamageNumbers;
+                this.game.damageNumberMode = parsed.damageNumberMode;
             } else {
                 this.game.showDamageNumbers = this.defaults.showDamageNumbers;
                 this.game.damageNumberMode = this.defaults.damageNumberMode;
@@ -74,6 +69,75 @@ export class Settings {
         } catch (e) {
             console.warn('[Settings] Failed to load game settings:', e);
         }
+    }
+
+    normalizeCursorSettings(value) {
+        const settings = (
+            value &&
+            typeof value === 'object' &&
+            !Array.isArray(value)
+        ) ? value : {};
+        const numberInRange = (candidate, fallback, min, max) => (
+            Number.isFinite(candidate)
+                ? Math.max(min, Math.min(max, candidate))
+                : fallback
+        );
+        const validShapes = new Set([
+            'dot',
+            'circle',
+            '3-lines',
+            '4-lines'
+        ]);
+
+        return {
+            shape: validShapes.has(settings.shape)
+                ? settings.shape
+                : this.defaults.cursorShape,
+            thickness: numberInRange(
+                settings.thickness,
+                this.defaults.cursorThickness,
+                1,
+                10
+            ),
+            length: numberInRange(
+                settings.length,
+                this.defaults.cursorLength,
+                5,
+                50
+            ),
+            gap: numberInRange(
+                settings.gap,
+                this.defaults.cursorGap,
+                0,
+                20
+            ),
+            color: (
+                typeof settings.color === 'string' &&
+                /^#[0-9a-fA-F]{6}$/.test(settings.color)
+            ) ? settings.color : this.defaults.cursorColor,
+            outline: typeof settings.outline === 'boolean'
+                ? settings.outline
+                : this.defaults.cursorOutline
+        };
+    }
+
+    normalizeGameSettings(value) {
+        const settings = (
+            value &&
+            typeof value === 'object' &&
+            !Array.isArray(value)
+        ) ? value : {};
+        const validModes = new Set(['singular', 'additive']);
+
+        return {
+            showDamageNumbers:
+                typeof settings.showDamageNumbers === 'boolean'
+                    ? settings.showDamageNumbers
+                    : this.defaults.showDamageNumbers,
+            damageNumberMode: validModes.has(settings.damageNumberMode)
+                ? settings.damageNumberMode
+                : this.defaults.damageNumberMode
+        };
     }
 
     saveGameSettings() {
@@ -92,6 +156,17 @@ export class Settings {
             localStorage.setItem('framebound_cursor_settings', JSON.stringify(this.game.cursorSettings));
         } catch (e) {
             console.warn('[Settings] Failed to save cursor settings:', e);
+        }
+    }
+
+    stopUpdating() {
+        if (this.setupTimeout !== null) {
+            clearTimeout(this.setupTimeout);
+            this.setupTimeout = null;
+        }
+        if (this.updateInterval !== null) {
+            clearInterval(this.updateInterval);
+            this.updateInterval = null;
         }
     }
 
@@ -321,10 +396,11 @@ export class Settings {
             </div>
         `;
 
-        if (this.updateInterval) clearInterval(this.updateInterval);
+        this.stopUpdating();
 
         // Setup Listeners
-        setTimeout(() => {
+        this.setupTimeout = setTimeout(() => {
+            this.setupTimeout = null;
             const audio = this.game.audio;
             const renderer = this.game.renderer;
 
@@ -367,7 +443,7 @@ export class Settings {
             if (selDamageMode) selDamageMode.onchange = (e) => { this.game.damageNumberMode = e.target.value; this.saveGameSettings(); };
 
             if (btnBack) btnBack.onclick = () => {
-                if (this.updateInterval) clearInterval(this.updateInterval);
+                this.stopUpdating();
                 if (backCallback) backCallback();
             };
 

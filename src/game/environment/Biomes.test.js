@@ -18,6 +18,8 @@ describe('Biomes Module', () => {
             assert.ok(biome.colors, `Biome ${key} should have colors`);
             assert.ok(biome.colors.background, `Biome ${key} should have background color`);
             assert.ok(biome.colors.grid, `Biome ${key} should have grid color`);
+            assert.ok(biome.colors.gridMajor, `Biome ${key} should have a major-grid color`);
+            assert.ok(biome.colors.stars, `Biome ${key} should have a star color`);
         }
     });
 

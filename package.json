@@ -1,19 +1,37 @@
 {
   "name": "framebound",
   "private": true,
-  "version": "1.1.0 (beta)",
+  "version": "1.1.0-beta",
   "type": "module",
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "scripts": {
     "start": "concurrently \"npm run server\" \"npm run dev\"",
     "dev": "vite",
+    "signaling": "node scripts/start-signaling.mjs",
+    "signaling:smoke": "node scripts/smoke-signaling.mjs",
+    "desktop": "tauri dev",
+    "desktop:build": "node scripts/build-desktop.mjs",
+    "desktop:build:app": "tauri build --bundles app && node scripts/sign-macos-app.mjs && node scripts/verify-desktop-artifact.mjs",
+    "desktop:verify": "node scripts/verify-desktop-artifact.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "server": "node src/server/server.js",
-    "test": "node src/tests/prepare.js && node --experimental-test-module-mocks --test 'src/**/*.test.js' 'test/**/*.test.js'",
+    "test": "node --experimental-test-module-mocks --test",
+    "test:coverage": "node --experimental-test-module-mocks --experimental-test-coverage --test",
+    "test:coverage:critical": "node --experimental-test-module-mocks --experimental-test-coverage --test --test-coverage-include=\"src/shared/multiplayer/*.js\" --test-coverage-include=\"src/game/systems/HostGameSimulation.js\" --test-coverage-include=\"src/game/systems/PeerWorldReplicator.js\" --test-coverage-include=\"src/game/systems/SaveManager.js\" --test-coverage-include=\"src/game/systems/RoomSnapshotSystem.js\" --test-coverage-include=\"src/engine/PeerConnectionCoordinator.js\" --test-coverage-include=\"src/engine/PeerNetworkManager.js\" --test-coverage-lines=80 --test-coverage-branches=60 --test-coverage-functions=70",
+    "check:version": "node scripts/check-release-version.mjs",
+    "check:source": "node scripts/check-source-hygiene.mjs",
+    "audit:imports": "node scripts/audit-import-graph.mjs",
     "test:random": "node src/utils/random.test.js",
-    "test:biomes": "node --test src/game/environment/Biomes.test.js"
+    "test:biomes": "node --test src/game/environment/Biomes.test.js",
+    "trace:movement": "node scripts/trace-movement.mjs",
+    "trace:weapon-rates": "node scripts/trace-weapon-rates.mjs",
+    "trace:projectiles": "node scripts/trace-projectile-families.mjs"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.11.4",
     "concurrently": "^9.2.1",
     "vite": "^7.2.4"
   },

@@ -55,13 +55,6 @@ export class ShipBuilder {
                     <div id="builder-part-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(50px, 1fr)); gap: 6px; overflow-y: auto; padding: 4px;">
                     </div>
                 </div>
-
-                <!-- Mobile Controls (Bottom Center) -->
-                <div id="mobile-builder-controls" style="position: absolute; bottom: 20px; left: 20px; display: flex; gap: 20px; pointer-events: auto;">
-                    <button id="btn-builder-rotate" style="width: 80px; height: 80px; background: #44a; color: white; border: 2px solid white; border-radius: 50%; font-size: 16px; font-weight: bold; box-shadow: 0 0 10px black;">rotate</button>
-                    <button id="btn-builder-place" style="width: 100px; height: 100px; background: #4a4; color: white; border: 3px solid white; border-radius: 50%; font-size: 16px; font-weight: bold; box-shadow: 0 0 10px black;">place</button>
-                    <button id="btn-builder-remove" style="width: 60px; height: 60px; background: #a44; color: white; border: 2px solid white; border-radius: 50%; font-size: 8px; font-weight: bold; box-shadow: 0 0 10px black;">del</button>
-                </div>
             </div>
         `;
         document.body.appendChild(this.ui);
@@ -75,10 +68,6 @@ export class ShipBuilder {
         this.ui.addEventListener('mouseup', (e) => e.stopPropagation());
         this.ui.addEventListener('click', (e) => e.stopPropagation());
         this.ui.addEventListener('contextmenu', (e) => e.stopPropagation());
-        // Stop Touch Events too (keeps ghost steady)
-        this.ui.addEventListener('touchstart', (e) => e.stopPropagation());
-        this.ui.addEventListener('touchend', (e) => e.stopPropagation());
-
         // Tooltip (reuse Hangar's style)
         this.tooltip = document.createElement('div');
         this.tooltip.style.cssText = `
@@ -120,15 +109,14 @@ export class ShipBuilder {
             this.tooltip.style.wordWrap = 'break-word';
         });
 
-        // Setup buttons after DOM is available
-        setTimeout(() => this.setupButtons(), 100);
+        this.setupButtons();
     }
 
     setupButtons() {
-        const importBtn = document.getElementById('builder-import');
-        const exportBtn = document.getElementById('builder-export');
-        const clearBtn = document.getElementById('builder-clear');
-        const turretToggle = document.getElementById('builder-turret-toggle');
+        const importBtn = this.ui.querySelector('#builder-import');
+        const exportBtn = this.ui.querySelector('#builder-export');
+        const clearBtn = this.ui.querySelector('#builder-clear');
+        const turretToggle = this.ui.querySelector('#builder-turret-toggle');
 
         if (importBtn) {
             importBtn.onclick = (e) => {
@@ -155,31 +143,25 @@ export class ShipBuilder {
             turretToggle.onclick = (e) => {
                 e.stopPropagation();
                 this.turretEditorMode = !this.turretEditorMode;
-                turretToggle.textContent = this.turretEditorMode ? '✓ turret editor' : '🔧 turret editor';
-                turretToggle.style.background = this.turretEditorMode
-                    ? 'linear-gradient(135deg, #44ff66, #22cc44)'
-                    : 'linear-gradient(135deg, #ff9944, #dd7722)';
+                this.syncTurretToggle();
                 this.game.showNotification(
                     this.turretEditorMode ? 'turret editor enabled' : 'turret editor disabled',
                     this.turretEditorMode ? '#4f4' : '#fa4'
                 );
             };
         }
+    }
 
-        // Mobile Buttons
-        const rBtn = document.getElementById('btn-builder-rotate');
-        const pBtn = document.getElementById('btn-builder-place');
-        const dBtn = document.getElementById('btn-builder-remove');
+    syncTurretToggle() {
+        const turretToggle = this.ui?.querySelector?.('#builder-turret-toggle');
+        if (!turretToggle) return;
 
-        if (rBtn) rBtn.onclick = (e) => { e.stopPropagation(); this.rotation = (this.rotation + 1) % 4; };
-        if (pBtn) pBtn.onclick = (e) => { e.stopPropagation(); this.placeAtGhost(); };
-        if (dBtn) dBtn.onclick = (e) => { e.stopPropagation(); this.removeAtGhost(); };
-
-        // Hide mobile controls on Desktop (if not touch)
-        const mobileCtrls = document.getElementById('mobile-builder-controls');
-        if (mobileCtrls && !this.game.input.isTouch) {
-            mobileCtrls.style.display = 'none';
-        }
+        turretToggle.textContent = this.turretEditorMode
+            ? '✓ turret editor'
+            : '🔧 turret editor';
+        turretToggle.style.background = this.turretEditorMode
+            ? 'linear-gradient(135deg, #44ff66, #22cc44)'
+            : 'linear-gradient(135deg, #ff9944, #dd7722)';
     }
 
     placeAtGhost() {
@@ -388,6 +370,21 @@ export class ShipBuilder {
             this.game.paused = false;
             this.draftShip = null;
         }
+    }
+
+    resetRunState() {
+        this.active = false;
+        this.ui.style.display = 'none';
+        this.tooltip.style.display = 'none';
+        this.isHoveringUI = false;
+        this.selectedPartId = 'hull';
+        this.rotation = 0;
+        this.rotateDebounce = false;
+        this.lastPlacedGrid = null;
+        this.ghostGrid = null;
+        this.draftShip = null;
+        this.turretEditorMode = false;
+        this.syncTurretToggle();
     }
 
     update(dt) {

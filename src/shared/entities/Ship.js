@@ -56,27 +56,36 @@ export class Ship {
         this.hp = this.maxHp;
     }
 
-    update(dt, input) {
+    update(dt, input, {
+        movementMultiplier = 1.0,
+        externalDashActive = null
+    } = {}) {
         if (this.isDead) return;
 
         // --- Dash Logic ---
         const boosterCount = this.stats.boosterCount || 0;
-        if (this.dashCooldown > 0) {
-            this.dashCooldown -= dt;
-        }
+        const usesExternalDash = typeof externalDashActive === 'boolean';
 
-        // Input handling for Dash
-        // Server receives 'shift' flag
-        if (boosterCount > 0 && input && input.shift && this.dashCooldown <= 0) {
-            const actualMaxCooldown = Math.max(1.0, this.dashMaxCooldown / boosterCount);
-            this.dashActiveTimer = this.dashDuration;
-            this.dashCooldown = actualMaxCooldown;
-            // Event hook for sound could be returned or emitted
-        }
+        if (!usesExternalDash) {
+            if (this.dashCooldown > 0) {
+                this.dashCooldown -= dt;
+            }
 
-        if (this.dashActiveTimer > 0) {
-            this.dashActiveTimer -= dt;
+            // The shared ship owns dash on the server. The local game supplies
+            // its external dash state so the same force is not applied twice.
+            if (boosterCount > 0 && input && input.shift && this.dashCooldown <= 0) {
+                const actualMaxCooldown = Math.max(1.0, this.dashMaxCooldown / boosterCount);
+                this.dashActiveTimer = this.dashDuration;
+                this.dashCooldown = actualMaxCooldown;
+            }
+
+            if (this.dashActiveTimer > 0) {
+                this.dashActiveTimer -= dt;
+            }
         }
+        const dashActive = usesExternalDash
+            ? externalDashActive
+            : this.dashActiveTimer > 0;
 
         // --- Movement Physics ---
         // Base Stats
@@ -84,17 +93,13 @@ export class Ship {
         const baseThrust = (this.stats.thrust !== undefined) ? this.stats.thrust : 0;
         const thrustMultiplier = 1 + (baseThrust * 0.05);
 
-        // Combat Boost (Logic requires knowing room state - usually handled by Game/Room)
-        // For pure shared entity, we might accept an 'environmentBoost' param?
-        // Or assume standard 1.0 for now to keep it simple.
-        const combatBoost = 1.0;
         const levelBonus = 1.0; // Pass level?
 
-        const currentAccel = 2500 * thrustMultiplier * levelBonus * combatBoost * (perm.speedMul || 1.0);
+        const currentAccel = 2500 * thrustMultiplier * levelBonus * movementMultiplier * (perm.speedMul || 1.0);
 
         // Max VELOCITY
-        let maxSpeed = 150 * thrustMultiplier * levelBonus * combatBoost * (perm.speedMul || 1.0);
-        if (this.dashActiveTimer > 0) {
+        let maxSpeed = 150 * thrustMultiplier * levelBonus * movementMultiplier * (perm.speedMul || 1.0);
+        if (dashActive) {
             maxSpeed *= 2.5;
         }
 
@@ -128,7 +133,7 @@ export class Ship {
         }
 
         // Apply Dash Force
-        if (this.dashActiveTimer > 0) {
+        if (dashActive && !usesExternalDash) {
             const angle = this.rotation - Math.PI / 2;
             this.vx += Math.cos(angle) * this.dashPower * dt;
             this.vy += Math.sin(angle) * this.dashPower * dt;
@@ -154,7 +159,7 @@ export class Ship {
         let targetRotation = null;
 
         // Aim Angle from input
-        if (input && input.aimAngle !== undefined) {
+        if (Number.isFinite(input?.aimAngle)) {
             targetRotation = input.aimAngle;
         } else {
             // Fallback: Move direction if fast enough
@@ -194,8 +199,16 @@ export class Ship {
     }
 
     canPlaceAt(x, y, partId, rotation = 0) {
+        if (
+            !Number.isFinite(x) ||
+            !Number.isFinite(y) ||
+            !Number.isFinite(rotation) ||
+            !Object.hasOwn(PartsLibrary, partId)
+        ) {
+            return false;
+        }
+
         const def = PartsLibrary[partId];
-        if (!def) return false;
 
         const isRotated = (rotation % 2 !== 0);
         const w = isRotated ? def.height : def.width;
@@ -233,6 +246,15 @@ export class Ship {
     }
 
     addPart(x, y, partId, rotation = 0) {
+        if (
+            !Number.isFinite(x) ||
+            !Number.isFinite(y) ||
+            !Number.isFinite(rotation) ||
+            !Object.hasOwn(PartsLibrary, partId)
+        ) {
+            return false;
+        }
+
         // Core exception: Always allow (since it's the first part)
         const isCore = (x === 0 && y === 0);
 
@@ -297,26 +319,32 @@ export class Ship {
     }
 
     clone() {
-        // Create new ship
         const newShip = new Ship();
-        // Clear default core (optional, but addPart handles collision if we overwrite)
-        // Actually addPart collision check prevents overwriting 0,0 Core.
-        // So we should clear parts first or just rely on addPart logic.
         newShip.parts.clear();
 
-        this.getUniqueParts().forEach(p => {
-            newShip.addPart(p.x, p.y, p.partId, p.rotation);
-        });
+        // Copy the occupied grid directly. Replaying addPart() can reject a
+        // valid layout when Map insertion order is not core-outward, silently
+        // dropping parts as soon as the hangar opens.
+        const clonedParts = new Map();
+        for (const [key, part] of this.parts) {
+            if (!clonedParts.has(part)) {
+                clonedParts.set(part, { ...part });
+            }
+            newShip.parts.set(key, clonedParts.get(part));
+        }
 
-        // Preserve HP and state
+        newShip.x = this.x;
+        newShip.y = this.y;
+        newShip.vx = this.vx;
+        newShip.vy = this.vy;
+        newShip.rotation = this.rotation;
         newShip.hp = this.hp;
         newShip.isDead = this.isDead;
         newShip.godMode = this.godMode;
-
-        // Preserve Permanent Stats
         newShip.permanentStats = { ...this.permanentStats };
+        newShip.dashCooldown = this.dashCooldown;
+        newShip.dashActiveTimer = this.dashActiveTimer;
 
-        // Ensure stats are consistent with cloned permanent stats
         newShip.recalculateStats();
 
         return newShip;
@@ -353,21 +381,21 @@ export class Ship {
                 if (def.stats.turnSpeed) this.stats.turnSpeed += def.stats.turnSpeed;
                 if (def.stats.regen) this.stats.regen += def.stats.regen;
             }
-            if (def.type === 'structure' && def.id === 'accelerant') this.stats.accelerantCount++;
+            if (def.type === PartType.ACCELERANT) this.stats.accelerantCount++;
             if (def.type === 'weapon') {
                 if (def.stats.weaponGroup === 'laser') this.stats.laserCount++;
                 if (def.stats.weaponGroup === 'rocket') this.stats.rocketCount++;
                 if (def.stats.weaponGroup === 'velocity') this.stats.velocityCount++;
             }
             if (def.type === PartType.ROCKET_BAY) this.stats.rocketBayCount++;
-            if (def.type === 'structure' && def.id === 'dash_booster') this.stats.boosterCount++;
+            if (def.type === PartType.BOOSTER) this.stats.boosterCount++;
         }
 
         // Apply Permanent Upgrades
         const perm = this.permanentStats;
         this.stats.totalHp = Math.floor(this.stats.totalHp * perm.hpMul);
         this.stats.regen += perm.regenAdd;
-        // thrust and turnSpeed multipliers are applied in PlayerController
+        // thrust and turnSpeed multipliers are applied in PlayerControlSystem
 
         // Finalize
         this.maxHp = this.stats.totalHp;

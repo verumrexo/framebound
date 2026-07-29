@@ -1,125 +1,36 @@
+import { createFrameboundServer } from './ServerApp.js';
 
-import express from 'express';
-import { createServer } from 'http';
-import { Server } from 'socket.io';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+const port = process.env.PORT || 3000;
+const legacyGameplay = process.env.LEGACY_GAMEPLAY_ENABLED !== 'false';
+let roomFactory = null;
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-import './setup.js'; // Must be first to handle hoisting
-
-import { GameRoom } from './GameRoom.js';
-
-const app = express();
-const httpServer = createServer(app);
-const io = new Server(httpServer, {
-    cors: {
-        origin: "*", // Allow all for dev
-        methods: ["GET", "POST"]
-    }
-});
-
-const PORT = process.env.PORT || 3000;
-
-// Room Management
-const rooms = new Map(); // roomId -> GameRoom
-
-function generateRoomId() {
-    return Math.random().toString(36).substring(2, 8).toUpperCase();
+if (legacyGameplay) {
+    await import('./setup.js');
+    const { GameRoom } = await import('./GameRoom.js');
+    roomFactory = (id, io, name) => new GameRoom(id, io, name);
 }
 
-io.on('connection', (socket) => {
-    console.log(`[Connect] ${socket.id}`);
-
-    // --- LOBBY MANAGEMENT ---
-
-    socket.on('create_lobby', (data) => {
-        // Leave any existing room first
-        rooms.forEach(r => {
-            if (r.clients.has(socket.id)) r.removePlayer(socket);
-        });
-
-        const roomId = generateRoomId();
-        const roomName = (data && data.name) ? data.name : `Sector ${roomId}`;
-
-        console.log(`[Server] Creating Lobby: ${roomName} (${roomId})`);
-
-        const room = new GameRoom(roomId, io, roomName);
-        rooms.set(roomId, room);
-
-        room.addPlayer(socket);
-        socket.emit('lobby_created', { roomId, name: roomName });
-
-        // Broadcast new lobby to everyone browsing
-        io.emit('lobby_list_update', getLobbyList());
-    });
-
-    socket.on('join_lobby', (roomId) => {
-        // Leave any existing room
-        rooms.forEach(r => {
-            if (r.clients.has(socket.id)) r.removePlayer(socket);
-        });
-
-        const room = rooms.get(roomId);
-        if (room) {
-            console.log(`[Server] Player ${socket.id} joining ${roomId}`);
-            room.addPlayer(socket);
-            socket.emit('lobby_joined', { roomId, name: room.name });
-        } else {
-            socket.emit('lobby_error', 'Room not found');
-        }
-    });
-
-    socket.on('list_lobbies', () => {
-        socket.emit('lobby_list', getLobbyList());
-    });
-
-    socket.on('leave_lobby', () => {
-        rooms.forEach(r => {
-            if (r.clients.has(socket.id)) {
-                r.removePlayer(socket);
-                // Check if empty
-                if (r.getPlayerCount() === 0) {
-                    console.log(`[Server] Room ${r.id} empty. Destroying.`);
-                    r.destroy();
-                    rooms.delete(r.id);
-                }
-            }
-        });
-        // Send updated list? Or just let clients refresh
-    });
-
-    socket.on('disconnect', () => {
-        console.log(`[Disconnect] ${socket.id}`);
-        // Remove from any room
-        rooms.forEach((r, id) => {
-            if (r.clients.has(socket.id)) {
-                r.removePlayer(socket);
-                if (r.getPlayerCount() === 0) {
-                    console.log(`[Server] Room ${id} empty. Destroying.`);
-                    r.destroy();
-                    rooms.delete(id);
-                }
-            }
-        });
-    });
+const server = createFrameboundServer({
+    corsOrigin: process.env.CORS_ORIGIN || '*',
+    legacyGameplay,
+    roomFactory
 });
 
-function getLobbyList() {
-    const list = [];
-    rooms.forEach(r => {
-        list.push({
-            id: r.id,
-            name: r.name,
-            players: r.getPlayerCount(),
-            maxPlayers: 8
-        });
-    });
-    return list;
+server.start(port).then(address => {
+    console.log(`Server running on port ${address.port}`);
+}).catch(error => {
+    console.error('[Server] Failed to start:', error);
+    process.exitCode = 1;
+});
+
+let stopping = false;
+async function shutdown(signal) {
+    if (stopping) return;
+    stopping = true;
+    console.log(`[Server] ${signal}, shutting down`);
+    await server.stop();
+    process.exit(0);
 }
 
-httpServer.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
-});
+process.once('SIGTERM', () => shutdown('SIGTERM'));
+process.once('SIGINT', () => shutdown('SIGINT'));

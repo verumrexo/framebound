@@ -1,3 +1,4 @@
+import { Sprite } from '../../engine/Sprite.js';
 import { TILE_SIZE } from '../parts/PartDefinitions.js';
 
 export class TrainingDummy {

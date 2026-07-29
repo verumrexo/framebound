@@ -60,8 +60,6 @@ export class Hangar {
         this.ui.addEventListener('click', (e) => e.stopPropagation());
         this.ui.addEventListener('contextmenu', (e) => e.stopPropagation());
 
-        this.ui.addEventListener('contextmenu', (e) => e.stopPropagation());
-
         // Tooltip
         this.tooltip = document.createElement('div');
         this.tooltip.id = 'hangar-tooltip';
@@ -240,7 +238,7 @@ export class Hangar {
         const accelerantBonus = (1 + (stats.accelerantCount || 0) * 0.05);
         const laserFR = Math.round(((levelBonus * (accelerantBonus + (perm.laserRateAdd || 0))) - 1) * 100);
 
-        // Turn Speed Calc (Matching PlayerController)
+        // Turn Speed Calc (Matching PlayerControlSystem)
         const baseTurnRate = 5.0;
         const currentMass = (stats.totalMass || 5);
         const turnSpeedVal = (Math.max(0.5, baseTurnRate * (5 / currentMass)) + (stats.turnSpeed || 0)) * (perm.turnMul || 1.0);
@@ -303,15 +301,50 @@ export class Hangar {
             // Reset rotation to 0 for editing comfort
             this.rotation = 0;
             this.updateUI();
+            if (this.game.peerNetwork?.isGuest) {
+                this.game.peerNetwork.sendInput?.({});
+                this.game.peerNetwork.sendFireIntent?.(false, 0);
+            } else if (this.game.peerNetwork?.isHost) {
+                this.game.peerNetwork.flushAuthoritativeState?.();
+            }
         } else {
             // CLOSING: Resume game and Apply Changes
             this.game.paused = false;
             // Apply draft to real ship
             if (this.draftShip) {
+                const parts = [...this.draftShip.getUniqueParts()].map(
+                    part => ({
+                        x: part.x,
+                        y: part.y,
+                        partId: part.partId,
+                        rotation: part.rotation || 0
+                    })
+                );
                 this.game.playerShip = this.draftShip;
                 this.draftShip = null;
+                if (this.game.peerNetwork?.isGuest) {
+                    this.game.peerNetwork.sendInput?.({});
+                    this.game.peerNetwork.sendFireIntent?.(false, 0);
+                    this.game.peerNetwork.sendShipEdit?.(parts);
+                } else if (this.game.peerNetwork?.isHost) {
+                    this.game.peerNetwork.flushAuthoritativeFullState?.();
+                }
             }
         }
+    }
+
+    resetRunState() {
+        this.active = false;
+        this.ui.style.display = 'none';
+        this.tooltip.style.display = 'none';
+        this.isHoveringUI = false;
+        this.selectedPartId = 'hull';
+        this.rotation = 0;
+        this.rotateDebounce = false;
+        this.lastPlacedGrid = null;
+        this.draftShip = null;
+        this.hasInfiniteParts = false;
+        this.inventory = {};
     }
 
     update(dt) {

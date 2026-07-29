@@ -1,3 +1,4 @@
+import { Sprite } from '../../engine/Sprite.js';
 
 export class Portal {
     constructor(x, y) {

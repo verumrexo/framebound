@@ -1,0 +1,394 @@
+import '../../tests/setup.js';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+
+const { ProjectileSystem } = await import('./ProjectileSystem.js');
+
+function createGame(projectiles = [], overrides = {}, systemOptions = {}) {
+    const events = [];
+    const game = {
+        projectiles,
+        enemies: [],
+        bosses: [],
+        shipwrecks: [],
+        asteroids: [],
+        lootCrates: [],
+        drones: [],
+        itemPickups: [],
+        playerShip: {
+            parts: new Map(),
+            takeDamage: () => {}
+        },
+        x: 0,
+        y: 0,
+        rotation: 0,
+        audio: {
+            sounds: {},
+            play: (name) => events.push(`audio:${name}`)
+        },
+        network: {
+            isConnected: false,
+            sendEnemyHit: () => {}
+        },
+        spawnDamageNumber: () => {},
+        spawnExplosion: () => {},
+        spawnAsteroidLoot: () => {},
+        spawnCrateLoot: () => {},
+        ...overrides
+    };
+
+    return {
+        events,
+        game,
+        system: new ProjectileSystem(game, systemOptions)
+    };
+}
+
+function visualProjectile(name, shouldExpire, updates) {
+    return {
+        owner: 'player',
+        isVisualOnly: true,
+        isBeam: false,
+        isDead: false,
+        shouldExplode: false,
+        update(dt, game) {
+            updates.push({ name, dt, game });
+            if (shouldExpire) this.isDead = true;
+        }
+    };
+}
+
+test('projectiles update in reverse order and remove from their original index', () => {
+    const updates = [];
+    const first = visualProjectile('first', false, updates);
+    const second = visualProjectile('second', true, updates);
+    const { game, system } = createGame([first, second]);
+
+    system.update(0.25);
+
+    assert.deepEqual(updates.map(({ name }) => name), ['second', 'first']);
+    assert.ok(updates.every(({ dt, game: updateGame }) => dt === 0.25 && updateGame === game));
+    assert.deepEqual(game.projectiles, [first]);
+});
+
+test('network enemy projectile spawning keeps owner, fields, sound mapping, and return value', () => {
+    class ProjectileStub {
+        constructor(...args) {
+            this.args = args;
+        }
+    }
+    const sounds = [];
+    const { game } = createGame([], {
+        audio: {
+            play: (...args) => sounds.push(args)
+        }
+    });
+    const random = () => 0.25;
+    const system = new ProjectileSystem(game, {
+        ProjectileClass: ProjectileStub,
+        random
+    });
+
+    const rail = system.spawnEnemyProjectile({
+        x: 10,
+        y: 20,
+        angle: 0.5,
+        type: 'railgun',
+        speed: 900,
+        damage: 12
+    });
+    system.spawnEnemyProjectile({
+        x: 1,
+        y: 2,
+        angle: 3,
+        type: 'saber',
+        speed: 0,
+        damage: 4
+    });
+    system.spawnEnemyProjectile({
+        x: 4,
+        y: 5,
+        angle: 6,
+        type: 'bullet',
+        speed: 600,
+        damage: 7
+    });
+
+    assert.equal(game.projectiles[0], rail);
+    assert.deepEqual(
+        rail.args,
+        [10, 20, 0.5, 'railgun', 900, 'enemy', 12, null, random]
+    );
+    assert.deepEqual(sounds, [
+        ['shoot_rail_shot', { volume: 0.6 }],
+        ['shoot_lsr', { volume: 0.6 }],
+        ['shoot_lps', { volume: 0.6 }]
+    ]);
+});
+
+test('loaded shield audio suppresses the generic hit fallback', () => {
+    const audioCalls = [];
+    const shield = {
+        partId: 'custom_1768410823264',
+        shieldCooldown: 0
+    };
+    const projectile = {
+        owner: 'enemy',
+        type: 'bullet',
+        x: 0,
+        y: 0,
+        radius: 4,
+        damage: 5,
+        isBeam: false,
+        isDead: false,
+        update() {}
+    };
+    const { game, system } = createGame([projectile], {
+        playerShip: {
+            parts: new Map([['0,0', shield]]),
+            takeDamage: () => assert.fail('shielded shot damaged the player')
+        },
+        audio: {
+            sounds: new Map([['shield_hit', {}]]),
+            play: (...args) => audioCalls.push(args)
+        }
+    });
+
+    system.update(0.016);
+
+    assert.deepEqual(audioCalls, [
+        ['shield_hit', { volume: 0.8 }]
+    ]);
+    assert.equal(shield.shieldCooldown, 3);
+    assert.deepEqual(game.projectiles, []);
+});
+
+test('host authority applies direct enemy projectile damage to guests', () => {
+    const damage = [];
+    const guestShip = {
+        x: 100,
+        y: 0,
+        rotation: 0,
+        isDead: false,
+        parts: new Map([[
+            '0,0',
+            { partId: 'core', shieldCooldown: 0 }
+        ]]),
+        takeDamage: amount => damage.push(amount)
+    };
+    const projectile = {
+        owner: 'enemy',
+        type: 'bullet',
+        x: 100,
+        y: 0,
+        radius: 4,
+        damage: 7,
+        isBeam: false,
+        isDead: false,
+        update() {}
+    };
+    const { game, system } = createGame([projectile], {
+        peerNetwork: {
+            isHost: true,
+            otherPlayers: new Map([['guest_1', guestShip]])
+        }
+    });
+
+    system.update(0.016);
+
+    assert.deepEqual(damage, [7]);
+    assert.deepEqual(game.projectiles, []);
+});
+
+test('host authority applies enemy explosion damage to every nearby guest', () => {
+    const damage = [];
+    const guestShip = {
+        x: 100,
+        y: 0,
+        rotation: 0,
+        isDead: false,
+        parts: new Map([['0,0', { partId: 'core' }]]),
+        takeDamage: amount => damage.push(amount)
+    };
+    const projectile = {
+        owner: 'enemy',
+        type: 'mini_grenade',
+        x: 100,
+        y: 0,
+        radius: 4,
+        damage: 10,
+        isBeam: false,
+        isDead: true,
+        shouldExplode: true,
+        update() {}
+    };
+    const { game, system } = createGame([projectile], {
+        peerNetwork: {
+            isHost: true,
+            otherPlayers: new Map([['guest_1', guestShip]])
+        }
+    });
+
+    system.update(0.016);
+
+    assert.deepEqual(damage, [5]);
+    assert.deepEqual(game.projectiles, []);
+});
+
+test('direct enemy hits keep collision, damage, audio, and network ordering', () => {
+    const order = [];
+    const projectile = {
+        owner: 'player',
+        isVisualOnly: false,
+        isBeam: false,
+        isDead: false,
+        shouldExplode: false,
+        type: 'bullet',
+        damage: 5,
+        x: 10,
+        y: 20,
+        radius: 4,
+        update() {
+            order.push('update');
+        }
+    };
+    const enemy = {
+        id: 'enemy-1',
+        isDead: false,
+        checkShieldHit() {
+            order.push('shield');
+            return { hit: false };
+        },
+        checkPartHit() {
+            order.push('part');
+            return { hit: true };
+        },
+        takeDamage() {
+            order.push('damage');
+            this.isDead = true;
+        }
+    };
+    const { game, system } = createGame([projectile], {
+        enemies: [enemy],
+        spawnDamageNumber: () => order.push('number'),
+        audio: {
+            sounds: {},
+            play: () => order.push('audio')
+        },
+        network: {
+            isConnected: true,
+            sendEnemyHit(id, damage, killed) {
+                order.push(['network', id, damage, killed]);
+            }
+        }
+    });
+
+    system.update(0.016);
+
+    assert.deepEqual(order, [
+        'update',
+        'shield',
+        'part',
+        'damage',
+        'number',
+        'audio',
+        ['network', 'enemy-1', 5, true]
+    ]);
+    assert.deepEqual(game.projectiles, []);
+});
+
+test('visual-only beams expire without running collision work', () => {
+    const projectile = {
+        owner: 'player',
+        isVisualOnly: true,
+        isBeam: true,
+        isDead: false,
+        shouldExplode: false,
+        update() {
+            this.isDead = true;
+        }
+    };
+    const { game, system } = createGame([projectile], {
+        enemies: [{
+            isDead: false,
+            checkShieldHit: () => assert.fail('visual-only beam checked a shield'),
+            checkPartHit: () => assert.fail('visual-only beam checked a body')
+        }]
+    });
+
+    system.update(0.016);
+
+    assert.deepEqual(game.projectiles, []);
+});
+
+test('an expired gameplay beam still receives its final collision tick', () => {
+    let hitCount = 0;
+    const projectile = {
+        owner: 'player',
+        isVisualOnly: false,
+        isBeam: true,
+        isDead: false,
+        shouldExplode: false,
+        type: 'railgun',
+        damage: 3,
+        x: 0,
+        y: 0,
+        angle: 0,
+        beamLength: 100,
+        radius: 10,
+        targetHits: new Map(),
+        update() {
+            this.isDead = true;
+        }
+    };
+    const enemy = {
+        id: 'enemy-1',
+        isDead: false,
+        x: 50,
+        y: 0,
+        radius: 10,
+        takeDamage() {
+            hitCount++;
+        }
+    };
+    const { game, system } = createGame([projectile], {
+        enemies: [enemy]
+    });
+
+    system.update(0.016);
+
+    assert.equal(hitCount, 1);
+    assert.deepEqual(game.projectiles, []);
+});
+
+test('cluster child scatter and fuse use the injected random source', () => {
+    const values = [1, 0.5];
+    const parent = {
+        owner: 'player',
+        isVisualOnly: false,
+        isBeam: false,
+        isDead: false,
+        shouldExplode: true,
+        type: 'cluster_grenade',
+        damage: 10,
+        x: 10,
+        y: 20,
+        clusterCount: 1,
+        update() {
+            this.isDead = true;
+        }
+    };
+    const { game, system } = createGame(
+        [parent],
+        {},
+        { random: () => values.shift() }
+    );
+
+    system.update(0.016);
+
+    assert.equal(game.projectiles.length, 1);
+    assert.equal(game.projectiles[0].type, 'mini_grenade');
+    assert.ok(Math.abs(game.projectiles[0].angle - 0.15) < 0.000001);
+    assert.equal(game.projectiles[0].life, 1);
+    assert.equal(values.length, 0);
+});

@@ -4,6 +4,7 @@ export class LevelUpManager {
         this.game = game;
         this.active = false;
         this.choices = [];
+        this.selectionPending = false;
 
         // Rarity Definition
         this.rarities = [
@@ -74,18 +75,24 @@ export class LevelUpManager {
 
     triggerLevelUp(forceRarity = null) {
         this.active = true;
-        this.choices = [];
+        this.selectionPending = false;
         this.game.paused = true;
         this.game.audio.play('item_pickup', { pitch: 0.5 });
+        this.choices = this.generateChoices(forceRarity);
+        this.game.peerNetwork?.beginSharedLevelUp?.();
+    }
 
+    generateChoices(forceRarity = null) {
+        const choices = [];
         // Generate 3 unique upgrade categories
         const availableUpgrades = [...this.upgrades];
         for (let i = 0; i < 3; i++) {
             if (availableUpgrades.length === 0) break;
             const typeIndex = Math.floor(Math.random() * availableUpgrades.length);
             const type = availableUpgrades.splice(typeIndex, 1)[0];
-            this.choices.push(this.generateChoiceForType(type, forceRarity));
+            choices.push(this.generateChoiceForType(type, forceRarity));
         }
+        return choices;
     }
 
     generateChoiceForType(type, forceRarity = null) {
@@ -119,43 +126,68 @@ export class LevelUpManager {
     }
 
     selectUpgrade(index) {
-        if (index < 0 || index >= this.choices.length) return;
+        if (
+            this.selectionPending ||
+            index < 0 ||
+            index >= this.choices.length
+        ) {
+            return false;
+        }
 
         const choice = this.choices[index];
-        this.applyUpgrade(choice);
+        if (this.game.peerNetwork?.isGuest) {
+            if (!this.game.peerNetwork.sendLevelUpChoice?.(index)) {
+                return false;
+            }
+            this.selectionPending = true;
+            return true;
+        }
 
-        this.active = false;
-        this.game.paused = false;
+        this.applyUpgrade(choice);
+        this.selectionPending = true;
+
         this.game.showNotification(`${choice.name} installed`, choice.rarity.color);
+        if (this.game.peerNetwork?.isHost) {
+            this.game.peerNetwork.completeLocalLevelUp?.();
+        } else {
+            this.completeSharedLevelUp();
+        }
+        return true;
     }
 
     applyUpgrade(u) {
-        const stats = this.game.playerShip.permanentStats;
+        applyUpgradeToShip(this.game.playerShip, u);
+    }
 
-        if (u.stat === 'maxHp') {
-            // Percent increase base
-            stats.hpMul = (stats.hpMul || 1.0) + u.value;
-        } else if (u.stat === 'regen') {
-            stats.regenAdd = (stats.regenAdd || 0) + u.value;
-        } else if (u.stat === 'velocityRate') {
-            stats.velocityRateAdd = (stats.velocityRateAdd || 0) + u.value;
-        } else if (u.stat === 'laserRate') {
-            stats.laserRateAdd = (stats.laserRateAdd || 0) + u.value;
-        } else if (u.stat === 'mobility') {
-            stats.speedMul = (stats.speedMul || 1.0) + u.value;
-            stats.turnMul = (stats.turnMul || 1.0) + u.value;
-        } else if (u.stat === 'missileSpeed') {
-            stats.missileSpeedMul = (stats.missileSpeedMul || 1.0) + u.value;
+    applyRemoteLevelUp(levelUp) {
+        if (!levelUp) {
+            this.completeSharedLevelUp();
+            return;
         }
 
-        this.game.playerShip.recalculateStats();
-        // Heal nicely on upgrade
-        this.game.playerShip.hp = this.game.playerShip.maxHp;
+        this.active = true;
+        this.game.paused = true;
+        if (levelUp.choices.length > 0) {
+            if (!this.selectionPending) {
+                this.choices = levelUp.choices;
+            }
+            return;
+        }
+        this.selectionPending = true;
+    }
+
+    completeSharedLevelUp() {
+        this.active = false;
+        this.choices = [];
+        this.selectionPending = false;
+        this.hoveredIndex = -1;
+        this.game.paused = false;
     }
 
     update() {
         // Mouse interaction
         if (!this.active) return;
+        if (this.selectionPending) return;
 
         const input = this.game.input;
         const mouse = input.getMousePos();
@@ -201,7 +233,15 @@ export class LevelUpManager {
 
         ctx.font = "12px 'Press Start 2P'";
         ctx.fillStyle = '#aaa';
-        ctx.fillText("select an enhancement", renderer.width / 2, 130);
+        ctx.fillText(
+            this.selectionPending
+                ? "waiting for crew"
+                : "select an enhancement",
+            renderer.width / 2,
+            130
+        );
+
+        if (this.selectionPending || this.choices.length < 3) return;
 
         // Cards
         const cw = 200;
@@ -289,4 +329,31 @@ export class LevelUpManager {
             ctx.fillText(lineArray[k], x, y + k * lineHeight);
         }
     }
+}
+
+export function applyUpgradeToShip(ship, upgrade) {
+    const stats = ship.permanentStats;
+
+    if (upgrade.stat === 'maxHp') {
+        stats.hpMul = (stats.hpMul || 1.0) + upgrade.value;
+    } else if (upgrade.stat === 'regen') {
+        stats.regenAdd = (stats.regenAdd || 0) + upgrade.value;
+    } else if (upgrade.stat === 'velocityRate') {
+        stats.velocityRateAdd =
+            (stats.velocityRateAdd || 0) + upgrade.value;
+    } else if (upgrade.stat === 'laserRate') {
+        stats.laserRateAdd = (stats.laserRateAdd || 0) + upgrade.value;
+    } else if (upgrade.stat === 'mobility') {
+        stats.speedMul = (stats.speedMul || 1.0) + upgrade.value;
+        stats.turnMul = (stats.turnMul || 1.0) + upgrade.value;
+    } else if (upgrade.stat === 'missileSpeed') {
+        stats.missileSpeedMul =
+            (stats.missileSpeedMul || 1.0) + upgrade.value;
+    } else {
+        return false;
+    }
+
+    ship.recalculateStats();
+    ship.hp = ship.maxHp;
+    return true;
 }

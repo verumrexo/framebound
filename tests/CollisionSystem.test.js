@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert';
-import { Collision } from '../src/game/systems/CollisionSystem.js';
+import { Collision } from '../src/shared/CollisionSystem.js';
 
 describe('CollisionSystem', () => {
     describe('separateCircles', () => {
@@ -100,31 +100,30 @@ describe('CollisionSystem', () => {
             assert.ok(Math.abs(b.y - 4.8) < 0.0001);
         });
     });
+
+    describe('beamCircle', () => {
+        it('hits horizontal, vertical, and diagonal targets inside the beam width', () => {
+            assert.equal(Collision.beamCircle(100, 100, 0, 200, 10, 200, 100, 5), true);
+            assert.equal(Collision.beamCircle(100, 100, Math.PI / 2, 200, 10, 100, 200, 5), true);
+            assert.equal(Collision.beamCircle(0, 0, Math.PI / 4, 200, 10, 50, 50, 5), true);
+        });
+
+        it('rejects targets outside the beam width or length', () => {
+            assert.equal(Collision.beamCircle(100, 100, 0, 200, 10, 200, 116, 5), false);
+            assert.equal(Collision.beamCircle(100, 100, 0, 200, 10, 90, 100, 5), false);
+            assert.equal(Collision.beamCircle(100, 100, 0, 200, 10, 310, 100, 5), false);
+            assert.equal(Collision.beamCircle(0, 0, Math.PI / 4, 200, 10, 0, 100, 5), false);
+        });
+
+        it('keeps the strict start and end boundaries', () => {
+            assert.equal(Collision.beamCircle(100, 100, 0, 200, 10, 100, 100, 5), false);
+            assert.equal(Collision.beamCircle(100, 100, 0, 200, 10, 300, 100, 5), false);
+        });
+    });
 });
-import assert from 'node:assert';
-import { Collision } from '../src/game/systems/CollisionSystem.js';
-
-console.log('🧪 Running CollisionSystem tests...');
-
-// Counter for passed tests
-let passed = 0;
-let total = 0;
-
-function test(name, fn) {
-    total++;
-    try {
-        fn();
-        console.log(`✅ ${name}`);
-        passed++;
-    } catch (e) {
-        console.error(`❌ ${name}`);
-        console.error(e);
-        process.exit(1); // Fail fast
-    }
-}
 
 // Test Suite
-test('Collision.circleCircle: No Collision (Far apart)', () => {
+it('Collision.circleCircle: No Collision (Far apart)', () => {
     // Circle A at (0,0) radius 10
     // Circle B at (100,100) radius 10
     // Distance is sqrt(20000) ≈ 141.4 > 20
@@ -132,7 +131,7 @@ test('Collision.circleCircle: No Collision (Far apart)', () => {
     assert.strictEqual(result, false, 'Circles far apart should not collide');
 });
 
-test('Collision.circleCircle: Collision (Overlapping)', () => {
+it('Collision.circleCircle: Collision (Overlapping)', () => {
     // Circle A at (0,0) radius 10
     // Circle B at (10,0) radius 10
     // Distance is 10 < 20
@@ -140,7 +139,7 @@ test('Collision.circleCircle: Collision (Overlapping)', () => {
     assert.strictEqual(result, true, 'Overlapping circles should collide');
 });
 
-test('Collision.circleCircle: Touching (Exact edge case)', () => {
+it('Collision.circleCircle: Touching (Exact edge case)', () => {
     // Circle A at (0,0) radius 10
     // Circle B at (20,0) radius 10
     // Distance is 20 == 20 (Radius Sum)
@@ -149,7 +148,7 @@ test('Collision.circleCircle: Touching (Exact edge case)', () => {
     assert.strictEqual(result, false, 'Touching circles should not collide (strict inequality)');
 });
 
-test('Collision.circleCircle: Just Inside (Epsilon overlap)', () => {
+it('Collision.circleCircle: Just Inside (Epsilon overlap)', () => {
     // Circle A at (0,0) radius 10
     // Circle B at (19.9,0) radius 10
     // Distance is 19.9 < 20
@@ -157,7 +156,7 @@ test('Collision.circleCircle: Just Inside (Epsilon overlap)', () => {
     assert.strictEqual(result, true, 'Slightly overlapping circles should collide');
 });
 
-test('Collision.circleCircle: Contained (Concentric)', () => {
+it('Collision.circleCircle: Contained (Concentric)', () => {
     // Circle A at (0,0) radius 20
     // Circle B at (0,0) radius 5
     // Distance is 0 < 25
@@ -165,7 +164,7 @@ test('Collision.circleCircle: Contained (Concentric)', () => {
     assert.strictEqual(result, true, 'Concentric/contained circles should collide');
 });
 
-test('Collision.circleCircle: Zero Radius (Point vs Circle)', () => {
+it('Collision.circleCircle: Zero Radius (Point vs Circle)', () => {
     // Circle A at (0,0) radius 10
     // Point B at (5,0) radius 0
     // Distance 5 < 10
@@ -173,12 +172,10 @@ test('Collision.circleCircle: Zero Radius (Point vs Circle)', () => {
     assert.strictEqual(result, true, 'Point inside circle should collide');
 });
 
-test('Collision.circleCircle: Zero Radius No Collision', () => {
+it('Collision.circleCircle: Zero Radius No Collision', () => {
     // Circle A at (0,0) radius 10
     // Point B at (15,0) radius 0
     // Distance 15 > 10
     const result = Collision.circleCircle(0, 0, 10, 15, 0, 0);
     assert.strictEqual(result, false, 'Point outside circle should not collide');
 });
-
-console.log(`\n🎉 All ${total} tests passed!`);

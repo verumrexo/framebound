@@ -315,6 +315,9 @@ export class Shipwreck {
         const def = PartsLibrary[part.partId];
         if (!def) {
             this.ship.parts.delete(key);
+            if (this.ship.parts.size === 0) {
+                this.isDead = true;
+            }
             return;
         }
 
@@ -326,6 +329,10 @@ export class Shipwreck {
             for (let j = 0; j < h; j++) {
                 this.ship.parts.delete(`${originX + i},${originY + j}`);
             }
+        }
+
+        if (this.ship.parts.size === 0) {
+            this.isDead = true;
         }
     }
 

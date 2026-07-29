@@ -45,10 +45,25 @@ function testEdgeCases() {
     console.log('✓ Edge cases handled deterministically');
 }
 
+function testSerializableState() {
+    console.log('Testing seededRandom state snapshots...');
+    const rng = seededRandom(77);
+    rng();
+    rng();
+    const savedState = rng.getState();
+    const expected = [rng(), rng(), rng()];
+
+    rng.setState(savedState);
+
+    assert.deepStrictEqual([rng(), rng(), rng()], expected);
+    console.log('✓ Saved state resumes the exact sequence');
+}
+
 try {
     testDeterminism();
     testDifferentSeeds();
     testEdgeCases();
+    testSerializableState();
     console.log('\nAll seededRandom tests passed!');
 } catch (error) {
     console.error('\nTests failed:');

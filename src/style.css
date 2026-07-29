@@ -42,6 +42,102 @@ body {
     height: 100%;
 }
 
+.main-menu-overlay {
+    padding: 20px;
+    overflow: hidden;
+}
+
+.main-menu-screen {
+    display: flex;
+    width: min(100%, 720px);
+    max-height: 100%;
+    min-height: 0;
+    flex-direction: column;
+    align-items: center;
+    overflow-x: hidden;
+    overflow-y: auto;
+    scrollbar-gutter: stable;
+}
+
+.main-menu-title {
+    margin: 0 0 16px;
+    color: #00ffff;
+    font-family: 'Press Start 2P', cursive;
+    max-width: 100%;
+    font-size: clamp(24px, 4vw, 42px);
+    font-weight: normal;
+    letter-spacing: -2px;
+    line-height: 1.2;
+    text-align: center;
+    text-shadow: 4px 4px 0 #005555, 0 0 20px rgba(0, 255, 255, 0.6);
+    text-transform: lowercase;
+}
+
+.main-menu-version {
+    margin: 0 0 28px;
+    color: #666;
+    font-size: clamp(9px, 1.2vw, 12px);
+    letter-spacing: clamp(2px, 0.35vw, 4px);
+    line-height: 1.6;
+    text-align: center;
+    text-transform: lowercase;
+}
+
+.main-menu-loading {
+    display: none;
+    color: #ffd700;
+    font-size: 12px;
+}
+
+.main-menu-actions {
+    display: flex;
+    width: min(360px, 100%);
+    flex-direction: column;
+    gap: 12px;
+}
+
+.changelog-screen {
+    display: flex;
+    width: min(720px, 100%);
+    height: min(720px, 100%);
+    min-height: 0;
+    flex-direction: column;
+    align-items: center;
+}
+
+.changelog-title {
+    margin: 0 0 20px;
+    color: #888;
+    font-size: 24px;
+}
+
+.changelog-scroll {
+    width: 100%;
+    min-height: 0;
+    flex: 1;
+    margin-bottom: 20px;
+    padding: 0 16px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+    text-align: left;
+    touch-action: pan-y;
+    -webkit-overflow-scrolling: touch;
+}
+
+.changelog-scroll:focus-visible {
+    outline: 1px solid rgba(0, 255, 255, 0.45);
+    outline-offset: 4px;
+}
+
+.changelog-back {
+    width: 200px;
+    flex: 0 0 auto;
+    border: 1px solid #fff;
+    background: transparent;
+    color: white;
+}
+
 canvas {
     display: block;
     width: 100%;
@@ -51,4 +147,86 @@ canvas {
     image-rendering: -moz-crisp-edges;
     /* Firefox */
     image-rendering: crisp-edges;
+}
+
+.menu-btn {
+    position: relative;
+    padding: 13px 0;
+    font-size: 12px;
+    background: rgba(0, 20, 30, 0.6);
+    border: 1px solid rgba(0, 255, 255, 0.2);
+    color: #acc;
+    cursor: pointer;
+    font-family: 'Press Start 2P', cursive;
+    text-transform: lowercase;
+    letter-spacing: 2.5px;
+    transition: all 0.2s ease-out;
+    overflow: hidden;
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
+    backdrop-filter: blur(5px);
+}
+
+.menu-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 4px;
+    height: 100%;
+    background: #00ffff;
+    transform: scaleY(0);
+    transition: transform 0.2s ease-out;
+    transform-origin: bottom;
+}
+
+.menu-btn:hover:not(:disabled) {
+    background: rgba(0, 40, 60, 0.8);
+    color: #fff;
+    border-color: rgba(0, 255, 255, 0.6);
+    padding-left: 20px;
+    box-shadow: 0 0 20px rgba(0, 255, 255, 0.1);
+    text-shadow: 0 0 8px rgba(0, 255, 255, 0.5);
+}
+
+.menu-btn:hover:not(:disabled)::before {
+    transform: scaleY(1);
+    transform-origin: top;
+}
+
+.menu-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+}
+
+#btn-online:hover {
+    border-color: #ffaa00;
+    box-shadow: 0 0 20px rgba(255, 170, 0, 0.2);
+}
+
+#btn-online:hover::before {
+    background: #ffaa00;
+}
+
+@media (max-height: 650px) {
+    .main-menu-overlay {
+        padding-block: 12px;
+    }
+
+    .main-menu-title {
+        margin-bottom: 10px;
+        font-size: clamp(24px, 4.5vw, 40px);
+    }
+
+    .main-menu-version {
+        margin-bottom: 16px;
+    }
+
+    .main-menu-actions {
+        gap: 8px;
+    }
+
+    .menu-btn {
+        padding-block: 10px;
+        font-size: 10px;
+    }
 }

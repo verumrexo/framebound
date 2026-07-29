@@ -26,13 +26,37 @@ export class AudioManager {
     }
 
     loadSettings() {
-        const savedMaster = localStorage.getItem('settings_volume_master');
-        const savedMusic = localStorage.getItem('settings_volume_music');
-        const savedSfx = localStorage.getItem('settings_volume_sfx');
+        try {
+            this.restoreVolume(
+                this.masterGain,
+                localStorage.getItem('settings_volume_master')
+            );
+            this.restoreVolume(
+                this.musicGain,
+                localStorage.getItem('settings_volume_music')
+            );
+            this.restoreVolume(
+                this.sfxGain,
+                localStorage.getItem('settings_volume_sfx')
+            );
+        } catch (error) {
+            console.warn('[Audio] Failed to load volume settings:', error);
+        }
+    }
 
-        if (savedMaster !== null) this.masterGain.gain.value = parseFloat(savedMaster);
-        if (savedMusic !== null) this.musicGain.gain.value = parseFloat(savedMusic);
-        if (savedSfx !== null) this.sfxGain.gain.value = parseFloat(savedSfx);
+    restoreVolume(gainNode, storedValue) {
+        if (storedValue === null) return;
+        const parsed = Number.parseFloat(storedValue);
+        if (!Number.isFinite(parsed)) return;
+        gainNode.gain.value = Math.max(0, Math.min(1, parsed));
+    }
+
+    saveVolume(key, value) {
+        try {
+            localStorage.setItem(key, value);
+        } catch (error) {
+            console.warn('[Audio] Failed to save volume setting:', error);
+        }
     }
 
     async load(name, url) {
@@ -158,18 +182,18 @@ export class AudioManager {
         // Clamp between 0 and 1
         const v = Math.max(0, Math.min(1, value));
         this.masterGain.gain.setTargetAtTime(v, this.context.currentTime, 0.1);
-        localStorage.setItem('settings_volume_master', v);
+        this.saveVolume('settings_volume_master', v);
     }
 
     setMusicVolume(value) {
         const v = Math.max(0, Math.min(1, value));
         this.musicGain.gain.setTargetAtTime(v, this.context.currentTime, 0.1);
-        localStorage.setItem('settings_volume_music', v);
+        this.saveVolume('settings_volume_music', v);
     }
 
     setSfxVolume(value) {
         const v = Math.max(0, Math.min(1, value));
         this.sfxGain.gain.setTargetAtTime(v, this.context.currentTime, 0.1);
-        localStorage.setItem('settings_volume_sfx', v);
+        this.saveVolume('settings_volume_sfx', v);
     }
 }

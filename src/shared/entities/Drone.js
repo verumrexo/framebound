@@ -1,17 +1,17 @@
+import { Sprite } from "../../engine/Sprite.js";
 import { Projectile } from "./Projectile.js";
 
 export class Drone {
     constructor(x, y, ownerPart, owner = 'player', randomGen = null) {
         if (isNaN(x) || isNaN(y)) {
             console.error(`[Drone] CREATED WITH NaN! Owner: ${owner}`, x, y);
-        } else {
-            console.log(`[Drone] Created at ${Math.round(x)}, ${Math.round(y)} Owner: ${owner}`);
         }
         this.x = x;
         this.y = y;
         this.random = randomGen || Math.random;
         this.ownerPart = ownerPart; // The part that spawned it (can be null if passed manually)
         this.owner = owner;
+        this.ownerPlayerId = owner === 'player' ? 'host' : null;
         this.isDead = false;
 
         // Stats
@@ -135,8 +135,9 @@ export class Drone {
             // If enemy drone and no target (player dead?), maybe just orbit spawn point?
             // If player drone, follow player.
 
-            let tx = game.x;
-            let ty = game.y;
+            const owner = this.findOwnerPlayer(game);
+            let tx = owner?.x ?? this.x;
+            let ty = owner?.y ?? this.y;
 
             if (this.owner === 'enemy') {
                 // If enemy drone has no target (player dead), just chill or follow carrier?
@@ -235,22 +236,40 @@ export class Drone {
                 }
             }
         } else {
-            // Owner is ENEMY
-            // Target Player
-            // Game object has x/y of player? Yes, game inherits from a "Player" concept or stores player params?
-            // Game.js: this.x, this.y IS the player position (since camera centers on player usually, or Game IS the player controller info)
-            // Wait, Game.js has `this.playerShip`.
-            // But usually `game` passed to update has x/y properties.
-            // Let's assume game.x/game.y is player pos.
-
-            // Check if player is alive
-            if (!game.playerShip.isDead) {
-                // Return a proxy object or the game itself as target
-                return game.playerShip;
+            for (const player of this.getLivingPlayers(game)) {
+                const distance =
+                    (player.x - this.x) ** 2 +
+                    (player.y - this.y) ** 2;
+                if (distance < minDesc) {
+                    minDesc = distance;
+                    nearest = player.ship;
+                }
             }
         }
 
         return nearest;
+    }
+
+    findOwnerPlayer(game) {
+        return this.getLivingPlayers(game).find(
+            player => player.id === this.ownerPlayerId
+        ) || null;
+    }
+
+    getLivingPlayers(game) {
+        const simulation = game.peerNetwork?.simulation;
+        if (simulation?.getPickupPlayers) {
+            return simulation.getPickupPlayers();
+        }
+        if (!game.playerShip?.isDead) {
+            return [{
+                id: 'host',
+                ship: game.playerShip,
+                x: game.x,
+                y: game.y
+            }];
+        }
+        return [];
     }
 
     shoot(game, angle) {
