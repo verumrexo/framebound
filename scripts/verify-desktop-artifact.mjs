@@ -86,10 +86,12 @@ export async function verifyMacArtifact(appPath, expected) {
         ]);
 
     assert.equal(executableStat.isFile(), true);
-    assert.ok(
-        (executableStat.mode & 0o111) !== 0,
-        'macos app executable is not executable'
-    );
+    if (process.platform !== 'win32') {
+        assert.ok(
+            (executableStat.mode & 0o111) !== 0,
+            'macos app executable is not executable'
+        );
+    }
     assert.ok(executableStat.size > 0, 'macos app executable is empty');
     assert.ok(iconStat.isFile() && iconStat.size > 0, 'macos icon is missing');
     assert.ok(

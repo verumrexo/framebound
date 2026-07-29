@@ -37,11 +37,13 @@ test('mac artifact verification checks identity, version, icon, and binary', asy
         );
 
         await assert.doesNotReject(() => verifyMacArtifact(app, expected));
-        await chmod(executable, 0o644);
-        await assert.rejects(
-            () => verifyMacArtifact(app, expected),
-            /not executable/
-        );
+        if (process.platform !== 'win32') {
+            await chmod(executable, 0o644);
+            await assert.rejects(
+                () => verifyMacArtifact(app, expected),
+                /not executable/
+            );
+        }
     } finally {
         await rm(root, { recursive: true, force: true });
     }
