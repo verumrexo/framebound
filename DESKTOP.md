@@ -1,7 +1,7 @@
 # framebound desktop direction
 
 date approved: 2026-07-26  
-status: development shell, locally valid macos bundle, and passing macos/windows artifact ci; native windows execution, distribution signing, and notarization remain open
+status: development shell, locally valid macos bundle, and native macos/windows artifact ci with a bounded windows launch smoke; native windows gameplay, distribution signing, and notarization remain open
 
 ## player experience
 
@@ -97,9 +97,10 @@ container.
 `.github/workflows/desktop.yml` builds unsigned internal macos `.app` and windows
 nsis `.exe` artifacts on their native runners. the macos app is zipped with
 `ditto` before upload so its executable permissions, resource forks, and bundle
-signature survive artifact download. those jobs are configuration, not proof:
-the first pushed run still has to pass before either platform is claimed as
-verified.
+signature survive artifact download. the workflow also launches the real
+windows binary, requires it to stay alive, and then terminates it cleanly.
+gameplay smoke remains a separate gate from artifact structure and process
+startup.
 
 `npm run desktop:build` now verifies the artifact before returning. macos
 verification checks bundle identity, release version, executable permissions,

@@ -73,6 +73,25 @@ jobs:
       - name: Verify desktop artifact structure
         run: npm run desktop:verify
 
+      - name: Smoke Windows native launch
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $binary = Resolve-Path "src-tauri/target/release/framebound.exe"
+          $process = Start-Process -FilePath $binary -PassThru
+          try {
+            Start-Sleep -Seconds 10
+            $process.Refresh()
+            if ($process.HasExited) {
+              throw "framebound exited during native launch smoke with code $($process.ExitCode)"
+            }
+          } finally {
+            if (!$process.HasExited) {
+              Stop-Process -Id $process.Id
+              $process.WaitForExit(10000)
+            }
+          }
+
       - name: Verify macOS internal signature
         if: runner.os == 'macOS'
         run: codesign --verify --deep --strict --verbose=2 src-tauri/target/release/bundle/macos/Framebound.app

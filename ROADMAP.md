@@ -667,9 +667,9 @@ goal: make starting framebound a double-click instead of a tiny sysadmin exercis
 
 status: the local arm64 macos app is built, ad-hoc signed, structurally and
 strictly verified, and launch-smoked. windows artifact structure is now enforced
-on its native ci runner, and github actions run `30706641165` passed both native
-artifact jobs. native windows execution, packaged two-instance multiplayer,
-public signing, and notarization remain open.
+on its native ci runner, and a bounded launch/quit smoke executes the real
+windows binary there. packaged two-instance multiplayer, native windows gameplay
+smoke, public signing, and notarization remain open.
 
 ### work
 
