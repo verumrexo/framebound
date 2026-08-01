@@ -222,7 +222,9 @@ test('signaling service relays only session-member webrtc messages', async () =>
             targetId: host.id,
             signal: { candidate: 'forged' }
         });
-        await new Promise(resolve => setTimeout(resolve, 20));
+        await new Promise(resolve => {
+            setTimeout(resolve, 20);
+        });
         assert.equal(server.signalingRegistry.get(hosted.code).guests.size, 1);
 
         const hostLeftPromise = waitForEvent(guest, 'p2p_host_left');
@@ -256,7 +258,9 @@ test('signaling-only deployment reports health and cannot allocate game rooms', 
 
         client = await connectClient(url);
         client.emit('create_lobby', { name: 'should not exist' });
-        await new Promise(resolve => setTimeout(resolve, 20));
+        await new Promise(resolve => {
+            setTimeout(resolve, 20);
+        });
         assert.equal(server.roomRegistry.size, 0);
 
         const hostedPromise = waitForEvent(client, 'p2p_hosted');

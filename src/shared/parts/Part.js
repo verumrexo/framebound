@@ -1,6 +1,7 @@
 import { Assets } from '../../Assets.js';
 import { Sprite } from '../../engine/Sprite.js';
 import { PartDef, PartType, TILE_SIZE } from './PartDefinitions.js';
+import { validatePartsLibrary } from './PartDefinitionValidation.js';
 
 export { PartDef, PartType, TILE_SIZE };
 
@@ -205,3 +206,5 @@ export const PartsLibrary = {
     // lattice hull
     'custom_1769996267734': new PartDef('custom_1769996267734', 'lattice hull', PartType.HULL, new Sprite([1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1], 8, 15, 4, { 1: '#26d426', 2: '#333' }), { hp: 40, mass: 4 }, 1, 2)
 };
+
+validatePartsLibrary(PartsLibrary);

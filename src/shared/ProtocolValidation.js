@@ -105,6 +105,7 @@ export function sanitizeShipManifest(data, partsLibrary) {
 export function sanitizeLobbyName(name) {
     if (typeof name !== 'string') return null;
     const sanitized = name
+        // eslint-disable-next-line no-control-regex -- these are the characters being stripped
         .replace(/[\u0000-\u001f\u007f]/g, ' ')
         .replace(/\s+/g, ' ')
         .trim();

@@ -378,7 +378,7 @@ export class Designer {
             // It usually appears before width/height arguments at the end of PartDef.
             // Let's try to match the substring between the last Sprite closing `)` and the size args `, w, h`.
 
-            const statsMatch = code.match(/PartDef\([^\{]+(\{[\s\S]+?\})\s*,/);
+            const statsMatch = code.match(/PartDef\([^{]+(\{[\s\S]+?\})\s*,/);
             if (statsMatch) {
                 const parsedStats = parsePartStatsLiteral(statsMatch[1]);
                 if (parsedStats) {

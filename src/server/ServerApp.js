@@ -297,7 +297,9 @@ export function createFrameboundServer({
         stop() {
             roomRegistry.destroyAll();
             if (!httpServer.listening) return Promise.resolve();
-            return new Promise(resolve => io.close(resolve));
+            return new Promise(resolve => {
+                io.close(resolve);
+            });
         }
     };
 }

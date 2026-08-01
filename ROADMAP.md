@@ -357,10 +357,16 @@ completed on 2026-07-25:
   always win and healthy replacement timers cannot be killed by old callbacks.
 - passed 392 node tests and the 88.98% critical-line coverage gate after the
   silent-link and deterministic network-fault batch.
+- fixed the release-version gate so the redesigned readme badge and equivalent
+  node-version wording stay aligned without restoring stale banner copy.
+- added correctness-focused eslint, a strict checked-javascript boundary for
+  part definitions, runtime part-library validation, and regression tests that
+  reject corrupt definitions before a run starts.
+- updated vulnerable development and network dependencies through compatible
+  versions; the complete npm audit now reports zero known vulnerabilities.
 
-still open before milestone 0 is fully closed:
-
-- let github actions prove the clean-install gate on the next pushed branch.
+- github actions run `30706641165` proved the clean-install, test, coverage,
+  source, native-save, and macos/windows artifact gates on 2026-08-01.
 
 ## objective
 
@@ -661,9 +667,9 @@ goal: make starting framebound a double-click instead of a tiny sysadmin exercis
 
 status: the local arm64 macos app is built, ad-hoc signed, structurally and
 strictly verified, and launch-smoked. windows artifact structure is now enforced
-on its native ci runner. native windows execution, packaged two-instance
-multiplayer, public signing, notarization, and the first external artifact-ci
-run remain open.
+on its native ci runner, and github actions run `30706641165` passed both native
+artifact jobs. native windows execution, packaged two-instance multiplayer,
+public signing, and notarization remain open.
 
 ### work
 
@@ -692,13 +698,15 @@ addresses: a-013 through a-015.
 
 status: critical coverage, source hygiene, content security, native navigation,
 version alignment, environment configuration, bundle splitting, import cleanup,
-artifact validation, and architecture docs are implemented locally. gradual
-type checking needs an approved compiler dependency; external supabase policy
-proof and pushed ci proof also remain open.
+artifact validation, correctness linting, gradual checked javascript, runtime
+dependency auditing, and architecture docs are implemented locally. the
+existing release gates passed github actions run `30706641165`; external
+supabase policy proof remains open.
 
 ### work
 
 - add linting and a lightweight type-safety strategy, either checked jsdoc or a gradual typescript boundary.
+- keep new part mechanics behind typed definitions, focused runtime owners, host authority, persistence, rendering, and parity tests as documented in `PARTS.md`.
 - track coverage for shared simulation, save hydration, and network protocol code.
 - verify supabase rls externally; move score submission behind a trusted server if scores are meant to be authoritative.
 - configure deploy-specific urls and public keys through environment files with documented examples.

@@ -1,7 +1,7 @@
 # framebound desktop direction
 
 date approved: 2026-07-26  
-status: development shell, locally valid macos bundle, and macos/windows artifact ci jobs implemented; native ci proof, distribution signing, and notarization remain open
+status: development shell, locally valid macos bundle, and passing macos/windows artifact ci; native windows execution, distribution signing, and notarization remain open
 
 ## player experience
 

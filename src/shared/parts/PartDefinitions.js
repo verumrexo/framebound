@@ -1,4 +1,6 @@
 
+// @ts-check
+
 // Asset is 8x8 scaled by 4 = 32px.
 // Border is 1px scaled by 4 = 4px.
 // To have single-width walls, we must overlap by the border width (4px).
@@ -16,7 +18,51 @@ export const PartType = {
     SHIELD: 'shield'
 };
 
+/**
+ * @typedef {object} PartStats
+ * @property {number} [hp]
+ * @property {number} [mass]
+ * @property {number} [energy]
+ * @property {number} [thrust]
+ * @property {number} [turnSpeed]
+ * @property {number} [regen]
+ * @property {number} [damage]
+ * @property {number} [cooldown]
+ * @property {number} [projectileSpeed]
+ * @property {string} [projectileType]
+ * @property {'velocity' | 'laser' | 'rocket' | 'utility'} [weaponGroup]
+ * @property {number} [lifetime]
+ * @property {number} [range]
+ * @property {number} [spread]
+ * @property {number} [aoeRadius]
+ * @property {number} [burstCount]
+ * @property {number} [burstInterval]
+ * @property {number} [chargeTime]
+ * @property {boolean} [rampUp]
+ * @property {number} [maxRamp]
+ * @property {number} [rampRate]
+ * @property {number} [peakDuration]
+ * @property {number} [overheatCooldown]
+ * @property {number} [pelletCount]
+ * @property {number} [pelletInterval]
+ * @property {number} [barrelSpacing]
+ * @property {{ x?: number, y?: number }} [barrelPosition]
+ * @property {number} [shieldCooldown]
+ * @property {number} [shieldRadiusScale]
+ * @property {number} [soundPitch]
+ * @property {number} [soundVolume]
+ */
+
 export class PartDef {
+    /**
+     * @param {string} id
+     * @param {string} name
+     * @param {string} type
+     * @param {unknown} sprite
+     * @param {PartStats} stats
+     * @param {number} width
+     * @param {number} height
+     */
     constructor(id, name, type, sprite, stats = {}, width = 1, height = 1) {
         this.id = id;
         this.name = name;

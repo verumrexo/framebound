@@ -29,11 +29,11 @@ test('stored settings reject markup and clamp malformed numeric values', (t) => 
     const originalStorage = globalThis.localStorage;
     const values = new Map([
         ['framebound_cursor_settings', JSON.stringify({
-            shape: '\"><img src=x>',
+            shape: '"><img src=x>',
             thickness: 999,
             length: -50,
             gap: 'wide',
-            color: '\" onfocus=\"alert(1)',
+            color: '" onfocus="alert(1)',
             outline: 'yes'
         })],
         ['framebound_game_settings', JSON.stringify({

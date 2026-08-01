@@ -119,6 +119,8 @@ offline development.
 | `npm run dev` | start the browser development build |
 | `npm test` | run the canonical regression suite |
 | `npm run build` | create the production web build |
+| `npm run lint` | run correctness-focused javascript linting |
+| `npm run typecheck` | check the gradual typed javascript boundary |
 | `npm run desktop` | launch the native desktop shell with hot reload |
 | `npm run desktop:build` | build and verify the current platform artifact |
 | `npm run signaling:smoke` | verify the configured signaling relay |
@@ -137,6 +139,7 @@ variable; browser builds expose them.
 - [signaling deployment](./SIGNALING.md)
 - [save format and migration rules](./SAVE_FORMAT.md)
 - [gameplay parity traces](./GAMEPLAY_PARITY.md)
+- [part mechanics architecture](./PARTS.md)
 - [leaderboard trust model](./LEADERBOARD.md)
 - [technical audit](./AUDIT.md)
 - [technical roadmap](./ROADMAP.md)

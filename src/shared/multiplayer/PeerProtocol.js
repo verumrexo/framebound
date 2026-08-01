@@ -364,6 +364,7 @@ function sanitizeAction(action, payload) {
 function sanitizeDisplayName(value) {
     if (typeof value !== 'string') return 'pilot';
     const cleaned = value
+        // eslint-disable-next-line no-control-regex -- these are the characters being stripped
         .replace(/[\u0000-\u001f\u007f]/g, ' ')
         .replace(/\s+/g, ' ')
         .trim()
