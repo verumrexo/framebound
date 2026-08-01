@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import {
+    hasReleaseVersionBadge,
+    hasSupportedNodeRequirement
+} from './release-version-readme.mjs';
 
 const packageJson = JSON.parse(await readFile('package.json', 'utf8'));
 const packageLock = JSON.parse(await readFile('package-lock.json', 'utf8'));
@@ -41,11 +45,11 @@ assert.match(
     )
 );
 assert.ok(
-    readme.includes(`**v${displayVersion} `),
-    'README release banner does not match package version'
+    hasReleaseVersionBadge(readme, releaseVersion),
+    'README version badge does not match package version'
 );
 assert.ok(
-    readme.includes('22.12+'),
+    hasSupportedNodeRequirement(readme),
     'README node requirement does not match the release runtime'
 );
 for (const [name, workflow] of [
