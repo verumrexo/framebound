@@ -3,6 +3,10 @@ import { Boss } from '../../shared/entities/Boss.js';
 import { Asteroid } from '../../shared/entities/Asteroid.js';
 import { LootCrate } from '../../shared/entities/LootCrate.js';
 import { Shipwreck } from '../../shared/entities/Shipwreck.js';
+import { ShopItem } from '../../shared/entities/ShopItem.js';
+import { TreasureChest } from '../../shared/entities/TreasureChest.js';
+import { VaultChest } from '../../shared/entities/VaultChest.js';
+import { PartsLibrary } from '../../shared/parts/Part.js';
 import { RoomType } from './RoomType.js';
 
 export class Room {
@@ -21,12 +25,22 @@ export class Room {
         this.height = heightUnits * this.unitSize;
 
         this.enemies = []; // Stores generated enemy instances
+        this.asteroids = [];
+        this.lootCrates = [];
+        this.shipwrecks = [];
+        this.xpOrbs = [];
+        this.goldOrbs = [];
+        this.hpOrbs = [];
+        this.itemPickups = [];
         this.locked = false;
         this.visited = false;
         this.cleared = false;
+        this.waveTimer = null;
 
         // Shop room properties
         this.shopItems = null; // Will be generated on first visit
+        this.treasureChests = null;
+        this.vaultChests = null;
         this.shopUsed = false; // True after player buys something
 
         // Connections (doors) - to be set by generator
@@ -45,6 +59,8 @@ export class Room {
     }
 
     onEnter(game) {
+        this.activate(game);
+
         if (!this.visited) {
             this.visited = true;
 
@@ -84,78 +100,106 @@ export class Room {
         }
     }
 
+    activate(game) {
+        game.asteroids = this.asteroids;
+        game.lootCrates = this.lootCrates;
+        game.shipwrecks = this.shipwrecks;
+        game.xpOrbs = this.xpOrbs;
+        game.goldOrbs = this.goldOrbs;
+        game.hpOrbs = this.hpOrbs;
+        game.itemPickups = this.itemPickups;
+        game.shopItems = this.shopItems || [];
+        game.treasureChests = this.treasureChests || [];
+        game.vaultChests = this.vaultChests || [];
+    }
+
+    deactivate(game) {
+        this.asteroids = [...(game.asteroids || [])];
+        this.lootCrates = [...(game.lootCrates || [])];
+        this.shipwrecks = [...(game.shipwrecks || [])];
+        this.xpOrbs = [...(game.xpOrbs || [])];
+        this.goldOrbs = [...(game.goldOrbs || [])];
+        this.hpOrbs = [...(game.hpOrbs || [])];
+        this.itemPickups = [...(game.itemPickups || [])];
+        this.shopItems = [...(game.shopItems || [])];
+        this.treasureChests = [...(game.treasureChests || [])];
+        this.vaultChests = [...(game.vaultChests || [])];
+    }
+
     generateShopItems(game) {
         if (this.shopItems) return; // Already generated
 
-        // Import ShopItem and parts synchronously
-        import('../../shared/entities/ShopItem.js').then(({ ShopItem }) => {
-            import('../../shared/parts/Part.js').then(({ PartsLibrary: PL }) => {
-                const allParts = [];
-                for (const id of Object.keys(PL)) {
-                    if (id !== 'core') allParts.push({ id, def: PL[id] });
-                }
+        const allParts = [];
+        for (const id of Object.keys(PartsLibrary)) {
+            if (id !== 'core') {
+                allParts.push({ id, def: PartsLibrary[id] });
+            }
+        }
 
-                // Shuffle and pick 3 random parts
-                for (let i = allParts.length - 1; i > 0; i--) {
-                    const j = Math.floor(this.random() * (i + 1));
-                    [allParts[i], allParts[j]] = [allParts[j], allParts[i]];
-                }
+        // Shuffle and pick 3 random parts
+        for (let i = allParts.length - 1; i > 0; i--) {
+            const j = Math.floor(this.random() * (i + 1));
+            [allParts[i], allParts[j]] = [allParts[j], allParts[i]];
+        }
 
-                const selectedParts = allParts.slice(0, 3);
+        const selectedParts = allParts.slice(0, 3);
 
-                // Create item data
-                const itemDatas = [
-                    // Heal option
-                    {
-                        type: 'heal',
-                        name: 'Repair Kit',
-                        description: 'Restore 50 HP',
-                        price: 30
-                    },
-                    // 3 random parts
-                    ...selectedParts.map(p => ({
-                        type: 'part',
-                        name: p.def.name || p.id,
-                        partId: p.id,
-                        description: p.def.type || 'Part',
-                        price: Math.floor((p.def.stats?.hp || 10) * 2 + (p.def.stats?.mass || 1) * 5)
-                    }))
-                ];
+        const itemDatas = [
+            {
+                type: 'heal',
+                name: 'Repair Kit',
+                description: 'Restore 50 HP',
+                price: 30
+            },
+            ...selectedParts.map(part => ({
+                type: 'part',
+                name: part.def.name || part.id,
+                partId: part.id,
+                description: part.def.type || 'Part',
+                price: Math.floor(
+                    (part.def.stats?.hp || 10) * 2 +
+                    (part.def.stats?.mass || 1) * 5
+                )
+            }))
+        ];
 
-                // Position items in a row in the center of the room
-                const centerX = this.x + this.width / 2;
-                const centerY = this.y + this.height / 2;
-                const spacing = 120;
-                const startX = centerX - ((itemDatas.length - 1) * spacing) / 2;
+        const centerX = this.x + this.width / 2;
+        const centerY = this.y + this.height / 2;
+        const spacing = 120;
+        const startX =
+            centerX - ((itemDatas.length - 1) * spacing) / 2;
 
-                this.shopItems = [];
-                for (let i = 0; i < itemDatas.length; i++) {
-                    const item = new ShopItem(startX + i * spacing, centerY, itemDatas[i]);
-                    this.shopItems.push(item);
-                    game.shopItems.push(item); // Add to game's global list for rendering
-                }
-            });
-        });
+        this.shopItems = [];
+        game.shopItems = this.shopItems;
+        for (let i = 0; i < itemDatas.length; i++) {
+            const item = new ShopItem(
+                startX + i * spacing,
+                centerY,
+                itemDatas[i]
+            );
+            this.shopItems.push(item);
+        }
     }
 
     spawnTreasureChests(game) {
         if (this.treasureChests) return; // Already spawned
 
-        import('../../shared/entities/TreasureChest.js').then(({ TreasureChest }) => {
-            // Spawn 1-2 chests
-            const chestCount = 1 + Math.floor(this.random() * 2);
-            const centerX = this.x + this.width / 2;
-            const centerY = this.y + this.height / 2;
-            const spacing = 150;
-            const startX = centerX - ((chestCount - 1) * spacing) / 2;
+        const chestCount = 1 + Math.floor(this.random() * 2);
+        const centerX = this.x + this.width / 2;
+        const centerY = this.y + this.height / 2;
+        const spacing = 150;
+        const startX = centerX - ((chestCount - 1) * spacing) / 2;
 
-            this.treasureChests = [];
-            for (let i = 0; i < chestCount; i++) {
-                const chest = new TreasureChest(startX + i * spacing, centerY, this.random);
-                this.treasureChests.push(chest);
-                game.treasureChests.push(chest);
-            }
-        });
+        this.treasureChests = [];
+        game.treasureChests = this.treasureChests;
+        for (let i = 0; i < chestCount; i++) {
+            const chest = new TreasureChest(
+                startX + i * spacing,
+                centerY,
+                this.random
+            );
+            this.treasureChests.push(chest);
+        }
     }
 
     spawnVaultChests(game) {
@@ -171,24 +215,30 @@ export class Room {
         const goldCost = Math.floor(100 * costMultiplier);
         const hpCost = Math.floor(50 * costMultiplier);
 
-        import('../../shared/entities/VaultChest.js').then(({ VaultChest }) => {
-            const centerX = this.x + this.width / 2;
-            const centerY = this.y + this.height / 2;
-            const spacing = 200;
+        const centerX = this.x + this.width / 2;
+        const centerY = this.y + this.height / 2;
+        const spacing = 200;
 
-            this.vaultChests = [];
+        this.vaultChests = [];
+        game.vaultChests = this.vaultChests;
 
-            // Chest 1: Gold Cost (High Gold)
-            const goldChest = new VaultChest(centerX - spacing / 2, centerY, 'gold', goldCost, this.random);
-            this.vaultChests.push(goldChest);
-            game.vaultChests = game.vaultChests || [];
-            game.vaultChests.push(goldChest);
+        const goldChest = new VaultChest(
+            centerX - spacing / 2,
+            centerY,
+            'gold',
+            goldCost,
+            this.random
+        );
+        this.vaultChests.push(goldChest);
 
-            // Chest 2: HP Cost (High HP)
-            const hpChest = new VaultChest(centerX + spacing / 2, centerY, 'hp', hpCost, this.random);
-            this.vaultChests.push(hpChest);
-            game.vaultChests.push(hpChest);
-        });
+        const hpChest = new VaultChest(
+            centerX + spacing / 2,
+            centerY,
+            'hp',
+            hpCost,
+            this.random
+        );
+        this.vaultChests.push(hpChest);
     }
 
     startAmbush(game) {
@@ -281,7 +331,10 @@ export class Room {
         if (this.enemies.length === 0) {
             if (this.waveCount < this.maxWaves) {
                 this.waveWaiting = true;
-                setTimeout(() => this.spawnWave(game), 1000); // Delay next wave
+                this.waveTimer = setTimeout(() => {
+                    this.waveTimer = null;
+                    this.spawnWave(game);
+                }, 1000);
             } else {
                 // Ambush Cleared!
                 this.ambushStarted = false;
@@ -298,6 +351,14 @@ export class Room {
                 }
             }
         }
+    }
+
+    cancelPendingEvents() {
+        if (this.waveTimer !== null) {
+            clearTimeout(this.waveTimer);
+            this.waveTimer = null;
+        }
+        this.waveWaiting = false;
     }
 
     spawnAsteroids(game) {
@@ -498,14 +559,15 @@ export class Room {
             }
         }
 
-        // Auto-save on room clear (safer checkpoint than room enter)
-        if (game.autoSave && game.playerShip) {
-            game.autoSave();
-        }
-
         // Room Clear Bonus: +100 Points
         game.score = (game.score || 0) + 100;
         game.showNotification('ROOM CLEARED! +100', '#ffff00');
+
+        // Auto-save after granting the clear reward so the checkpoint cannot
+        // remember a cleared room while dropping its score.
+        if (game.autoSave && game.playerShip) {
+            game.autoSave();
+        }
     }
 
     draw(renderer, camera) {

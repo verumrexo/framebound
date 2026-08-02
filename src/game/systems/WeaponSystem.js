@@ -1,101 +1,56 @@
-
-import { Projectile } from '../shared/entities/Projectile.js';
 import { PartsLibrary, TILE_SIZE } from '../../shared/parts/Part.js';
+import { Projectile } from '../../shared/entities/Projectile.js';
+import { dispatchPlayerShot } from './PlayerShotDispatcher.js';
+
+const WEAPON_SOUNDS = {
+    gun_basic: 'shoot_dart',
+    scattr: 'shoot_scattr',
+    lps: 'shoot_lps',
+    ggbm: 'shoot_ggbm',
+    rocketle: 'shoot_rocketle',
+    minigun: 'shoot_minigun',
+    custom_1767999386292: 'shoot_lsr',
+    custom_1768036702131: 'shoot_rocket_he',
+    custom_1768397007593: 'rail_shot',
+    custom_1768857172136: 'shoot_sniper',
+    custom_1769204337665: 'shoot_dart',
+    custom_1769336961268: 'shoot_lsr',
+    railgun: 'rail_shot'
+};
 
 export class WeaponSystem {
-    constructor() {
+    constructor(game, {
+        ProjectileClass = Projectile,
+        random = Math.random
+    } = {}) {
+        this.game = game;
         this.staggerTimers = {};
-        // Removed global activeChargeSound - now using per-part tracking
-        this.weaponSounds = {
-            'gun_basic': 'shoot_dart',
-            'scattr': 'shoot_scattr',
-            'lps': 'shoot_lps',
-            'ggbm': 'shoot_ggbm',
-            'rocketle': 'shoot_rocketle',
-            'minigun': 'shoot_minigun',
-            'custom_1767999386292': 'shoot_lsr',
-            'custom_1768036702131': 'shoot_rocket_he',
-            'custom_1768397007593': 'rail_shot',
-            'custom_1768857172136': 'shoot_sniper',
-            'custom_1769204337665': 'shoot_dart', // Burst
-            'custom_1769336961268': 'shoot_lsr', // Freeze Ray
-            'custom_1769514097773': 'nova', // Nova Cluster
-            'railgun': 'rail_shot'
-        };
+        this.ProjectileClass = ProjectileClass;
+        this.random = random;
     }
 
-    update(game, dt) {
-        // --- 1. SETUP & INPUT ---
-        const CELL_STRIDE = TILE_SIZE;
-        const levelBonus = 1 + (game.level - 1) * 0.01;
-        const accelerantBonus = (1 + (game.playerShip.stats.accelerantCount || 0) * 0.05);
+    update(dt, state) {
+        const game = this.game;
+        let { isMouseDown, worldMouseX, worldMouseY, levelBonus } = state;
 
-        // Input Handling
-        let isMouseDown = game.input.isMouseDown();
-        if (game.input.joysticks && game.input.joysticks.right.active) {
-            isMouseDown = true;
-        }
+        const accelerantBonus = 1 + (game.playerShip.stats.accelerantCount || 0) * 0.05;
 
-
-
-
-
-        // Prevent firing when interacting with UI (Shop/Hangar)
-        if (isMouseDown && !game.designer.active) {
-            // Check Shop
-            if (game.shopButtonRects && game.shopButtonRects.length > 0 && !game.mouseDownLastFrame) {
-                const mousePos = game.input.getMousePos();
-                for (const btn of game.shopButtonRects) {
-                    if (mousePos.x >= btn.x && mousePos.x <= btn.x + btn.w &&
-                        mousePos.y >= btn.y && mousePos.y <= btn.y + btn.h) {
-                        return; // UI Click
-                    }
-                }
+        for (const part of game.playerShip.getUniqueParts()) {
+            if (part.shieldCooldown > 0) {
+                part.shieldCooldown -= dt;
             }
-            // Check Hangar
-            if (game.hangarButtonRect && !game.mouseDownLastFrame) {
-                const mousePos = game.input.getMousePos();
-                const btn = game.hangarButtonRect;
-                if (mousePos.x >= btn.x && mousePos.x <= btn.x + btn.w &&
-                    mousePos.y >= btn.y && mousePos.y <= btn.y + btn.h) {
-                    return; // UI Click
-                }
+            if (part.recoil > 0) {
+                part.recoil -= dt * 20;
+                if (part.recoil < 0) part.recoil = 0;
             }
         }
 
-        // Aiming Calculation
-        const zoom = game.camera.zoom || 1;
-        const mouse = game.input.getMousePos();
-        let worldMouseX = (mouse.x / zoom) + game.camera.x;
-        let worldMouseY = (mouse.y / zoom) + game.camera.y;
-
-        if (game.input.joysticks && game.input.joysticks.right.active) {
-            const v = game.input.joysticks.right.vector;
-            worldMouseX = game.x + v.x * 2000;
-            worldMouseY = game.y + v.y * 2000;
-        }
-
-        // --- 2. UPDATE COOLDOWNS & GROUP WEAPONS ---
         const weaponGroups = {};
 
         for (const partRef of game.playerShip.getUniqueParts()) {
-            // General Updates
-            if (partRef.shieldCooldown > 0) partRef.shieldCooldown -= dt;
-            if (partRef.recoil > 0) {
-                partRef.recoil -= dt * 20;
-                if (partRef.recoil < 0) partRef.recoil = 0;
-            }
-
             const def = PartsLibrary[partRef.partId];
-            if (!def) {
-                if (Math.random() < 0.01) console.warn('Missing definition for part:', partRef.partId);
-                continue;
-            }
-            if (def.type !== 'weapon') {
-                continue;
-            }
+            if (!def || def.type !== 'weapon') continue;
 
-            // Ramp / Minigun Logic
             if (def.stats.rampUp) {
                 if (partRef.rampLevel === undefined) partRef.rampLevel = 0;
                 if (partRef.peakMeter === undefined) partRef.peakMeter = 0;
@@ -108,12 +63,12 @@ export class WeaponSystem {
                         game.audio.play('overheat', { volume: 0.7 });
                     }
                 }
+
                 if (!isMouseDown && partRef.peakMeter <= 0) {
                     partRef.rampLevel = Math.max(0, partRef.rampLevel - dt * 2.0);
                 }
             }
 
-            // Charge Logic
             if (partRef.chargeLeft > 0) {
                 partRef.chargeLeft -= dt;
                 if (partRef.chargeLeft <= 0) {
@@ -121,15 +76,10 @@ export class WeaponSystem {
                 }
             }
 
-            // Calculate Cooldown
-            const perm = game.playerShip.permanentStats;
-            const rampFactor = (def.stats.rampUp && partRef.rampLevel) ? (1 + partRef.rampLevel) : 1;
+            const rampFactor = (def.stats.rampUp && partRef.rampLevel) ? 1 + partRef.rampLevel : 1;
             let currentFireRateMul = levelBonus;
-
             if (def.stats.weaponGroup === 'laser') {
-                currentFireRateMul *= (accelerantBonus + (perm.laserRateAdd || 0));
-            } else if (def.stats.weaponGroup === 'velocity') {
-                currentFireRateMul += (perm.velocityRateAdd || 0);
+                currentFireRateMul *= accelerantBonus;
             }
 
             let baseCooldown = def.stats.cooldown || 0.15;
@@ -139,108 +89,101 @@ export class WeaponSystem {
             if (!partRef.cooldown) partRef.cooldown = 0;
             if (partRef.cooldown > 0) partRef.cooldown -= dt;
 
-            // Grouping
             if (!weaponGroups[def.id]) {
                 weaponGroups[def.id] = {
-                    def: def,
+                    def,
                     weapons: [],
                     minBaseCooldown: adjCooldown
                 };
             } else {
-                weaponGroups[def.id].minBaseCooldown = Math.min(weaponGroups[def.id].minBaseCooldown, adjCooldown);
+                weaponGroups[def.id].minBaseCooldown = Math.min(
+                    weaponGroups[def.id].minBaseCooldown,
+                    adjCooldown
+                );
             }
             weaponGroups[def.id].weapons.push({ partRef, def, adjCooldown });
         }
 
-        // --- 3. TRIGGER UPDATE (STAGGERED) ---
         if (isMouseDown && !game.designer.active) {
-            // DEBUG: Check weapon groups
-            if (Object.keys(weaponGroups).length === 0) {
-                // console.log('No weapon groups found! Items checked:', game.playerShip.parts.size);
-            } else {
-                // console.log('Weapon Groups:', Object.keys(weaponGroups));
-            }
-
             for (const [groupId, group] of Object.entries(weaponGroups)) {
                 if (this.staggerTimers[groupId] === undefined) this.staggerTimers[groupId] = 0;
 
                 const count = group.weapons.length;
                 const staggerInterval = Math.min(0.2, group.minBaseCooldown / count);
-
-                this.staggerTimers[groupId] -= dt;
-
-                // DEBUG: Check specific group logic
-                // if (Math.random() < 0.01) console.log(`Group ${groupId}: count=${count} timer=${this.staggerTimers[groupId]}`);
-
-
-
-
-
                 this.staggerTimers[groupId] -= dt;
 
                 let safety = 0;
                 while (this.staggerTimers[groupId] <= 0 && safety < 50) {
                     safety++;
 
-                    // Find ready weapon
-                    const readyWeapon = group.weapons.find(w => {
-                        if (w.partRef.cooldown === undefined) w.partRef.cooldown = 0;
-                        return w.partRef.cooldown <= 0 && (w.partRef.chargeLeft === undefined || w.partRef.chargeLeft <= 0) && !w.partRef.chargeReady;
-                    });
+                    const readyWeapon = group.weapons.find(w =>
+                        w.partRef.cooldown <= 0 &&
+                        w.partRef.chargeLeft === undefined &&
+                        !w.partRef.chargeReady
+                    );
                     const chargedWeapon = group.weapons.find(w => w.partRef.chargeReady);
 
                     if (readyWeapon || chargedWeapon) {
                         const activeWeapon = chargedWeapon || readyWeapon;
                         const { partRef, def, adjCooldown } = activeWeapon;
 
-                        // Start Charge
                         if (!chargedWeapon && def.stats.chargeTime && !partRef.chargeLeft) {
                             partRef.chargeLeft = def.stats.chargeTime;
-                            // Stop THIS part's existing charge sound (prevents stacking on same weapon)
-                            if (partRef.chargeSound) {
-                                try { partRef.chargeSound.source.stop(); } catch (e) { }
+                            if (def.stats.projectileType === 'saber') {
+                                partRef.chargeSound = game.audio.play('rail_charge', {
+                                    volume: 0.3,
+                                    pitch: 1.5
+                                });
+                            } else {
+                                partRef.chargeSound = game.audio.play('rail_charge', { volume: 0.5 });
                             }
-                            const pitch = def.stats.projectileType === 'saber' ? 1.5 : 1.0;
-                            const vol = def.stats.projectileType === 'saber' ? 0.08 : 0.4;
-                            partRef.chargeSound = game.audio.play('rail_charge', { volume: vol, pitch });
-                            break; // Stop loop, waiting for charge
+                            break;
                         }
 
-                        // Fire (Set Burst)
                         if (chargedWeapon) {
                             partRef.chargeLeft = undefined;
                             partRef.chargeReady = false;
+
                             if (partRef.chargeSound) {
-                                try { partRef.chargeSound.source.stop(); } catch (e) { }
+                                try { partRef.chargeSound.stop(); } catch (e) { }
                                 partRef.chargeSound = null;
                             }
+
                             const pitch = def.stats.projectileType === 'saber' ? 1.5 : 1.0;
-                            const fireVol = def.stats.projectileType === 'saber' ? 0.15 : 0.5;
-                            game.audio.play('rail', { volume: fireVol, pitch });
+                            game.audio.play('rail', { volume: 0.7, pitch });
                         }
 
-                        // Initialize Burst
-                        let bCount = def.stats.burstCount || 0;
+                        const { fireX, fireY, angle } = this.getInitialShotOrigin(
+                            partRef,
+                            def,
+                            worldMouseX,
+                            worldMouseY
+                        );
 
+                        const burstCount = def.stats.burstCount || 0;
                         if (def.stats.weaponGroup === 'rocket') {
-                            const rocketBonus = (game.playerShip.stats.rocketBayCount || 0);
-                            partRef.burstLeft = (bCount || 1) + rocketBonus;
-                            partRef.burstTimer = 0;
-                        } else if (bCount > 0) {
-                            partRef.burstLeft = bCount;
-                            partRef.burstTimer = 0;
-                        } else {
-                            // Default single shot is essentially a burst of 1
-                            partRef.burstLeft = 1;
+                            const rocketBonus = game.playerShip.stats.rocketBayCount || 0;
+                            if (burstCount > 0 || rocketBonus > 0) {
+                                partRef.burstLeft = (burstCount || 1) + rocketBonus;
+                                partRef.burstTimer = 0;
+                            }
+                        } else if (burstCount > 0) {
+                            partRef.burstLeft = burstCount;
                             partRef.burstTimer = 0;
                         }
 
-                        // Apply Cooldown / Ramp
+                        if (!(partRef.burstLeft > 0)) {
+                            dispatchPlayerShot(game, def, fireX, fireY, angle, partRef);
+                        }
+
                         if (def.stats.rampUp) {
                             if (partRef.peakMeter > 0) {
                                 partRef.cooldown = adjCooldown;
                             } else {
-                                partRef.rampLevel = Math.min(def.stats.maxRamp || 2.0, (partRef.rampLevel || 0) + (def.stats.rampRate || 0.5));
+                                partRef.rampLevel = Math.min(
+                                    def.stats.maxRamp || 2.0,
+                                    (partRef.rampLevel || 0) + (def.stats.rampRate || 0.5)
+                                );
                                 if (partRef.rampLevel >= (def.stats.maxRamp || 2.0)) {
                                     partRef.peakMeter = def.stats.peakDuration || 5;
                                 }
@@ -252,60 +195,60 @@ export class WeaponSystem {
 
                         this.staggerTimers[groupId] += staggerInterval;
                     } else {
-                        // Group empty/waiting
                         if (this.staggerTimers[groupId] < 0) this.staggerTimers[groupId] = 0;
                         break;
                     }
                 }
             }
         } else {
-            // Reset stagger timers
             for (const key in this.staggerTimers) {
                 if (this.staggerTimers[key] < 0) this.staggerTimers[key] = 0;
             }
-            // Reset Charges and stop per-part charge sounds
-            for (const partRef of game.playerShip.getUniqueParts()) {
-                partRef.chargeLeft = 0;
-                partRef.chargeReady = false;
-                if (partRef.chargeSound) {
-                    try { partRef.chargeSound.source.stop(); } catch (e) { }
-                    partRef.chargeSound = null;
-                }
-            }
         }
 
-        // --- 4. BURST EXECUTION LOOP ---
         for (const partRef of game.playerShip.getUniqueParts()) {
-            if (partRef.burstLeft > 0) {
-                partRef.burstTimer -= dt;
+            if (!(partRef.burstLeft > 0)) continue;
 
-                if (partRef.burstTimer <= 0) {
-                    const def = PartsLibrary[partRef.partId];
-                    if (def) {
-                        this.fireBurstShot(game, partRef, def, worldMouseX, worldMouseY);
-                    } else {
-                        partRef.burstLeft = 0;
-                    }
-                }
+            partRef.burstTimer -= dt;
+            if (partRef.burstTimer > 0) continue;
+
+            const def = PartsLibrary[partRef.partId];
+            if (!def) {
+                partRef.burstLeft = 0;
+                continue;
             }
+
+            const { fireX, fireY, angle } = this.getBurstShotOrigin(
+                partRef,
+                def,
+                worldMouseX,
+                worldMouseY
+            );
+            dispatchPlayerShot(game, def, fireX, fireY, angle, partRef);
+
+            partRef.burstLeft--;
+            let interval = def.stats.burstInterval || 0.1;
+            if (def.stats.weaponGroup === 'rocket' && game.playerShip.stats.rocketBayCount > 0) {
+                interval /= 1 + game.playerShip.stats.rocketBayCount;
+            }
+            partRef.burstTimer = interval;
         }
+
+        return { isMouseDown, blockedFrame: false };
     }
 
-    fireBurstShot(game, partRef, def, worldMouseX, worldMouseY) {
-        const CELL_STRIDE = TILE_SIZE;
-
-        // Calculate Trigger Position
+    getInitialShotOrigin(partRef, def, worldMouseX, worldMouseY) {
+        const game = this.game;
         const isRotated = ((partRef.rotation || 0) % 2 !== 0);
-        const pw = isRotated ? def.height : def.width;
-        const ph = isRotated ? def.width : def.height;
-        const localCX = (partRef.x + (pw - 1) / 2) * CELL_STRIDE;
-        const localCY = (partRef.y + (ph - 1) / 2) * CELL_STRIDE;
+        const width = isRotated ? def.height : def.width;
+        const height = isRotated ? def.width : def.height;
+        const localCX = (partRef.x + (width - 1) / 2) * TILE_SIZE;
+        const localCY = (partRef.y + (height - 1) / 2) * TILE_SIZE;
         const cos = Math.cos(game.rotation);
         const sin = Math.sin(game.rotation);
         let finalX = game.x + (localCX * cos - localCY * sin);
         let finalY = game.y + (localCX * sin + localCY * cos);
 
-        // Base Pivot Mount Offset
         const baseAngle = game.rotation + (partRef.rotation || 0) * (Math.PI / 2);
         if (def.baseSprite && (def.baseSprite.anchorX !== 0.5 || def.baseSprite.anchorY !== 0.5)) {
             const bpx = (def.baseSprite.anchorX - 0.5) * def.baseSprite.width * def.baseSprite.scale;
@@ -314,141 +257,148 @@ export class WeaponSystem {
             finalY += Math.sin(baseAngle) * bpx + Math.cos(baseAngle) * bpy;
         }
 
-        // Turret Pivot & Angle
-        // Turret follows mouse from its pivot
+        const angle = Math.atan2(worldMouseY - finalY, worldMouseX - finalX);
         let turretX = finalX;
         let turretY = finalY;
 
         if (def.turretDrawOffset) {
             if (typeof def.turretDrawOffset === 'object') {
-                // Vector offset from mount
                 const ox = def.turretDrawOffset.x || 0;
                 const oy = def.turretDrawOffset.y || 0;
                 turretX += Math.cos(baseAngle) * ox - Math.sin(baseAngle) * oy;
                 turretY += Math.sin(baseAngle) * ox + Math.cos(baseAngle) * oy;
             } else {
-                // Scalar forward offset
-                // But wait, forward in what direction? Base direction?
-                // The original code uses Math.cos(angle) for scalar... wait.
-                // Original: 
-                // } else { turretX += Math.cos(angle) * def.turretDrawOffset; ... }
-                // BUT 'angle' was calculated relative to 'finalX/Y'. 
-                // This implies circular dependency if angle uses turret position?
-                // Original code calculated `angle` BEFORE applying `turretDrawOffset` (scalar).
-                // So scalar offset moves along the aim vector.
+                turretX += Math.cos(angle) * def.turretDrawOffset;
+                turretY += Math.sin(angle) * def.turretDrawOffset;
             }
         }
 
-        // Re-calc angle based on pivot (finalX/Y is pivot)
-        const angle = Math.atan2(worldMouseY - finalY, worldMouseX - finalX);
-
-        if (typeof def.turretDrawOffset === 'number') {
-            turretX += Math.cos(angle) * def.turretDrawOffset;
-            turretY += Math.sin(angle) * def.turretDrawOffset;
-        }
-
-        // Firing Origin
         let fireX = turretX;
         let fireY = turretY;
-
-        // Barrel Offset (Muzzle)
         if (def.stats.barrelPosition) {
             const bx = def.stats.barrelPosition.x || 0;
             const by = def.stats.barrelPosition.y || 0;
-            // Barrel position is relative to sprite's local space, so rotate by actual visual angle
-            const muzzleAngle = angle + (def.rotationOffset || 0);
-            fireX += Math.cos(muzzleAngle) * bx - Math.sin(muzzleAngle) * by;
-            fireY += Math.sin(muzzleAngle) * bx + Math.cos(muzzleAngle) * by;
+            fireX += Math.cos(angle) * bx - Math.sin(angle) * by;
+            fireY += Math.sin(angle) * bx + Math.cos(angle) * by;
         } else {
-            // Default barrel length (scalar forward from aim)
-            // Note: turretX already includes scalar turretDrawOffset, so barrelLen should just be the sprite length
-            let barrelLen = (ph > 1.5) ? CELL_STRIDE * 1.3 : CELL_STRIDE * 0.6;
+            const barrelLen = height > 1.5 ? TILE_SIZE * 1.3 : TILE_SIZE * 0.6;
             fireX += Math.cos(angle) * barrelLen;
             fireY += Math.sin(angle) * barrelLen;
         }
 
-        // Spawn Projectiles
-        const pCount = def.stats.pelletCount || 1;
-        const pSpread = def.stats.spread || 0;
-        const pInterval = def.stats.pelletInterval || 0;
+        return { fireX, fireY, angle };
+    }
 
-        for (let i = 0; i < pCount; i++) {
-            const finalAngle = angle + (Math.random() - 0.5) * pSpread;
-            let pX = fireX;
-            let pY = fireY;
+    getBurstShotOrigin(partRef, def, worldMouseX, worldMouseY) {
+        const game = this.game;
+        const isRotated = ((partRef.rotation || 0) % 2 !== 0);
+        const width = isRotated ? def.height : def.width;
+        const height = isRotated ? def.width : def.height;
+        const localCX = (partRef.x + (width - 1) / 2) * TILE_SIZE;
+        const localCY = (partRef.y + (height - 1) / 2) * TILE_SIZE;
+        const cos = Math.cos(game.rotation);
+        const sin = Math.sin(game.rotation);
+        let finalX = game.x + (localCX * cos - localCY * sin);
+        let finalY = game.y + (localCX * sin + localCY * cos);
 
-            if (pCount > 1 && def.stats.barrelSpacing) {
-                const perpX = Math.cos(angle + Math.PI / 2);
-                const perpY = Math.sin(angle + Math.PI / 2);
-                const offset = (i - (pCount - 1) / 2) * def.stats.barrelSpacing;
-                pX += perpX * offset;
-                pY += perpY * offset;
+        if (def.baseSprite && (def.baseSprite.anchorX !== 0.5 || def.baseSprite.anchorY !== 0.5)) {
+            const baseAngle = game.rotation + (partRef.rotation || 0) * (Math.PI / 2);
+            const bpx = (def.baseSprite.anchorX - 0.5) * def.baseSprite.width * def.baseSprite.scale;
+            const bpy = (def.baseSprite.anchorY - 0.5) * def.baseSprite.height * def.baseSprite.scale;
+            finalX += Math.cos(baseAngle) * bpx - Math.sin(baseAngle) * bpy;
+            finalY += Math.sin(baseAngle) * bpx + Math.cos(baseAngle) * bpy;
+        }
+
+        const angle = Math.atan2(worldMouseY - finalY, worldMouseX - finalX);
+        let fireX = finalX;
+        let fireY = finalY;
+
+        if (def.stats.barrelPosition) {
+            const bx = def.stats.barrelPosition.x || 0;
+            const by = def.stats.barrelPosition.y || 0;
+            fireX += Math.cos(angle) * bx - Math.sin(angle) * by;
+            fireY += Math.sin(angle) * bx + Math.cos(angle) * by;
+        } else {
+            let barrelLen = height > 1.5 ? TILE_SIZE * 1.3 : TILE_SIZE * 0.6;
+            if (typeof def.turretDrawOffset === 'number') {
+                barrelLen += def.turretDrawOffset;
+            }
+            fireX += Math.cos(angle) * barrelLen;
+            fireY += Math.sin(angle) * barrelLen;
+        }
+
+        return { fireX, fireY, angle };
+    }
+
+    spawnProjectile(def, fireX, fireY, angle, partRef = null) {
+        const game = this.game;
+        const projectileCount = def.stats.pelletCount || 1;
+        const spread = def.stats.spread || 0;
+        const pelletInterval = def.stats.pelletInterval || 0;
+
+        for (let i = 0; i < projectileCount; i++) {
+            const finalAngle = angle + (this.random() - 0.5) * spread;
+            let projectileX = fireX;
+            let projectileY = fireY;
+
+            if (projectileCount > 1 && def.stats.barrelSpacing) {
+                const perpendicularX = Math.cos(angle + Math.PI / 2);
+                const perpendicularY = Math.sin(angle + Math.PI / 2);
+                const offset = (i - (projectileCount - 1) / 2) * def.stats.barrelSpacing;
+                projectileX += perpendicularX * offset;
+                projectileY += perpendicularY * offset;
             }
 
-            // Calculate Speed
             let speed = def.stats.projectileSpeed || 600;
-            if (def.stats.weaponGroup === 'rocket') {
-                const speedMul = game.playerShip.permanentStats.missileSpeedMul || 1.0;
-                speed *= speedMul;
+            if (def.stats.weaponGroup === 'rocket' && game.playerShip) {
+                speed *= game.playerShip.permanentStats.missileSpeedMul || 1.0;
             }
 
-            // Projectile(x, y, angle, type, speed, owner, damage, lifetime)
-            const p = new Projectile(pX, pY, finalAngle, def.stats.projectileType || 'bullet', speed, 'player', def.stats.damage || 10, def.stats.lifetime, game.random);
+            const projectile = new this.ProjectileClass(
+                projectileX,
+                projectileY,
+                finalAngle,
+                def.stats.projectileType || 'bullet',
+                speed,
+                'player',
+                def.stats.damage || 10,
+                def.stats.lifetime
+            );
 
-            if (def.stats.projectileType === 'railgun' || def.stats.projectileType === 'beam_freeze') p.isBeam = true;
+            if (def.stats.projectileType === 'railgun' ||
+                def.stats.projectileType === 'beam_freeze') {
+                projectile.isBeam = true;
+            }
 
-            if (def.stats.projectileType === 'beam_freeze') {
+            if (def.stats.projectileType === 'beam_freeze' && partRef) {
                 partRef.shotCount = (partRef.shotCount || 0) + 1;
-                if (partRef.shotCount % 5 !== 0) p.isVisualOnly = true;
+                if (partRef.shotCount % 5 !== 0) {
+                    projectile.isVisualOnly = true;
+                }
             }
 
-            p.delay = i * pInterval * (0.5 + Math.random());
-            game.projectiles.push(p);
+            projectile.delay = i * pelletInterval * (0.5 + this.random());
+            game.projectiles.push(projectile);
 
-            if (def.stats.weaponGroup === 'velocity') {
+            if (partRef && def.stats.weaponGroup === 'velocity') {
                 partRef.recoil = 5.0;
             }
         }
 
-        // Decrement Burst
-        partRef.burstLeft--;
-        let interval = def.stats.burstInterval || 0.1;
-        if (def.stats.weaponGroup === 'rocket' && game.playerShip.stats.rocketBayCount > 0) {
-            interval /= (1 + game.playerShip.stats.rocketBayCount);
-        }
-        partRef.burstTimer = interval;
-
-        // Audio
-        let snd = this.weaponSounds[def.id] || 'hit';
+        const sound = WEAPON_SOUNDS[def.id] || 'hit';
         let pitch = def.stats.soundPitch || 1.0;
-        let shouldPlay = true;
-        let vol = def.stats.soundVolume ?? 0.6;
+        if (def.id === 'custom_1769336961268') pitch = 0.5;
 
-        // Lower volume for saber shot sound
-        if (def.stats.projectileType === 'saber') {
-            vol = 0.15;
+        let shouldPlayShoot = true;
+        if (def.stats.projectileType === 'beam_freeze' && partRef) {
+            if (partRef.shotCount % 5 !== 0) shouldPlayShoot = false;
         }
 
-        if (def.stats.projectileType === 'beam_freeze') {
-            if (partRef.shotCount % 5 !== 0) shouldPlay = false;
-        }
-
-        if (shouldPlay) {
-            game.audio.play(snd, {
-                volume: vol,
-                pitch: pitch,
+        if (shouldPlayShoot) {
+            game.audio.play(sound, {
+                volume: def.stats.soundVolume ?? 0.6,
+                pitch,
                 randomizePitch: 0.15
-            });
-        }
-
-        // Network Sync: Send Shoot Event
-        // We send the firing parameters so others can replicate the projectile and sound
-        if (game.network && game.network.isConnected) {
-            game.network.sendShoot({
-                partId: def.id,
-                x: fireX,
-                y: fireY,
-                angle: angle
             });
         }
     }

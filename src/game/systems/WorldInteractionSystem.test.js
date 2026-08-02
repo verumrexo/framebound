@@ -1,0 +1,338 @@
+import '../../tests/setup.js';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { WorldInteractionSystem } from './WorldInteractionSystem.js';
+
+class PickupStub {
+    constructor(x, y, partId) {
+        this.x = x;
+        this.y = y;
+        this.partId = partId;
+    }
+}
+
+function createHarness({
+    gold = 100,
+    hp = 100,
+    mouse = { x: 0, y: 0 },
+    eDown = false,
+    mouseDown = false,
+    random = () => 0
+} = {}) {
+    const notifications = [];
+    const audioCalls = [];
+    const explosions = [];
+    const ambushCalls = [];
+    const room = {
+        cleared: false,
+        shopUsed: false,
+        startAmbush: game => ambushCalls.push(game)
+    };
+    const game = {
+        audio: {
+            play: (...args) => audioCalls.push(args)
+        },
+        camera: {
+            x: 0,
+            y: 0,
+            zoom: 1
+        },
+        currentRoom: room,
+        eKeyLastFrame: false,
+        gold,
+        input: {
+            getMousePos: () => mouse,
+            isKeyDown: code => code === 'KeyE' && eDown,
+            isMouseDown: () => mouseDown
+        },
+        itemPickups: [],
+        mouseDownLastFrame: false,
+        playerShip: {
+            hp,
+            maxHp: 100
+        },
+        shopItems: [],
+        treasureChests: [],
+        vaultChests: [],
+        showNotification: (...args) => notifications.push(args),
+        spawnExplosion: (...args) => explosions.push(args)
+    };
+    const partsLibrary = {
+        core: { name: 'Core' },
+        gun: { name: 'Basic Gun' },
+        rocket: { name: 'Rocket Launcher' }
+    };
+    const system = new WorldInteractionSystem(game, {
+        random,
+        partsLibrary,
+        ItemPickupClass: PickupStub
+    });
+
+    return {
+        ambushCalls,
+        audioCalls,
+        explosions,
+        game,
+        notifications,
+        room,
+        system
+    };
+}
+
+test('hovered shop purchases keep the existing e-key edge trigger', () => {
+    const harness = createHarness({
+        gold: 50,
+        hp: 40,
+        mouse: { x: 100, y: 200 },
+        eDown: true
+    });
+    const shopItem = {
+        x: 100,
+        y: 200,
+        radius: 40,
+        purchased: false,
+        data: {
+            type: 'heal',
+            name: 'Repair',
+            price: 30
+        }
+    };
+    harness.game.shopItems.push(shopItem);
+
+    harness.system.update();
+    harness.system.update();
+
+    assert.equal(harness.game.hoveredShopItem, null);
+    assert.equal(harness.game.gold, 20);
+    assert.equal(harness.game.playerShip.hp, 90);
+    assert.equal(shopItem.purchased, true);
+    assert.equal(harness.room.shopUsed, true);
+    assert.deepEqual(harness.notifications, [['+50 HP!', '#44ff44']]);
+});
+
+test('shop and chest animation uses real frame time outside rendering', () => {
+    const harness = createHarness();
+    const calls = [];
+    harness.game.shopItems = [{
+        purchased: false,
+        x: 1000,
+        y: 1000,
+        radius: 1,
+        update: dt => calls.push(['shop', dt])
+    }];
+    harness.game.treasureChests = [{
+        opened: false,
+        x: 1000,
+        y: 1000,
+        radius: 1,
+        update: dt => calls.push(['treasure', dt])
+    }];
+    harness.game.vaultChests = [{
+        opened: false,
+        x: 1000,
+        y: 1000,
+        radius: 1,
+        update: dt => calls.push(['vault', dt])
+    }];
+
+    harness.system.update(0.025);
+
+    assert.deepEqual(calls, [
+        ['shop', 0.025],
+        ['treasure', 0.025],
+        ['vault', 0.025]
+    ]);
+});
+
+test('part purchases still create a pickup at the shop item', () => {
+    const harness = createHarness();
+    const shopItem = {
+        x: 12,
+        y: 34,
+        purchased: false,
+        data: {
+            type: 'part',
+            name: 'Rocket Launcher',
+            partId: 'rocket',
+            price: 75
+        }
+    };
+
+    harness.system.purchaseShopItem(shopItem);
+
+    assert.equal(harness.game.gold, 25);
+    const pickup = new PickupStub(12, 34, 'rocket');
+    pickup.ownerId = 'host';
+    assert.deepEqual(harness.game.itemPickups, [pickup]);
+    assert.deepEqual(harness.notifications, [[
+        'Unlocked: Rocket Launcher! Pick it up.',
+        '#ffd700'
+    ]]);
+});
+
+test('guest shop purchases heal or lock parts to that buyer only', () => {
+    const harness = createHarness({ gold: 100 });
+    const guest = {
+        id: 'guest_1',
+        x: 12,
+        y: 34,
+        ship: { hp: 20, maxHp: 100 }
+    };
+    const heal = {
+        purchased: false,
+        data: { type: 'heal', price: 25 }
+    };
+    const part = {
+        x: 12,
+        y: 34,
+        purchased: false,
+        data: {
+            type: 'part',
+            name: 'Rocket Launcher',
+            partId: 'rocket',
+            price: 50
+        }
+    };
+
+    assert.equal(harness.system.purchaseShopItem(heal, guest), true);
+    assert.equal(guest.ship.hp, 70);
+    assert.equal(harness.game.playerShip.hp, 100);
+    assert.equal(harness.system.purchaseShopItem(part, guest), true);
+    assert.equal(harness.game.gold, 25);
+    assert.equal(harness.game.itemPickups[0].ownerId, 'guest_1');
+    assert.deepEqual(harness.notifications, []);
+});
+
+test('host authority rejects forged interaction targets across the room', () => {
+    const harness = createHarness();
+    harness.game.shopItems = [{
+        x: 5000,
+        y: 5000,
+        purchased: false,
+        data: {
+            type: 'part',
+            name: 'Rocket Launcher',
+            partId: 'rocket',
+            price: 50
+        }
+    }];
+    const guest = {
+        id: 'guest_1',
+        x: 0,
+        y: 0,
+        ship: { hp: 100, maxHp: 100 }
+    };
+
+    assert.equal(
+        harness.system.interactForPlayer(guest, 'shop', 0),
+        false
+    );
+    assert.equal(harness.game.gold, 100);
+    assert.equal(harness.game.shopItems[0].purchased, false);
+    assert.deepEqual(harness.game.itemPickups, []);
+});
+
+test('treasure chests keep their random non-core part reward', () => {
+    const harness = createHarness({ random: () => 0 });
+    const chest = { x: 80, y: 90, opened: false };
+
+    harness.system.openTreasureChest(chest);
+
+    assert.equal(chest.opened, true);
+    assert.deepEqual(harness.game.itemPickups, [
+        new PickupStub(80, 90, 'gun')
+    ]);
+    assert.deepEqual(harness.notifications, [[
+        'Chest opened! Pick up: Basic Gun',
+        '#ffd700'
+    ]]);
+    assert.deepEqual(harness.audioCalls, [['hit', { volume: 0.6 }]]);
+});
+
+test('gold vault payment is deducted once and starts the ambush', () => {
+    const harness = createHarness({ gold: 80 });
+    const chest = {
+        opened: false,
+        ambushActive: false,
+        locked: false,
+        wasPaid: false,
+        costType: 'gold',
+        costAmount: 50
+    };
+
+    harness.system.tryActivateVaultChest(chest);
+    harness.system.tryActivateVaultChest(chest);
+
+    assert.equal(harness.game.gold, 30);
+    assert.equal(chest.wasPaid, true);
+    assert.deepEqual(harness.ambushCalls, [harness.game]);
+});
+
+test('hp vault keeps the strict survival requirement', () => {
+    const harness = createHarness({ hp: 50 });
+    const chest = {
+        opened: false,
+        ambushActive: false,
+        locked: false,
+        wasPaid: false,
+        costType: 'hp',
+        costAmount: 50
+    };
+
+    harness.system.tryActivateVaultChest(chest);
+
+    assert.equal(harness.game.playerShip.hp, 50);
+    assert.equal(chest.wasPaid, false);
+    assert.deepEqual(harness.notifications, [[
+        'Not enough Health!',
+        '#ff0000'
+    ]]);
+});
+
+test('cleared paid vaults drop three rewards once', () => {
+    const harness = createHarness({ random: () => 0 });
+    harness.room.cleared = true;
+    const chest = {
+        x: 500,
+        y: 700,
+        opened: false,
+        ambushActive: false,
+        locked: false,
+        wasPaid: true,
+        costType: 'gold',
+        costAmount: 50
+    };
+
+    harness.system.tryActivateVaultChest(chest);
+    harness.system.openVaultChest(chest);
+
+    assert.equal(chest.opened, true);
+    assert.equal(harness.game.itemPickups.length, 3);
+    assert.ok(harness.game.itemPickups.every(
+        pickup => pickup.partId === 'gun'
+            && pickup.x === 470
+            && pickup.y === 670
+    ));
+    assert.deepEqual(harness.explosions, [[500, 700, 80, 0.8]]);
+    assert.deepEqual(harness.audioCalls, [[
+        'hit',
+        { volume: 0.8, pitch: 0.5 }
+    ]]);
+});
+
+test('empty treasure libraries fail closed without creating a pickup', () => {
+    const harness = createHarness();
+    harness.system.partsLibrary = {
+        core: { name: 'Core' }
+    };
+    const chest = { x: 1, y: 2, opened: false };
+
+    harness.system.openTreasureChest(chest);
+
+    assert.equal(chest.opened, true);
+    assert.deepEqual(harness.game.itemPickups, []);
+    assert.deepEqual(harness.notifications, [[
+        'Chest is empty!',
+        '#ff4444'
+    ]]);
+});

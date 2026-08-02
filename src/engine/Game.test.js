@@ -5,6 +5,7 @@
 import '../tests/setup.js';
 import { test, mock } from 'node:test';
 import assert from 'node:assert';
+import { TransientEffectsSystem } from '../game/systems/TransientEffectsSystem.js';
 
 test('Game.spawnExplosion adds explosion entity', async (t) => {
     // Mock external dependencies that fail to load in Node environment
@@ -35,6 +36,7 @@ test('Game.spawnExplosion adds explosion entity', async (t) => {
         explosions: [],
         spawnExplosion: Game.prototype.spawnExplosion
     };
+    mockGame.effects = new TransientEffectsSystem(mockGame);
 
     // Test case 1: Basic explosion with all parameters
     mockGame.spawnExplosion(100, 200, 50, 0.5, '#ff0000');
@@ -58,4 +60,43 @@ test('Game.spawnExplosion adds explosion entity', async (t) => {
     // Test case 3: Multiple explosions
     mockGame.spawnExplosion(0, 0, 10, 0.1, '#ffffff');
     assert.strictEqual(mockGame.explosions.length, 3, 'Should have 3 explosions in total');
+
+    const projectileCalls = [];
+    const projectileGame = {
+        weaponSystem: {
+            spawnProjectile: (...args) => {
+                projectileCalls.push(args);
+                return 'projectile-result';
+            }
+        },
+        spawnProjectile: Game.prototype.spawnProjectile
+    };
+    const def = { id: 'rocketle' };
+    const partRef = { partId: 'rocketle' };
+
+    assert.strictEqual(
+        projectileGame.spawnProjectile(def, 10, 20, 0.5, partRef),
+        'projectile-result'
+    );
+    assert.deepStrictEqual(projectileCalls, [[def, 10, 20, 0.5, partRef]]);
+
+    const frameCalls = [];
+    const frameGame = {
+        frameRuntime: {
+            update: dt => frameCalls.push(dt)
+        },
+        update: Game.prototype.update
+    };
+    frameGame.update(0.125);
+    assert.deepStrictEqual(frameCalls, [0.125]);
+
+    const drawCalls = [];
+    const drawGame = {
+        framePresentation: {
+            draw: () => drawCalls.push('draw')
+        },
+        draw: Game.prototype.draw
+    };
+    drawGame.draw();
+    assert.deepStrictEqual(drawCalls, ['draw']);
 });

@@ -1,0 +1,112 @@
+name: Desktop builds
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            artifact: framebound-macos
+            path: artifacts/Framebound-macos.zip
+          - os: windows-latest
+            artifact: framebound-windows
+            path: src-tauri/target/release/bundle/nsis/*.exe
+    runs-on: ${{ matrix.os }}
+    env:
+      VITE_SIGNALING_URL: ${{ vars.VITE_SIGNALING_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Test
+        run: npm test
+
+      - name: Critical coverage gate
+        run: npm run test:coverage:critical
+
+      - name: Check release version
+        run: npm run check:version
+
+      - name: Check runtime import graph
+        run: npm run audit:imports
+
+      - name: Check source hygiene
+        run: npm run check:source
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Check typed boundaries
+        run: npm run typecheck
+
+      - name: Audit runtime dependencies
+        run: npm run audit:dependencies
+
+      - name: Test native save integration
+        run: cargo test --manifest-path src-tauri/Cargo.toml
+
+      - name: Build desktop bundle
+        run: npm run desktop:build
+
+      - name: Verify desktop artifact structure
+        run: npm run desktop:verify
+
+      - name: Smoke Windows native launch
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $binary = Resolve-Path "src-tauri/target/release/framebound.exe"
+          $process = Start-Process -FilePath $binary -PassThru
+          try {
+            Start-Sleep -Seconds 10
+            $process.Refresh()
+            if ($process.HasExited) {
+              throw "framebound exited during native launch smoke with code $($process.ExitCode)"
+            }
+          } finally {
+            if (!$process.HasExited) {
+              Stop-Process -Id $process.Id
+              $process.WaitForExit(10000)
+            }
+          }
+
+      - name: Verify macOS internal signature
+        if: runner.os == 'macOS'
+        run: codesign --verify --deep --strict --verbose=2 src-tauri/target/release/bundle/macos/Framebound.app
+
+      - name: Archive macOS app without losing bundle permissions
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p artifacts
+          ditto -c -k --sequesterRsrc --keepParent \
+            src-tauri/target/release/bundle/macos/Framebound.app \
+            artifacts/Framebound-macos.zip
+
+      - name: Upload unsigned internal artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.path }}
+          if-no-files-found: error

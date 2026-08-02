@@ -757,7 +757,7 @@ export class Enemy {
                     const dy = playerY - worldY;
                     const angleToPlayer = Math.atan2(dy, dx);
 
-                    const spread = (Math.random() - 0.5) * (burst.def.stats.spread || 0);
+                    const spread = (this.random() - 0.5) * (burst.def.stats.spread || 0);
                     const pType = burst.def.stats.projectileType || 'bullet';
                     const pSpeed = burst.def.stats.projectileSpeed || (pType === 'laser' || pType === 'small_laser' ? 800 : 400);
                     const baseDamage = burst.def.stats.damage || 5;
@@ -829,7 +829,7 @@ export class Enemy {
                     if (wep.chargeTimer >= chargeStats) {
                         // FIRE!
                         // Logic same as single shot, but use lockedAngle
-                        const spread = (Math.random() - 0.5) * (wep.def.stats.spread || 0);
+                        const spread = (this.random() - 0.5) * (wep.def.stats.spread || 0);
                         const pType = wep.def.stats.projectileType || 'bullet';
                         const pSpeed = wep.def.stats.projectileSpeed || (pType === 'laser' || pType === 'small_laser' ? 800 : 400);
                         const baseDamage = wep.def.stats.damage || 5;
@@ -879,7 +879,7 @@ export class Enemy {
                         const dy = playerY - worldY;
                         const angleToPlayer = Math.atan2(dy, dx);
 
-                        const spread = (Math.random() - 0.5) * (wep.def.stats.spread || 0);
+                        const spread = (this.random() - 0.5) * (wep.def.stats.spread || 0);
                         const pType = wep.def.stats.projectileType || 'bullet';
                         const pSpeed = wep.def.stats.projectileSpeed || (pType === 'laser' || pType === 'small_laser' ? 800 : 400);
                         const baseDamage = wep.def.stats.damage || 5;

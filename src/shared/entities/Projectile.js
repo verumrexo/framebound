@@ -11,7 +11,7 @@ export class Projectile {
         if (this.owner === 'enemy') {
             // console.log('[DEBUG] Enemy Projectile:', type, 'at', x, y, 'speed', speed);
         }
-        const projSpeed = type === 'laser' ? 1500 : (type === 'small_laser' ? 1800 : (type === 'railgun' || type === 'saber' || type === 'beam_freeze' ? 0 : (type === 'pellet' ? 700 + Math.random() * 200 : (type === 'cluster_grenade' ? 350 : speed))));
+        const projSpeed = type === 'laser' ? 1500 : (type === 'small_laser' ? 1800 : (type === 'railgun' || type === 'saber' || type === 'beam_freeze' ? 0 : (type === 'pellet' ? 700 + this.random() * 200 : (type === 'cluster_grenade' ? 350 : speed))));
         this.vx = Math.cos(angle) * projSpeed;
         this.vy = Math.sin(angle) * projSpeed;
         this.angle = angle;
@@ -56,14 +56,14 @@ export class Projectile {
 
         // Custom variables for erratic movement
         if (this.type === 'rocket' || this.type === 'rocket_le' || this.type === 'rocket_he' || this.type === 'guided_rocket' || this.type === 'ggbm' || this.type === 'cluster_grenade') {
-            this.wavyTime = Math.random() * 100;
-            this.wavySpeed = 4 + Math.random() * 2;
-            this.wavyAmp = (this.type === 'rocket' || this.type === 'rocket_le' || this.type === 'rocket_he') ? (0.2 + Math.random() * 0.15) : (this.type === 'cluster_grenade' ? 0.15 : 0.08);
+            this.wavyTime = this.random() * 100;
+            this.wavySpeed = 4 + this.random() * 2;
+            this.wavyAmp = (this.type === 'rocket' || this.type === 'rocket_le' || this.type === 'rocket_he') ? (0.2 + this.random() * 0.15) : (this.type === 'cluster_grenade' ? 0.15 : 0.08);
             this.baseAngle = angle;
             this.speed = projSpeed * (this.type === 'ggbm' ? 0.7 : (this.type === 'cluster_grenade' ? 0.6 : 1.0));
             // Add a permanent random "drift" to each rocket's base trajectory
-            this.driftDirection = (Math.random() - 0.5) * 0.4; // Radians per second drift
-            this.secondaryWavySpeed = 6 + Math.random() * 4;
+            this.driftDirection = (this.random() - 0.5) * 0.4; // Radians per second drift
+            this.secondaryWavySpeed = 6 + this.random() * 4;
             this.secondaryWavyAmp = this.wavyAmp * 0.5;
 
             if (this.type === 'guided_rocket' || this.type === 'ggbm') {

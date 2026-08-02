@@ -3,7 +3,13 @@ import { LevelGenerator } from '../game/environment/LevelGenerator.js';
 import { Ship } from '../shared/entities/Ship.js';
 import { Projectile } from '../shared/entities/Projectile.js';
 import { Collision } from '../shared/CollisionSystem.js';
-import { PartsLibrary } from '../shared/parts/Part.js';
+import { PartsLibrary, PartType } from '../shared/parts/Part.js';
+import {
+    FixedWindowRateLimiter,
+    sanitizePlayerInput,
+    sanitizePlayerShot,
+    sanitizeShipManifest
+} from '../shared/ProtocolValidation.js';
 
 export class GameRoom {
     constructor(id, io, name = "Unknown Sector") {
@@ -23,6 +29,8 @@ export class GameRoom {
         this.goldOrbs = [];
         this.hpOrbs = [];
         this.floor = 1;
+        this.maxPlayers = 8;
+        this.maxDeltaTime = 0.05;
 
         this.running = false;
 
@@ -41,6 +49,10 @@ export class GameRoom {
     }
 
     addPlayer(socket) {
+        if (!this.clients.has(socket.id) && this.clients.size >= this.maxPlayers) {
+            return false;
+        }
+
         console.log(`[Room ${this.id}] Player joined: ${socket.id}`);
 
         // Create Ship Entity
@@ -52,7 +64,8 @@ export class GameRoom {
             id: socket.id,
             socket: socket,
             ship: ship,
-            input: {}
+            input: {},
+            rateLimiter: new FixedWindowRateLimiter()
         };
         this.clients.set(socket.id, client);
 
@@ -70,97 +83,147 @@ export class GameRoom {
         });
 
         this.setupSocketHandlers(socket);
+        return true;
     }
 
     removePlayer(socket) {
         if (this.clients.has(socket.id)) {
+            const client = this.clients.get(socket.id);
+            if (client.rateLimiter) client.rateLimiter.clear();
+            this.teardownSocketHandlers(socket);
             this.clients.delete(socket.id);
             socket.leave(this.id);
             this.io.to(this.id).emit('player_leave', { id: socket.id });
+            return true;
         }
+        return false;
     }
 
     setupSocketHandlers(socket) {
-        socket.on('player_input', (inputState) => {
-            const client = this.clients.get(socket.id);
-            if (client) {
-                client.input = inputState;
-                // If client sends rotation, update ship immediately or let update() handle it via input?
-                // Ship.update() handles rotation lerp towards input.aimAngle.
-                // But client might send 'rotation' directly if it's authoritative on mouse angle.
-                // Let's assume inputState has { up, down..., aimAngle, rotation }
-                // We'll store it and let Ship.update use it.
-            }
-        });
+        if (!this.socketHandlers) this.socketHandlers = new Map();
+        this.teardownSocketHandlers(socket);
 
-        socket.on('player_shoot', (data) => {
-            // data: { partId, x, y, angle }
-            // Authoritative Shooting: We assume client checked cooldown visually,
-            // but we SHOULD verify cooldown here.
-            // For now, trust client trigger, but spawn projectile on server.
+        const handlers = new Map();
+        const register = (event, handler) => {
+            const safeHandler = (payload) => {
+                try {
+                    handler(payload);
+                } catch (error) {
+                    console.warn(`[Room ${this.id}] Rejected ${event} from ${socket.id}:`, error);
+                }
+            };
+            handlers.set(event, safeHandler);
+            socket.on(event, safeHandler);
+        };
+
+        const getClientLimiter = (client) => {
+            if (!client.rateLimiter) client.rateLimiter = new FixedWindowRateLimiter();
+            return client.rateLimiter;
+        };
+
+        register('player_input', (inputState) => {
             const client = this.clients.get(socket.id);
             if (!client) return;
+            if (!getClientLimiter(client).allow('player_input', 240, 1000)) return;
 
-            const def = PartsLibrary[data.partId];
-            if (def) {
+            const input = sanitizePlayerInput(inputState);
+            if (input) client.input = input;
+        });
+
+        register('player_shoot', (data) => {
+            const client = this.clients.get(socket.id);
+            if (!client) return;
+            if (!getClientLimiter(client).allow('player_shoot', 300, 1000)) return;
+
+            const shot = sanitizePlayerShot(data);
+            if (!shot) return;
+
+            const def = PartsLibrary[shot.partId];
+            if (def && def.type === PartType.WEAPON) {
                 // Spawn Projectile
                 // Logic mirrored from Game.js spawnProjectile
                 const speed = def.stats.projectileSpeed || 600; // Simplified
                 // Note: Missing rocket speed mult logic from ship stats here
 
-                const p = new Projectile(data.x, data.y, data.angle, def.stats.projectileType || 'bullet', speed, 'player', def.stats.damage || 10, def.stats.lifetime);
+                const p = new Projectile(shot.x, shot.y, shot.angle, def.stats.projectileType || 'bullet', speed, 'player', def.stats.damage || 10, def.stats.lifetime);
 
                 if (def.stats.projectileType === 'railgun' || def.stats.projectileType === 'beam_freeze') p.isBeam = true;
 
                 // Add to list
                 this.projectiles.push(p);
 
-                // Broadcast shoot event so other clients see it/hear it
-                socket.to(this.id).emit('player_shoot', { id: socket.id, ...data });
+                // The shooter already spawned locally with its live weapon state.
+                socket.to(this.id).emit('player_shoot', { id: socket.id, ...shot });
             }
         });
 
-        socket.on('join_game', (data) => {
-             const client = this.clients.get(socket.id);
-             if (client && data.parts) {
-                 // Reconstruct ship parts
-                 client.ship.parts.clear();
-                 for (const p of data.parts) {
-                     client.ship.addPart(p.x, p.y, p.partId, p.rotation);
-                 }
-                 client.ship.recalculateStats();
+        register('join_game', (data) => {
+            const client = this.clients.get(socket.id);
+            if (!client || !client.ship) return;
+            if (!getClientLimiter(client).allow('join_game', 10, 10_000)) return;
 
-                 // Broadcast appearance
-                 socket.to(this.id).emit('player_join', {
-                     id: socket.id,
-                     parts: data.parts
-                 });
+            const parts = sanitizeShipManifest(data, PartsLibrary);
+            if (!parts) return;
 
-                 // Send existing players
-                 const others = [];
-                 for (const [oid, oc] of this.clients) {
-                     if (oid === socket.id) continue;
-                     const oparts = [];
-                     for (const p of oc.ship.getUniqueParts()) {
-                         oparts.push({ x: p.x, y: p.y, partId: p.partId, rotation: p.rotation });
-                     }
-                     others.push({
-                         id: oid,
-                         x: oc.ship.x,
-                         y: oc.ship.y,
-                         rotation: oc.ship.rotation,
-                         parts: oparts
-                     });
-                 }
-                 socket.emit('players_list', others);
-             }
+            const previousParts = client.ship.parts;
+            client.ship.parts = new Map();
+
+            const accepted = parts.every(part => (
+                client.ship.addPart(part.x, part.y, part.partId, part.rotation)
+            ));
+
+            if (!accepted) {
+                client.ship.parts = previousParts;
+                client.ship.recalculateStats();
+                return;
+            }
+
+            client.ship.recalculateStats();
+
+            // Broadcast appearance
+            socket.to(this.id).emit('player_join', {
+                id: socket.id,
+                parts
+            });
+
+            // Send existing players
+            const others = [];
+            for (const [oid, oc] of this.clients) {
+                if (oid === socket.id) continue;
+                const oparts = [];
+                for (const p of oc.ship.getUniqueParts()) {
+                    oparts.push({ x: p.x, y: p.y, partId: p.partId, rotation: p.rotation });
+                }
+                others.push({
+                    id: oid,
+                    x: oc.ship.x,
+                    y: oc.ship.y,
+                    rotation: oc.ship.rotation,
+                    parts: oparts
+                });
+            }
+            socket.emit('players_list', others);
         });
+
+        this.socketHandlers.set(socket.id, handlers);
+    }
+
+    teardownSocketHandlers(socket) {
+        if (!this.socketHandlers) return;
+        const handlers = this.socketHandlers.get(socket.id);
+        if (!handlers) return;
+
+        for (const [event, handler] of handlers) {
+            if (socket.off) socket.off(event, handler);
+        }
+        this.socketHandlers.delete(socket.id);
     }
 
     update() {
         if (!this.running) return;
         const now = Date.now();
-        const dt = (now - this.lastTime) / 1000;
+        const elapsed = (now - this.lastTime) / 1000;
+        const dt = Math.min(Math.max(elapsed, 0), this.maxDeltaTime || 0.05);
         this.lastTime = now;
 
         // 1. Update Players

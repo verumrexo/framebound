@@ -1,4 +1,4 @@
-import { PartsLibrary, TILE_SIZE } from '../parts/Part.js';
+import { Assets } from '../../Assets.js';
 
 export class TreasureChest {
     constructor(x, y, randomGen = null) {

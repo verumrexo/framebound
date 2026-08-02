@@ -1,13 +1,16 @@
 
-import { HighScoreManager } from '../systems/HighScoreManager.js';
+import { HighScoreGateway } from '../systems/HighScoreGateway.js';
 import { SaveManager } from '../systems/SaveManager.js';
 import { CHANGELOG } from '../../version.js';
 import { Settings } from '../systems/Settings.js';
+import { APP_CONFIG } from '../../engine/AppConfig.js';
+import { escapeHtml } from './html.js';
 
 export class MainMenu {
     constructor(game) {
         this.game = game;
         this.overlay = null;
+        this.peerStartPending = false;
     }
 
     show() {
@@ -15,6 +18,7 @@ export class MainMenu {
 
         this.overlay = document.createElement('div');
         this.overlay.id = 'main-menu';
+        this.overlay.className = 'main-menu-overlay';
         this.overlay.style.cssText = `
             position: fixed;
             top: 0; left: 0; right: 0; bottom: 0;
@@ -51,6 +55,7 @@ export class MainMenu {
 
     renderMenu() {
         if (!this.overlay) return;
+        this.game.gameSettings?.stopUpdating();
 
         const hasSave = SaveManager.hasSave();
 
@@ -68,76 +73,20 @@ export class MainMenu {
         }
 
         this.overlay.innerHTML = `
-            <h1 style="
-                font-family: 'Press Start 2P', cursive;
-                font-size: 64px;
-                color: #00ffff;
-                margin: 0 0 30px 0;
-                text-shadow: 4px 4px 0px #005555, 0 0 20px rgba(0,255,255,0.6);
-                font-weight: normal;
-                line-height: 1.2;
-                letter-spacing: -2px;
-                text-transform: lowercase;
-            ">framebound:uplink</h1>
-            <p style="color: #666; font-size: 16px; margin-bottom: 60px; text-transform: lowercase; letter-spacing: 4px;">${this.game.version} // ${this.game.versionName}</p>
-            <div id="loading-text" style="color: #ffd700; font-size: 16px; display: none;">initializing systems...</div>
+            <div class="main-menu-screen">
+                <h1 class="main-menu-title">framebound:uplink</h1>
+                <p class="main-menu-version">${this.game.version} // ${this.game.versionName}</p>
+                <div id="loading-text" class="main-menu-loading">initializing systems...</div>
 
-            <div style="display: flex; flex-direction: column; gap: 25px; width: 400px;">
-                ${localButtons}
-                <button id="btn-online" class="menu-btn start-btn" style="border-color: #ffaa00; color: #ffddaa;">online lobby</button>
-                <button id="btn-seed" class="menu-btn start-btn">inject custom seed</button>
-                <button id="btn-settings" class="menu-btn">system settings</button>
-                <button id="btn-leaderboard" class="menu-btn">global rankings</button>
-                <button id="btn-changelog" class="menu-btn">patch notes</button>
+                <div class="main-menu-actions">
+                    ${localButtons}
+                    <button id="btn-online" class="menu-btn start-btn" style="border-color: #ffaa00; color: #ffddaa;">online play</button>
+                    <button id="btn-seed" class="menu-btn start-btn">inject custom seed</button>
+                    <button id="btn-settings" class="menu-btn">system settings</button>
+                    <button id="btn-leaderboard" class="menu-btn">global rankings</button>
+                    <button id="btn-changelog" class="menu-btn">patch notes</button>
+                </div>
             </div>
-
-            <style>
-                .menu-btn {
-                    position: relative;
-                    padding: 16px 0;
-                    font-size: 16px;
-                    background: rgba(0, 20, 30, 0.6);
-                    border: 1px solid rgba(0, 255, 255, 0.2);
-                    color: #acc;
-                    cursor: pointer;
-                    font-family: 'Press Start 2P', cursive;
-                    text-transform: lowercase;
-                    letter-spacing: 4px;
-                    transition: all 0.2s ease-out;
-                    overflow: hidden;
-                    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
-                    backdrop-filter: blur(5px);
-                }
-
-                .menu-btn::before {
-                    content: '';
-                    position: absolute;
-                    top: 0; left: 0;
-                    width: 4px;
-                    height: 100%;
-                    background: #00ffff;
-                    transform: scaleY(0);
-                    transition: transform 0.2s ease-out;
-                    transform-origin: bottom;
-                }
-
-                .menu-btn:hover {
-                    background: rgba(0, 40, 60, 0.8);
-                    color: #fff;
-                    border-color: rgba(0, 255, 255, 0.6);
-                    padding-left: 20px;
-                    box-shadow: 0 0 20px rgba(0, 255, 255, 0.1);
-                    text-shadow: 0 0 8px rgba(0, 255, 255, 0.5);
-                }
-
-                .menu-btn:hover::before {
-                    transform: scaleY(1);
-                    transform-origin: top;
-                }
-
-                #btn-online:hover { border-color: #ffaa00; box-shadow: 0 0 20px rgba(255, 170, 0, 0.2); }
-                #btn-online:hover::before { background: #ffaa00; }
-            </style>
         `;
 
         setTimeout(() => {
@@ -153,7 +102,7 @@ export class MainMenu {
             if (btnStart) btnStart.onclick = () => this.startNewGame();
             if (btnContinue) btnContinue.onclick = () => this.continueGame();
             if (btnNew) btnNew.onclick = () => this.startNewGame();
-            if (btnOnline) btnOnline.onclick = () => this.renderLobbyBrowser();
+            if (btnOnline) btnOnline.onclick = () => this.renderOnlinePlay();
             if (btnSettings) btnSettings.onclick = () => this.renderSettings();
             if (btnLeaderboard) btnLeaderboard.onclick = () => this.renderLeaderboard();
             if (btnChange) btnChange.onclick = () => this.renderChangelog();
@@ -161,214 +110,266 @@ export class MainMenu {
         }, 0);
     }
 
-    renderLobbyBrowser() {
+    renderOnlinePlay() {
         if (!this.overlay) return;
-
-        // Connect Network
-        if (this.game.network && !this.game.network.isConnected) {
-            this.game.network.connect();
-        }
+        const signalingReady = Boolean(APP_CONFIG.signalingUrl);
 
         this.overlay.innerHTML = `
-            <h2 style="color: #ffaa00; margin-bottom: 20px; font-size: 24px;">online lobbies</h2>
-            <div id="lobby-status" style="color: #888; font-size: 12px; margin-bottom: 20px;">connecting...</div>
+            <h2 style="color: #ffaa00; margin-bottom: 24px; font-size: 24px;">
+                online play
+            </h2>
+            <div id="peer-status" style="
+                color: ${signalingReady ? '#888' : '#ff6666'};
+                font-size: 11px;
+                line-height: 1.8;
+                text-align: center;
+                min-height: 40px;
+                max-width: 620px;
+                margin-bottom: 24px;
+            ">${signalingReady
+                ? 'host a run or enter a six-character join code'
+                : 'online unavailable: signaling service is not configured in this build'
+            }</div>
 
-            <div style="display: flex; gap: 20px; margin-bottom: 20px;">
-                <button id="btn-create" class="menu-btn" style="width: 180px;" disabled>create lobby</button>
-                <button id="btn-refresh" class="menu-btn" style="width: 180px;" disabled>refresh list</button>
-            </div>
-
-            <div id="lobby-list" style="
-                width: 600px;
-                height: 300px;
-                background: rgba(0,0,0,0.5);
-                border: 1px solid #444;
-                overflow-y: auto;
-                margin-bottom: 20px;
-                padding: 10px;
+            <div style="
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 24px;
+                width: 620px;
+                margin-bottom: 28px;
             ">
-                <div style="color: #666; text-align: center; padding: 20px;">waiting for server response...</div>
-            </div>
-
-            <div style="display: flex; gap: 20px; align-items: flex-start; margin-bottom: 20px; width: 600px; justify-content: space-between;">
-
-                <div style="display: flex; flex-direction: column; gap: 5px;">
-                    <span style="font-size: 10px; color: #aaa;">join by id:</span>
-                    <div style="display: flex; gap: 5px;">
-                        <input id="input-lobby-id" type="text" maxlength="6" style="
-                            background: rgba(0,0,0,0.5);
-                            border: 1px solid #666;
-                            color: white;
-                            padding: 10px;
-                            font-family: 'Press Start 2P';
-                            width: 80px;
-                            text-transform: uppercase;
-                            font-size: 12px;
-                        ">
-                        <button id="btn-join-id" class="menu-btn" style="padding: 10px; font-size: 10px;">join</button>
+                <div style="
+                    border: 1px solid #665522;
+                    background: rgba(40, 25, 0, 0.45);
+                    padding: 24px;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 18px;
+                ">
+                    <div style="color: #ffcc66; font-size: 13px;">host game</div>
+                    <div style="color: #777; font-size: 9px; line-height: 1.8;">
+                        your game runs the session. send the code to a friend.
                     </div>
+                    <button id="btn-peer-host" class="menu-btn"
+                        ${signalingReady ? '' : 'disabled'}
+                        style="font-size: 11px;">create code</button>
+                    <div id="peer-host-code" style="
+                        color: #00ffff;
+                        font-size: 28px;
+                        letter-spacing: 8px;
+                        min-height: 34px;
+                        text-align: center;
+                    "></div>
                 </div>
 
-                <div style="display: flex; flex-direction: column; gap: 5px;">
-                     <span style="font-size: 10px; color: #aaa;">direct connect (wss://...):</span>
-                     <div style="display: flex; gap: 5px;">
-                        <input id="input-server-url" type="text" placeholder="wss://your-tunnel.url" style="
-                            background: rgba(0,0,0,0.5);
-                            border: 1px solid #666;
+                <div style="
+                    border: 1px solid #225566;
+                    background: rgba(0, 25, 40, 0.45);
+                    padding: 24px;
+                    display: flex;
+                    flex-direction: column;
+                    gap: 18px;
+                ">
+                    <div style="color: #66ddff; font-size: 13px;">join game</div>
+                    <div style="color: #777; font-size: 9px; line-height: 1.8;">
+                        enter the code from the host. no ip address bullshit.
+                    </div>
+                    <input id="input-peer-code" type="text" maxlength="6"
+                        ${signalingReady ? '' : 'disabled'}
+                        autocomplete="off" spellcheck="false" style="
+                            background: #001018;
+                            border: 1px solid #447788;
                             color: white;
-                            padding: 10px;
+                            padding: 14px;
                             font-family: 'Press Start 2P';
-                            width: 200px;
-                            font-size: 8px;
+                            text-transform: uppercase;
+                            text-align: center;
+                            letter-spacing: 6px;
+                            font-size: 16px;
                         ">
-                        <button id="btn-connect-url" class="menu-btn" style="padding: 10px; font-size: 10px;">connect</button>
-                     </div>
+                    <button id="btn-peer-join" class="menu-btn" disabled
+                        style="font-size: 11px;">join host</button>
                 </div>
-
             </div>
 
-            <button id="btn-back" class="menu-btn" style="width: 200px;">back</button>
+            <div style="
+                color: #555;
+                font-size: 8px;
+                line-height: 1.8;
+                text-align: center;
+                width: 620px;
+                margin-bottom: 24px;
+            ">
+                gameplay travels directly between players. the tiny signaling
+                service only introduces the connection.
+            </div>
+
+            <button id="btn-peer-back" class="menu-btn" style="width: 200px;">
+                back
+            </button>
         `;
 
-        // Bind UI Events
+        this.bindPeerCallbacks();
         setTimeout(() => {
-            const btnCreate = document.getElementById('btn-create');
-            const btnRefresh = document.getElementById('btn-refresh');
-            const btnJoinId = document.getElementById('btn-join-id');
-            const btnConnectUrl = document.getElementById('btn-connect-url');
-            const btnBack = document.getElementById('btn-back');
-            const inputId = document.getElementById('input-lobby-id');
-            const inputUrl = document.getElementById('input-server-url');
+            const host = document.getElementById('btn-peer-host');
+            const join = document.getElementById('btn-peer-join');
+            const back = document.getElementById('btn-peer-back');
+            const input = document.getElementById('input-peer-code');
 
-            // Pre-fill URL input if a custom one is set
-            if (this.game.network.customServerUrl && inputUrl) {
-                inputUrl.value = this.game.network.customServerUrl;
+            if (host) host.onclick = () => this.beginPeerHost();
+            if (input && join) {
+                input.oninput = () => {
+                    const code = input.value
+                        .toUpperCase()
+                        .replace(/[^A-Z0-9]/g, '')
+                        .slice(0, 6);
+                    input.value = code;
+                    join.disabled = code.length !== 6;
+                };
+                input.onkeydown = event => {
+                    if (event.key === 'Enter' && input.value.length === 6) {
+                        this.beginPeerJoin(input.value);
+                    }
+                };
             }
-
-            if (btnCreate) btnCreate.onclick = () => {
-                if (!this.game.network.isConnected) return;
-                this.game.network.createLobby();
-                document.getElementById('lobby-status').innerText = "creating lobby...";
-                // Re-disable to prevent double clicks
-                btnCreate.disabled = true;
-            };
-
-            if (btnRefresh) btnRefresh.onclick = () => {
-                if (!this.game.network.isConnected) return;
-                this.game.network.listLobbies();
-                document.getElementById('lobby-status').innerText = "refreshing...";
-                // Re-disable briefly
-                btnRefresh.disabled = true;
-            };
-
-            if (btnJoinId) btnJoinId.onclick = () => {
-                const id = inputId.value.toUpperCase();
-                if (id.length === 6) {
-                    this.game.network.joinLobby(id);
-                    document.getElementById('lobby-status').innerText = `joining ${id}...`;
-                }
-            };
-
-            if (btnConnectUrl) btnConnectUrl.onclick = () => {
-                const url = inputUrl.value.trim();
-                if (url) {
-                    document.getElementById('lobby-status').innerText = `connecting to ${url}...`;
-                    this.game.network.setServerUrl(url);
-                    this.game.network.connect();
-                    // Force refresh list to trigger connection
-                    setTimeout(() => {
-                        if (this.game.network.isConnected) this.game.network.listLobbies();
-                    }, 1000);
-                }
-            };
-
-            if (btnBack) btnBack.onclick = () => {
-                this.game.network.socket.disconnect(); // Disconnect when backing out
-                this.renderMenu();
-            };
+            if (join && input) {
+                join.onclick = () => this.beginPeerJoin(input.value);
+            }
+            if (back) back.onclick = () => this.cancelPeerSession();
         }, 0);
+    }
 
-        // Bind Network Callbacks
-        if (this.game.network) {
-            this.game.network.onLobbyListUpdate = (list) => {
-                const container = document.getElementById('lobby-list');
-                const status = document.getElementById('lobby-status');
+    bindPeerCallbacks() {
+        const peer = this.game.peerNetwork;
+        if (!peer) return false;
 
-                // Enable buttons now that we have connection
-                const btnCreate = document.getElementById('btn-create');
-                const btnRefresh = document.getElementById('btn-refresh');
-                if (btnCreate) btnCreate.disabled = false;
-                if (btnRefresh) btnRefresh.disabled = false;
+        peer.onStatus = (status, detail) =>
+            this.updatePeerStatus(status, detail);
+        peer.onHosted = data => this.showHostedCode(data?.code);
+        peer.onReady = data => this.completePeerStart(data?.role);
+        return true;
+    }
 
-                if (status) status.innerText = "ready";
-                if (!container) return;
+    beginPeerHost() {
+        const peer = this.game.peerNetwork;
+        if (!peer || this.peerStartPending) return false;
 
-                if (list.length === 0) {
-                    container.innerHTML = `<div style="color: #666; text-align: center; padding: 20px;">no active lobbies found.</div>`;
-                    return;
-                }
+        const started = this.game.startOffline?.();
+        if (started === false) {
+            this.updatePeerStatus('error', 'could not create host run');
+            return false;
+        }
 
-                container.innerHTML = '';
-                list.forEach(lobby => {
-                    const el = document.createElement('div');
-                    el.style.cssText = `
-                        display: flex;
-                        justify-content: space-between;
-                        padding: 10px;
-                        border-bottom: 1px solid #333;
-                        cursor: pointer;
-                        transition: background 0.2s;
-                    `;
-                    el.onmouseover = () => el.style.background = 'rgba(255, 255, 255, 0.1)';
-                    el.onmouseout = () => el.style.background = 'transparent';
-                    el.onclick = () => {
-                        this.game.network.joinLobby(lobby.id);
-                        document.getElementById('lobby-status').innerText = `joining ${lobby.id}...`;
-                    };
+        this.peerStartPending = true;
+        this.game.paused = true;
+        this.bindPeerCallbacks();
+        this.updatePeerStatus('creating_session');
+        const hosting = peer.host();
+        if (!hosting) {
+            this.peerStartPending = false;
+            this.game.paused = false;
+            this.game.running = false;
+            this.updatePeerStatus('error', 'could not create online session');
+        }
+        return hosting;
+    }
 
-                    const nameSpan = document.createElement('span');
-                    nameSpan.style.color = '#00ffff';
-                    nameSpan.textContent = lobby.name;
-                    el.appendChild(nameSpan);
+    beginPeerJoin(code) {
+        const peer = this.game.peerNetwork;
+        if (!peer || this.peerStartPending) return false;
 
-                    const countSpan = document.createElement('span');
-                    countSpan.style.color = '#888';
-                    countSpan.style.fontSize = '10px';
-                    countSpan.textContent = `${lobby.players}/${lobby.maxPlayers}`;
-                    el.appendChild(countSpan);
+        const cleanCode = typeof code === 'string'
+            ? code.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6)
+            : '';
+        if (cleanCode.length !== 6) {
+            this.updatePeerStatus('invalid_code');
+            return false;
+        }
 
-                    container.appendChild(el);
-                });
-            };
+        this.peerStartPending = true;
+        this.bindPeerCallbacks();
+        this.updatePeerStatus('joining_session');
+        const joining = peer.join(cleanCode);
+        if (!joining) this.peerStartPending = false;
+        return joining;
+    }
 
-            this.game.network.onLobbyJoined = (data) => {
-                console.log("Joined Lobby:", data);
-                // Start Game!
-                // init event will follow shortly from server
-                this.startGame(true); // isOnline = true
-            };
+    completePeerStart(role) {
+        if (!this.peerStartPending) return false;
+        this.peerStartPending = false;
+        this.game.paused = false;
 
-            this.game.network.onLobbyError = (msg) => {
-                const status = document.getElementById('lobby-status');
-                if (status) {
-                    status.innerText = `error: ${msg}`;
-                    status.style.color = '#ff4444';
-                }
-            };
+        if (this.game.audio?.context?.state === 'suspended') {
+            this.game.audio.context.resume();
+        }
+        this.game.loop.start();
+        this.game.audio.playMusic('bgm', 0.4);
+        this.updatePeerStatus('ready', role);
+        this.dismissOverlay();
+        return true;
+    }
 
-            // Initial List
-            setTimeout(() => {
-                if(this.game.network.isConnected) this.game.network.listLobbies();
-                else {
-                    // Wait for connect
-                    const check = setInterval(() => {
-                        if (this.game.network.isConnected) {
-                            this.game.network.listLobbies();
-                            clearInterval(check);
-                        }
-                    }, 100);
-                }
-            }, 100);
+    dismissOverlay() {
+        const overlay = this.overlay;
+        if (!overlay) return false;
+
+        overlay.style.opacity = '0';
+        this.overlay = null;
+        setTimeout(() => overlay.remove(), 500);
+        return true;
+    }
+
+    cancelPeerSession() {
+        this.peerStartPending = false;
+        this.game.peerNetwork?.disconnect();
+        this.game.running = false;
+        this.game.paused = false;
+        this.renderMenu();
+    }
+
+    showHostedCode(code) {
+        const target = document.getElementById?.('peer-host-code');
+        if (target) target.textContent = typeof code === 'string' ? code : '';
+        this.updatePeerStatus('waiting_for_peers');
+    }
+
+    updatePeerStatus(status, detail) {
+        const target = document.getElementById?.('peer-status');
+        if (!target) return;
+        const messages = {
+            creating_session: 'creating a short join code...',
+            waiting_for_peers: 'code ready // waiting for another player',
+            joining_session: 'checking join code...',
+            connecting_to_host: 'host found // opening direct connection...',
+            peer_connecting: 'player found // opening direct connection...',
+            connected: 'direct connection established // synchronizing...',
+            reconnecting: `connection lost // retry ${detail || 1}`,
+            invalid_code: 'that join code is invalid',
+            join_timeout: 'join timed out // check the code and try again',
+            connection_lost: 'direct connection lost',
+            host_left: 'the host left the session',
+            invalid_resync: 'host sent an invalid world state',
+            peer_error: detail || 'peer protocol error',
+            error: detail || 'online connection failed',
+            ready: `${detail || 'peer'} synchronized // starting run`
+        };
+        target.textContent = messages[status] || String(status || 'connecting...');
+        target.style.color = [
+            'error',
+            'peer_error',
+            'invalid_code',
+            'join_timeout',
+            'connection_lost',
+            'host_left',
+            'invalid_resync'
+        ].includes(status) ? '#ff6666' : '#888';
+        if ([
+            'error',
+            'invalid_code',
+            'join_timeout',
+            'connection_lost'
+        ].includes(status)) {
+            this.peerStartPending = false;
         }
     }
 
@@ -402,8 +403,8 @@ export class MainMenu {
                     ">${this.currentSeedInput || 'enter-seed'}</div>
 
                     <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
-                        ${['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', 'RUN'].map(key => `
-                            <button class="keypad-btn" style="
+                        ${['1', '2', '3', '4', '5', '6', '7', '8', '9', 'c', '0', 'run'].map(key => `
+                            <button class="keypad-btn" data-seed-key="${key}" style="
                                 background: rgba(0, 55, 55, 0.5);
                                 border: 1px solid #00ffff;
                                 color: #00ffff;
@@ -413,7 +414,7 @@ export class MainMenu {
                                 cursor: pointer;
                                 width: 90px;
                                 text-align: center;
-                            " onclick="window.game.mainMenu.handleSeedKey('${key}')">${key}</button>
+                            ">${key}</button>
                         `).join('')}
                     </div>
 
@@ -422,15 +423,14 @@ export class MainMenu {
             `;
 
             setTimeout(() => {
-                const back = document.getElementById('btn-seed-back');
-                if (back) back.onclick = () => this.renderMenu();
+                this.bindSeedControls();
             }, 0);
         };
 
         this.handleSeedKey = (key) => {
-            if (key === 'C') {
+            if (key === 'c') {
                 this.currentSeedInput = "";
-            } else if (key === 'RUN') {
+            } else if (key === 'run') {
                 if (this.currentSeedInput.length > 0) {
                     this.startSeededGame(parseInt(this.currentSeedInput));
                 }
@@ -441,6 +441,21 @@ export class MainMenu {
         };
 
         renderInput();
+    }
+
+    bindSeedControls() {
+        if (!this.overlay) return false;
+
+        const buttons = this.overlay.querySelectorAll?.('[data-seed-key]') || [];
+        for (const button of buttons) {
+            button.addEventListener('click', () => {
+                this.handleSeedKey(button.dataset.seedKey);
+            });
+        }
+
+        const back = this.overlay.querySelector?.('#btn-seed-back');
+        back?.addEventListener('click', () => this.renderMenu());
+        return true;
     }
 
     startSeededGame(seed) {
@@ -456,7 +471,7 @@ export class MainMenu {
 
     renderSettings() {
         if (!this.overlay) return;
-        this.game.settings.render(this.overlay, () => this.renderMenu());
+        this.game.gameSettings.render(this.overlay, () => this.renderMenu());
     }
 
 
@@ -466,39 +481,41 @@ export class MainMenu {
         const changes = CHANGELOG;
 
         let html = `
-            <h2 style="color: #888; margin-bottom: 40px; font-size: 24px;">changelog</h2>
-            <div style="
-                max-height: 400px; 
-                overflow-y: auto; 
-                width: 600px; 
-                text-align: left; 
-                margin-bottom: 40px;
-                padding-right: 20px;
-            ">
+            <div class="changelog-screen">
+                <h2 class="changelog-title">patch notes</h2>
+                <div class="changelog-scroll" tabindex="0" aria-label="patch notes history">
         `;
 
         changes.forEach(c => {
+            const versionLabel = `${c.ver}${c.name ? ' // ' + c.name : ''}`;
             html += `
                 <div style="margin-bottom: 30px;">
-                    <div style="display: flex; justify-content: space-between; color: #00ffff; margin-bottom: 10px; border-bottom: 1px solid #333; align-items: baseline;">
-                        <span style="font-size: 16px;">${c.ver}${c.name ? ' // ' + c.name : ''}</span>
-                        <span style="font-size: 10px; color: #666;">${c.date}</span>
+                    <div style="display: flex; gap: 20px; justify-content: space-between; color: #00ffff; margin-bottom: 10px; border-bottom: 1px solid #333; align-items: baseline;">
+                        <span style="font-size: 14px; line-height: 1.5; flex: 1; min-width: 0;">${escapeHtml(versionLabel).toLowerCase()}</span>
+                        <span style="font-size: 10px; color: #666; flex-shrink: 0; white-space: nowrap;">${escapeHtml(c.date).toLowerCase()}</span>
                     </div>
                     <ul style="color: #aaa; list-style-type: square; padding-left: 20px; font-size: 12px; line-height: 1.4;">
-                        ${(c.changes || c.items || []).map(i => `<li style="margin-bottom: 5px;">${i}</li>`).join('')}
+                        ${(c.changes || c.items || []).map(i => `
+                            <li style="margin-bottom: 5px;">${escapeHtml(i).toLowerCase()}</li>
+                        `).join('')}
                     </ul>
                 </div>
             `;
         });
 
-        html += `</div>
-            <button id="btn-back" class="menu-btn" style="background: transparent; color: white; border: 1px solid #fff; width: 200px;">back</button>
+        html += `
+                </div>
+                <button id="btn-back" class="menu-btn changelog-back">back</button>
+            </div>
         `;
 
         this.overlay.innerHTML = html;
 
         setTimeout(() => {
-            document.getElementById('btn-back').onclick = () => this.renderMenu();
+            const back = document.getElementById('btn-back');
+            const scroll = this.overlay?.querySelector?.('.changelog-scroll');
+            if (back) back.onclick = () => this.renderMenu();
+            scroll?.focus?.({ preventScroll: true });
         }, 0);
     }
 
@@ -511,7 +528,7 @@ export class MainMenu {
             <p style="color: #888; font-size: 16px;">loading global leaderboard...</p>
         `;
 
-        const scores = await HighScoreManager.getHighScores();
+        const scores = await HighScoreGateway.getHighScores();
 
         let html = `
             <h2 style="color: #ffff00; margin-bottom: 40px; font-size: 32px; text-shadow: 0 0 10px #ffff00;">high scores</h2>
@@ -544,8 +561,8 @@ export class MainMenu {
                         border-left: 3px solid ${color};
                     ">
                         <span style="color: ${color}; font-size: 16px; width: 50px;">${medal}</span>
-                        <span style="color: white; font-size: 16px; flex: 1;">${score.name}</span>
-                        <span style="color: #ffff00; font-size: 16px; font-weight: bold;">${score.score}</span>
+                        <span style="color: white; font-size: 16px; flex: 1;">${escapeHtml(score.name)}</span>
+                        <span style="color: #ffff00; font-size: 16px; font-weight: bold;">${escapeHtml(score.score)}</span>
                     </div>
                 `;
             });
@@ -580,14 +597,7 @@ export class MainMenu {
         this.game.loop.start();
         this.game.audio.playMusic('bgm', 0.4);
 
-        // Fade Out
-        this.overlay.style.opacity = '0';
-        setTimeout(() => {
-            if (this.overlay) {
-                this.overlay.remove();
-                this.overlay = null;
-            }
-        }, 500);
+        this.dismissOverlay();
     }
 
     continueGame() {
@@ -596,22 +606,21 @@ export class MainMenu {
             this.game.audio.context.resume();
         }
 
-        // Force Offline
-        if (this.game.startOffline) this.game.startOffline(undefined, true); // true = isLoad
-
-        // Load save data
-        this.game.loadFromSave();
+        // The game owns the complete continue pipeline so it cannot create a throwaway world first.
+        const continued = this.game.startOffline ?
+            this.game.startOffline(undefined, true) :
+            false;
+        if (continued === false) {
+            this.game.hasPendingSave = false;
+            this.renderMenu();
+            return;
+        }
 
         // Start Loop
         this.game.loop.start();
         this.game.audio.playMusic('bgm', 0.4);
 
-        // Fade Out
-        this.overlay.style.opacity = '0';
-        setTimeout(() => {
-            this.overlay.remove();
-            this.overlay = null;
-        }, 500);
+        this.dismissOverlay();
     }
 
     startNewGame(seed) {
@@ -631,11 +640,6 @@ export class MainMenu {
         this.game.loop.start();
         this.game.audio.playMusic('bgm', 0.4);
 
-        // Fade Out
-        this.overlay.style.opacity = '0';
-        setTimeout(() => {
-            this.overlay.remove();
-            this.overlay = null;
-        }, 500);
+        this.dismissOverlay();
     }
 }

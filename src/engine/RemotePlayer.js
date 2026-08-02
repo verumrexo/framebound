@@ -14,6 +14,8 @@ export class RemotePlayer {
         this.input = {}; // { up, down, left, right, x, y, rotation }
         this.hp = 100;
         this.maxHp = 100;
+        this.isDead = false;
+        this.suspended = false;
 
         // Interpolation
         this.interpolationBuffer = [];
@@ -25,6 +27,10 @@ export class RemotePlayer {
     }
 
     addSnapshot(data) {
+        if (typeof data.isDead === 'boolean') this.isDead = data.isDead;
+        if (typeof data.suspended === 'boolean') {
+            this.suspended = data.suspended;
+        }
         // data: { x, y, rotation, input, hp, maxHp }
         // We add a timestamp when we receive it (or server timestamp if available, but client receive time is simpler for now)
         this.interpolationBuffer.push({

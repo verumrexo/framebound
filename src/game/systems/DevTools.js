@@ -17,7 +17,7 @@ export class DevTools {
         this.keypadEntry = "";
         this.correctCode = "2519";
         // Persistent auth via localStorage
-        this.authenticated = localStorage.getItem('fb_dev_auth') === 'true';
+        this.authenticated = this.loadAuthentication();
         this.spawnAmount = 1;
         this.pendingSpawnAction = null; // Function to execute on map click
         this.placementMode = false;
@@ -80,7 +80,8 @@ export class DevTools {
         container.appendChild(graphicsHeader);
 
         // Helper for Toggles
-        const createToggle = (label, getVal, setVal) => {
+        this.debugToggleInputs = {};
+        const createToggle = (label, getVal, setVal, stateKey = null) => {
             const row = document.createElement('div');
             row.style.display = 'flex';
             row.style.justifyContent = 'space-between';
@@ -95,6 +96,7 @@ export class DevTools {
             chk.checked = getVal();
             chk.style.cursor = 'pointer';
             chk.onchange = (e) => setVal(e.target.checked);
+            if (stateKey) this.debugToggleInputs[stateKey] = chk;
 
             row.appendChild(txt);
             row.appendChild(chk);
@@ -177,11 +179,21 @@ export class DevTools {
 
         // 6. Show Hitboxes (Debug)
         this.showHitboxes = false;
-        createToggle('show hitboxes', () => this.showHitboxes, (v) => this.showHitboxes = v);
+        createToggle(
+            'show hitboxes',
+            () => this.showHitboxes,
+            (v) => this.showHitboxes = v,
+            'showHitboxes'
+        );
 
         // 7. Freeze Enemies (Debug)
         this.freezeEnemies = false;
-        createToggle('freeze enemies', () => this.freezeEnemies, (v) => this.freezeEnemies = v);
+        createToggle(
+            'freeze enemies',
+            () => this.freezeEnemies,
+            (v) => this.freezeEnemies = v,
+            'freezeEnemies'
+        );
 
         // 8. Damage Numbers
         createToggle('show dmg numbers', () => this.game.showDamageNumbers, (v) => this.game.showDamageNumbers = v);
@@ -231,6 +243,8 @@ export class DevTools {
         sliderContainer.appendChild(slider);
         sliderContainer.style.gridColumn = 'span 2';
         container.appendChild(sliderContainer);
+        this.spawnAmountSlider = slider;
+        this.spawnAmountLabel = sliderLabel;
 
 
 
@@ -321,6 +335,57 @@ export class DevTools {
         window.addEventListener('mousedown', (e) => this.handleGlobalClick(e), true);
     }
 
+    loadAuthentication() {
+        try {
+            return localStorage.getItem('fb_dev_auth') === 'true';
+        } catch (error) {
+            console.warn('[DevTools] Failed to load authentication:', error);
+            return false;
+        }
+    }
+
+    persistAuthentication(authenticated) {
+        try {
+            if (authenticated) {
+                localStorage.setItem('fb_dev_auth', 'true');
+            } else {
+                localStorage.removeItem('fb_dev_auth');
+            }
+            return true;
+        } catch (error) {
+            console.warn('[DevTools] Failed to save authentication:', error);
+            return false;
+        }
+    }
+
+    resetRunState() {
+        this.active = false;
+        this.keypadActive = false;
+        this.keypadEntry = '';
+        this.spawnAmount = 1;
+        this.pendingSpawnAction = null;
+        this.placementMode = false;
+        this.showHitboxes = false;
+        this.freezeEnemies = false;
+        if (this.debugToggleInputs?.showHitboxes) {
+            this.debugToggleInputs.showHitboxes.checked = false;
+        }
+        if (this.debugToggleInputs?.freezeEnemies) {
+            this.debugToggleInputs.freezeEnemies.checked = false;
+        }
+        if (this.spawnAmountSlider) {
+            this.spawnAmountSlider.value = '1';
+        }
+        if (this.spawnAmountLabel) {
+            this.spawnAmountLabel.innerText = 'spawn amount: 1';
+        }
+        this.ui.style.display = 'none';
+        this.keypadUI.style.display = 'none';
+        if (document.body?.style) {
+            document.body.style.cursor = 'default';
+        }
+    }
+
     toggle() {
         if (this.active) {
             // Close devtools
@@ -363,7 +428,7 @@ export class DevTools {
             </div>
             <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
                 ${['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', 'X'].map(key => `
-                    <button class="keypad-btn" style="
+                    <button class="keypad-btn" data-dev-key="${key}" style="
                         background: rgba(0, 50, 0, 0.5);
                         border: 1px solid #00ff00;
                         color: #00ff00;
@@ -373,11 +438,24 @@ export class DevTools {
                         cursor: pointer;
                         width: 60px;
                         text-align: center;
-                    " onclick="window.game.devTools.handleKeypadInput('${key}')">${key}</button>
+                    ">${key}</button>
                 `).join('')}
             </div>
-            <button style="margin-top: 30px; background: none; border: none; color: #888; font-family: 'Press Start 2P'; font-size: 8px; cursor: pointer;" onclick="window.game.devTools.hideKeypad()">[abort_connection]</button>
+            <button id="dev-keypad-abort" style="margin-top: 30px; background: none; border: none; color: #888; font-family: 'Press Start 2P'; font-size: 8px; cursor: pointer;">[abort_connection]</button>
         `;
+        this.bindKeypadControls();
+    }
+
+    bindKeypadControls() {
+        const buttons = this.keypadUI.querySelectorAll?.('[data-dev-key]') || [];
+        for (const button of buttons) {
+            button.addEventListener('click', () => {
+                this.handleKeypadInput(button.dataset.devKey);
+            });
+        }
+
+        const abort = this.keypadUI.querySelector?.('#dev-keypad-abort');
+        abort?.addEventListener('click', () => this.hideKeypad());
     }
 
     handleKeypadInput(key) {
@@ -397,7 +475,7 @@ export class DevTools {
                 this.game.showNotification("access granted", "#00ff00");
                 this.hideKeypad();
                 this.authenticated = true;
-                localStorage.setItem('fb_dev_auth', 'true'); // Persistent auth
+                this.persistAuthentication(true);
                 this.active = true;
                 this.ui.style.display = 'block';
             } else {
@@ -555,7 +633,7 @@ export class DevTools {
         }
     }
     logout() {
-        localStorage.removeItem('fb_dev_auth');
+        this.persistAuthentication(false);
         this.authenticated = false;
         this.active = false;
         this.ui.style.display = 'none';

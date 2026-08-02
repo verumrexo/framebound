@@ -18,6 +18,7 @@ export class ItemPickup {
         this.bobOffset = this.random() * 100;
         this.life = 0;
         this.isDead = false;
+        this.ownerId = null;
 
         // Attraction to player
         this.magnetRadius = 150;
@@ -37,7 +38,10 @@ export class ItemPickup {
             const dy = player.y - this.y;
             const distSq = dx * dx + dy * dy;
 
-            if (distSq < this.magnetRadius * this.magnetRadius) {
+            if (
+                distSq > 0
+                && distSq < this.magnetRadius * this.magnetRadius
+            ) {
                 const dist = Math.sqrt(distSq);
                 const force = (1.0 - dist / this.magnetRadius) * this.magnetForce * dt;
 

@@ -145,6 +145,10 @@ export class EntityRenderer {
 
     static drawEnemy(renderer, enemy) {
         if (enemy.isDead) return;
+        if (enemy.type === 'dummy') {
+            EntityRenderer.drawTrainingDummy(renderer, enemy);
+            return;
+        }
 
         // Determine visual overrides (Freeze)
         // Enemy logic stripped, so we check properties if they exist
@@ -194,10 +198,15 @@ export class EntityRenderer {
                     let offsetY = 0;
 
                     if (def.turretDrawOffset) {
-                        // ... offset logic ...
-                         // Scalar approximation
-                        offsetX = Math.cos(baseAngle) * (typeof def.turretDrawOffset === 'number' ? def.turretDrawOffset : 0);
-                        offsetY = Math.sin(baseAngle) * (typeof def.turretDrawOffset === 'number' ? def.turretDrawOffset : 0);
+                        if (typeof def.turretDrawOffset === 'object') {
+                            const ox = def.turretDrawOffset.x || 0;
+                            const oy = def.turretDrawOffset.y || 0;
+                            offsetX = Math.cos(baseAngle) * ox - Math.sin(baseAngle) * oy;
+                            offsetY = Math.sin(baseAngle) * ox + Math.cos(baseAngle) * oy;
+                        } else {
+                            offsetX = Math.cos(baseAngle) * def.turretDrawOffset;
+                            offsetY = Math.sin(baseAngle) * def.turretDrawOffset;
+                        }
                     }
 
                     turretX = drawX + offsetX;
@@ -241,9 +250,45 @@ export class EntityRenderer {
                 }
             }
 
-            // Draw Charge Telegraphs (Copied Logic)
+            // Draw charged-weapon tracking and lock telegraphs over the ship.
             if (enemy.weaponCooldowns) {
-                // ... (simplified telegraph drawing)
+                for (const weapon of enemy.weaponCooldowns) {
+                    if (!weapon.isCharging || weapon.chargeTimer <= 0) continue;
+
+                    const chargeTime = weapon.def.stats.chargeTime || 1;
+                    const isLocked = weapon.chargeTimer >= chargeTime * 0.6;
+                    const isRotated = ((weapon.part.rotation || 0) % 2 !== 0);
+                    const width = isRotated ? weapon.def.height : weapon.def.width;
+                    const height = isRotated ? weapon.def.width : weapon.def.height;
+                    const localX = (weapon.part.x + (width - 1) / 2) * TILE_SIZE;
+                    const localY = (weapon.part.y + (height - 1) / 2) * TILE_SIZE;
+                    const aimAngle = weapon.lockedAngle;
+                    if (aimAngle === null || aimAngle === undefined) continue;
+
+                    const localDrawAngle = aimAngle - (enemy.rotation + (enemy.rotationOffset || 0));
+                    ctx.save();
+                    if (isLocked) {
+                        ctx.strokeStyle = '#ffffff';
+                        ctx.shadowColor = '#00ffff';
+                        ctx.shadowBlur = 10;
+                        ctx.lineWidth = 1 + Math.random();
+                    } else {
+                        ctx.strokeStyle = '#ff0000';
+                        ctx.shadowColor = '#ff0000';
+                        ctx.shadowBlur = 5;
+                        ctx.lineWidth = 0.5;
+                    }
+
+                    const range = 2000;
+                    ctx.beginPath();
+                    ctx.moveTo(localX, localY);
+                    ctx.lineTo(
+                        localX + Math.cos(localDrawAngle) * range,
+                        localY + Math.sin(localDrawAngle) * range
+                    );
+                    ctx.stroke();
+                    ctx.restore();
+                }
             }
 
             if (frozenTimer > 0 || freezeMeter > 0) {
@@ -272,8 +317,45 @@ export class EntityRenderer {
         let barCenterX = entity.x;
         let topY = entity.y - (entity.radius || 20);
 
-        // ... Calculate bounding box logic if parts exist ...
-        // Simplified for now:
+        if (entity.shipParts && entity.shipParts.length > 0) {
+            const rotation = entity.rotation + (entity.rotationOffset || 0);
+            const cos = Math.cos(rotation);
+            const sin = Math.sin(rotation);
+            let minWorldY = Infinity;
+            let minWorldX = Infinity;
+            let maxWorldX = -Infinity;
+
+            for (const partData of entity.shipParts) {
+                const def = PartsLibrary[partData.partId];
+                if (!def) continue;
+
+                const isRotated = ((partData.rotation || 0) % 2 !== 0);
+                const width = isRotated ? def.height : def.width;
+                const height = isRotated ? def.width : def.height;
+                const corners = [
+                    { x: partData.x, y: partData.y },
+                    { x: partData.x + width, y: partData.y },
+                    { x: partData.x, y: partData.y + height },
+                    { x: partData.x + width, y: partData.y + height }
+                ];
+
+                for (const corner of corners) {
+                    const localX = corner.x * TILE_SIZE;
+                    const localY = corner.y * TILE_SIZE;
+                    const worldX = entity.x + (localX * cos - localY * sin);
+                    const worldY = entity.y + (localX * sin + localY * cos);
+                    minWorldY = Math.min(minWorldY, worldY);
+                    minWorldX = Math.min(minWorldX, worldX);
+                    maxWorldX = Math.max(maxWorldX, worldX);
+                }
+            }
+
+            if (Number.isFinite(minWorldY)) {
+                topY = minWorldY;
+                barCenterX = (minWorldX + maxWorldX) / 2;
+            }
+        }
+
         const barW = Math.min(160, Math.max(40, entity.maxHp / 2));
         const barH = 8;
         const hpPct = Math.max(0, entity.hp / entity.maxHp);
@@ -321,32 +403,7 @@ export class EntityRenderer {
         ctx.restore();
     }
 
-    static drawProjectile(renderer, p) {
-        if (p.delay > 0) return;
-        const color = p.owner === 'enemy' ? '#ff4444' : '#26d426';
-        const ctx = renderer.ctx;
-
-        if (p.type === 'laser' || p.type === 'small_laser' || p.type === 'railgun' || p.type === 'saber' || p.type === 'beam_freeze') {
-            ctx.save();
-            ctx.translate(p.x, p.y);
-            ctx.rotate(p.angle);
-
-            // Beam logic (Railgun/Saber visual state)
-            // ... (Copy detailed logic from Projectile.js.draw)
-            // Simplified for now:
-            renderer.drawRect(-15, -2, 30, 4, color);
-
-            ctx.restore();
-        } else {
-            // Generic
-            const size = p.radius * 2;
-            renderer.drawRect(p.x - p.radius, p.y - p.radius, size, size, color);
-        }
-        // ... (Include other projectile types like rockets)
-    }
-
     static drawLootCrate(renderer, crate) {
-        // ... (Logic from LootCrate.js)
         const ctx = renderer.ctx;
         ctx.save();
         ctx.translate(crate.x, crate.y);
@@ -354,16 +411,46 @@ export class EntityRenderer {
 
         const w = crate.width;
         const h = crate.height;
-        const hw = w/2;
-        const hh = h/2;
+        const hw = w / 2;
+        const hh = h / 2;
+        const pixelSize = 4;
 
         if (crate.isOpened) {
-             ctx.fillStyle = '#222';
-             ctx.fillRect(-hw, -hh, w, h);
+            ctx.fillStyle = '#222';
+            ctx.fillRect(-hw, -hh, w, h);
+
+            ctx.fillStyle = crate.detailColor;
+            for (let i = 0; i < 8; i++) {
+                const x = (crate.random() - 0.5) * w;
+                const y = (crate.random() - 0.5) * h;
+                ctx.fillRect(x, y, pixelSize * 2, pixelSize * 2);
+            }
         } else {
-             ctx.fillStyle = crate.baseColor || '#506070';
-             ctx.fillRect(-hw, -hh, w, h);
-             // ... Details
+            ctx.fillStyle = crate.baseColor;
+            ctx.fillRect(-hw, -hh, w, h);
+
+            const border = pixelSize * 2;
+            ctx.fillStyle = crate.detailColor;
+            ctx.fillRect(-hw + border, -hh + border, w - border * 2, h - border * 2);
+
+            ctx.fillStyle = crate.lightColor;
+            const corner = pixelSize * 2;
+            ctx.fillRect(-hw, -hh, corner, corner);
+            ctx.fillRect(hw - corner, -hh, corner, corner);
+            ctx.fillRect(hw - corner, hh - corner, corner, corner);
+            ctx.fillRect(-hw, hh - corner, corner, corner);
+
+            if (crate.wTiles === 2 || crate.hTiles === 2) {
+                ctx.fillStyle = 'rgba(0,0,0,0.3)';
+                if (crate.wTiles === 2) ctx.fillRect(-2, -hh + border, 4, h - border * 2);
+                if (crate.hTiles === 2) ctx.fillRect(-hw + border, -2, w - border * 2, 4);
+            }
+
+            const pulse = 0.5 + Math.sin(Date.now() * 0.005) * 0.5;
+            ctx.fillStyle = crate.lightColor;
+            ctx.globalAlpha = 0.5 + pulse * 0.5;
+            ctx.fillRect(-pixelSize, -pixelSize, pixelSize * 2, pixelSize * 2);
+            ctx.globalAlpha = 1.0;
         }
         ctx.restore();
     }
@@ -377,26 +464,51 @@ export class EntityRenderer {
 
         const pixelSize = 4;
         if (asteroid.type === 'rock') ctx.fillStyle = asteroid.isBroken ? '#333' : '#666';
-        else if (asteroid.type === 'crystal_blue') ctx.fillStyle = '#00ffff';
-        else ctx.fillStyle = '#ffaa00';
+        else if (asteroid.type === 'crystal_blue') ctx.fillStyle = asteroid.isBroken ? '#003333' : '#00ffff';
+        else ctx.fillStyle = asteroid.isBroken ? '#442200' : '#ffaa00';
 
-        // Draw Vertices
-        if (asteroid.vertices) {
-            // ... (Logic from Asteroid.js)
-            // Simplified: Draw polygon
-            ctx.beginPath();
-            asteroid.vertices.forEach((v, i) => {
-                if (i===0) ctx.moveTo(v.x, v.y);
-                else ctx.lineTo(v.x, v.y);
-            });
-            ctx.closePath();
-            ctx.fill();
+        const drawPixelLine = (x0, y0, x1, y1) => {
+            const steps = Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) / pixelSize;
+            for (let i = 0; i <= steps; i++) {
+                const t = steps === 0 ? 0 : i / steps;
+                const x = x0 + (x1 - x0) * t;
+                const y = y0 + (y1 - y0) * t;
+                ctx.fillRect(
+                    Math.floor(x / pixelSize) * pixelSize - pixelSize / 2,
+                    Math.floor(y / pixelSize) * pixelSize - pixelSize / 2,
+                    pixelSize,
+                    pixelSize
+                );
+            }
+        };
+
+        if (asteroid.vertices && asteroid.vertices.length > 0) {
+            for (let i = 0; i < asteroid.vertices.length; i++) {
+                const next = (i + 1) % asteroid.vertices.length;
+                drawPixelLine(
+                    asteroid.vertices[i].x,
+                    asteroid.vertices[i].y,
+                    asteroid.vertices[next].x,
+                    asteroid.vertices[next].y
+                );
+            }
+        }
+
+        if (asteroid.isBroken) {
+            ctx.globalAlpha = 0.4;
+            ctx.fillStyle = asteroid.type === 'rock'
+                ? '#444'
+                : asteroid.type === 'crystal_blue' ? '#008888' : '#885500';
+            for (let i = 0; i < 6; i++) {
+                const x = (asteroid.random() - 0.5) * asteroid.radius * 1.5;
+                const y = (asteroid.random() - 0.5) * asteroid.radius * 1.5;
+                ctx.fillRect(x, y, pixelSize, pixelSize);
+            }
         }
         ctx.restore();
     }
 
     static drawDrone(renderer, drone) {
-        // ... (Logic from Drone.js)
         if (drone.sprite) {
              drone.sprite.draw(renderer.ctx, drone.x, drone.y, drone.rotation + Math.PI/2, 0.5, 0.5);
         }
@@ -406,7 +518,6 @@ export class EntityRenderer {
         if (orb.isDead) return;
         const ctx = renderer.ctx;
 
-        // XP Orb Pulse
         if (orb.pulseAngle !== undefined) {
             const pulse = Math.sin(orb.pulseAngle) * 0.5;
             const r = orb.radius + pulse;
@@ -416,6 +527,39 @@ export class EntityRenderer {
             renderer.drawCircle(orb.x, orb.y, r, orb.color || '#00ffff');
             ctx.globalAlpha = 0.5;
             renderer.drawCircle(orb.x, orb.y, r * 1.5, orb.color || '#00ffff');
+            ctx.restore();
+        } else if (orb.color === '#ffd700') {
+            ctx.save();
+            ctx.translate(orb.x, orb.y);
+            ctx.scale(Math.max(0.1, Math.abs(Math.sin(orb.rotation))), 1);
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = orb.color;
+            ctx.strokeStyle = orb.color;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(0, 0, orb.radius, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.fillStyle = '#ffffaa';
+            ctx.beginPath();
+            ctx.arc(0, 0, orb.radius * 0.6, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
+        } else if (orb.color === '#44ff44') {
+            ctx.save();
+            ctx.translate(orb.x, orb.y);
+            ctx.rotate(orb.rotation);
+            ctx.shadowBlur = 12;
+            ctx.shadowColor = orb.color;
+            ctx.fillStyle = orb.color;
+            const size = orb.radius;
+            const thickness = 3;
+            ctx.fillRect(-thickness / 2, -size, thickness, size * 2);
+            ctx.fillRect(-size, -thickness / 2, size * 2, thickness);
+            ctx.globalAlpha = 0.7;
+            ctx.fillStyle = '#aaffaa';
+            const innerThickness = 1.5;
+            ctx.fillRect(-innerThickness / 2, -size + 1, innerThickness, (size - 1) * 2);
+            ctx.fillRect(-size + 1, -innerThickness / 2, (size - 1) * 2, innerThickness);
             ctx.restore();
         } else {
             const color = orb.color || '#ffff00';
@@ -519,6 +663,9 @@ export class EntityRenderer {
         } else {
             ctx.fillStyle = '#ffd700';
             ctx.fillRect(-30, -30, 60, 60);
+            ctx.strokeStyle = '#8b4513';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(-30, -30, 60, 60);
         }
         ctx.shadowBlur = 0;
         ctx.restore();
@@ -541,13 +688,15 @@ export class EntityRenderer {
         } else {
             ctx.fillStyle = chest.costType === 'hp' ? '#800000' : '#ffd700';
             ctx.fillRect(-30, -30, 60, 60);
+            ctx.strokeStyle = '#fff';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(-30, -30, 60, 60);
         }
         ctx.shadowBlur = 0;
         ctx.restore();
     }
 
     static drawItemPickup(renderer, item) {
-        // Simple logic for pickup
         if (item.isDead) return;
         const ctx = renderer.ctx;
         const bobY = item.y + Math.sin(item.life * 5 + item.bobOffset) * 4;
@@ -555,41 +704,47 @@ export class EntityRenderer {
         ctx.save();
         ctx.translate(item.x, bobY);
 
-        // Draw sprite if available (need def)
-        // item has item.def usually if populated, or we look it up
-        const def = PartsLibrary[item.partId];
-        if (def && def.sprite) {
-            // Glow based on rarity
-            let glow = '#00ff00';
-            if (def.rarity === 'rare') glow = '#0088ff';
-            if (def.rarity === 'epic') glow = '#aa00ff';
-
-            ctx.shadowBlur = 15;
-            ctx.shadowColor = glow;
-            def.sprite.draw(ctx, 0, 0, 0, 0.5, 0.5);
-            ctx.shadowBlur = 0;
+        ctx.shadowColor = '#ffff00';
+        const def = item.def || PartsLibrary[item.partId];
+        if (def) {
+            ctx.scale(0.6, 0.6);
+            if (def.baseSprite) {
+                def.baseSprite.draw(ctx, 0, 0, 0);
+            } else if (def.sprite) {
+                def.sprite.draw(ctx, 0, 0, 0);
+            }
         } else {
-            renderer.drawCircle(0, 0, 10, '#00ff00');
+            ctx.fillStyle = '#ff00ff';
+            ctx.fillRect(-6, -6, 12, 12);
         }
         ctx.restore();
     }
 
-    static drawPortal(renderer, p) {
-        const ctx = renderer.ctx;
-        ctx.save();
-        ctx.translate(p.x, p.y);
-        ctx.rotate(p.rotation || 0); // Portals spin?
+    static drawPortal(renderer, portal) {
+        renderer.ctx.save();
+        renderer.ctx.globalAlpha = 0.5 + Math.sin(Date.now() * 0.005) * 0.2;
+        renderer.drawCircle(portal.x, portal.y, portal.radius + 10, '#aa00ff');
+        renderer.drawCircle(portal.x, portal.y, portal.radius, '#ffffff');
+        renderer.ctx.restore();
 
-        // Simple portal viz
-        const r = p.radius || 60;
-        ctx.beginPath();
-        ctx.arc(0, 0, r, 0, Math.PI*2);
-        ctx.fillStyle = 'rgba(100, 0, 255, 0.5)';
-        ctx.fill();
-        ctx.strokeStyle = '#aa00ff';
-        ctx.lineWidth = 4;
-        ctx.stroke();
+        if (portal.sprite) {
+            portal.sprite.draw(renderer.ctx, portal.x, portal.y, portal.rotation);
+        }
+    }
 
-        ctx.restore();
+    static drawTrainingDummy(renderer, dummy) {
+        if (dummy.sprite) {
+            dummy.sprite.draw(renderer.ctx, dummy.x, dummy.y, dummy.rotation);
+        }
+
+        renderer.ctx.fillStyle = '#fff';
+        renderer.ctx.font = "12px 'Press Start 2P'";
+        renderer.ctx.textAlign = 'center';
+        renderer.ctx.fillText('training dummy', dummy.x, dummy.y - (dummy.radius + 30));
+
+        renderer.ctx.fillStyle = '#0f0';
+        renderer.ctx.font = "24px 'Press Start 2P'";
+        renderer.ctx.fillText(`${dummy.currentDps} dps`, dummy.x, dummy.y - (dummy.radius + 5));
+        renderer.ctx.textAlign = 'start';
     }
 }

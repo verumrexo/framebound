@@ -2,6 +2,7 @@
 import { Assets, AssetsData } from '../../Assets.js';
 import { PartsLibrary, PartDef, PartType, TILE_SIZE } from '../../shared/parts/Part.js';
 import { Sprite } from '../../engine/Sprite.js';
+import { parsePartStatsLiteral } from '../dev/PartStatsParser.js';
 
 export class Designer {
     constructor(game) {
@@ -377,19 +378,14 @@ export class Designer {
             // It usually appears before width/height arguments at the end of PartDef.
             // Let's try to match the substring between the last Sprite closing `)` and the size args `, w, h`.
 
-            const statsMatch = code.match(/PartDef\([^\{]+(\{[\s\S]+?\})\s*,/);
+            const statsMatch = code.match(/PartDef\([^{]+(\{[\s\S]+?\})\s*,/);
             if (statsMatch) {
-                try {
-                    // We need to evaluate this string to an object.
-                    // It might contain unquoted keys (hp: 20) which JSON.parse hates.
-                    // And it might be multiline.
-                    const statsStr = statsMatch[1];
-                    // Wrap in parentheses to ensure block is treated as expression
-                    const parsedStats = new Function(`return ${statsStr}`)();
+                const parsedStats = parsePartStatsLiteral(statsMatch[1]);
+                if (parsedStats) {
                     this.importedStats = parsedStats;
                     console.log("Imported Stats:", this.importedStats);
-                } catch (e) {
-                    console.warn("Failed to parse stats object from code", e);
+                } else {
+                    console.warn("Failed to parse stats object from code");
                     this.importedStats = null;
                 }
             } else {
@@ -724,4 +720,3 @@ export class Designer {
     }
 
 }
-

@@ -1,23 +1,52 @@
-// Single source of truth for version info
-// UPDATE THIS FILE when making changes to the game
+// single source of truth for version info
+// update this file when making changes to the game
 
 export const VERSION = '1.1.0 (beta)';
-export const VERSION_NAME = 'System: Authority';
+export const VERSION_NAME = 'system: authority';
 
 export const CHANGELOG = [
     {
         ver: '1.1.0 (beta)',
-        name: 'System: Authority',
+        name: 'system: authority',
         date: new Date().toISOString().split('T')[0],
         items: [
-            "CORE: Complete architecture refactor to Server-Authoritative model.",
-            "NET: Logic moved to shared/ directory for parity.",
-            "NET: GameRoom.js now runs the full physics simulation (walls, collisions, entities).",
-            "CLIENT: Rendering logic isolated in EntityRenderer.js.",
-            "CLIENT: Implemented Client-Side Prediction and Interpolation.",
-            "FIX: Wall collisions are now enforced by the server.",
-            "DEV: Added server-side DOM mocks to support shared assets.",
-            "REFACTOR: Cleaned up Game.js and stripped draw logic from entities."
+            'desktop: added a native macos app that starts without a browser or local server.',
+            'desktop: windows save replacement now restores the previous file if the final rename fails and recovers leftover backups on startup.',
+            'desktop: build checkpoints now reject malformed macos bundles and fake or missing windows installers before ci upload.',
+            'desktop: native shell warnings now fail the build instead of hiding in release logs.',
+            'refactor: split game.js into focused systems while preserving the original update and draw order.',
+            'visuals: restored distinct projectile families, including green basic shots and long red rockets.',
+            'save: room debris, loose rewards, cleared rooms, boss portals, ship parts, and run progress now survive continue and revisits correctly.',
+            'fix: main menu return, hangar inventory, booster dash, cleared-room speed, and stale run-state bugs.',
+            'fix: returning to the main menu now marks the old run stopped so gameplay shortcuts cannot reopen hidden overlays.',
+            'fix: offline and host run saves are cleared as soon as the final ship dies, closing the old force-quit continue exploit.',
+            'fix: returning to the main menu can no longer lose a race with the old menu fade.',
+            'online: added peer-to-peer host and six-character join-code flow with host-authoritative simulation.',
+            'online: dead players spectate living teammates and resurrect immediately when the boss dies.',
+            'online: the final team-wipe frame no longer runs enemy ai with a missing target or corrupts authoritative enemy state.',
+            'online: added shared xp and gold, individual parts and shop purchases, four-player team transitions, nearest-player enemy targeting, friendly-fire protection, and host-owned pause.',
+            'online: health orbs now heal their collector, while shared xp gives every player a private upgrade choice and waits for the crew before resuming.',
+            'online: host map fast-travel now pulls every connected ship to the destination instead of leaving guests behind.',
+            'online: guest hive modules now deploy owned drones, friendly drones follow their builder, and enemy drones target the nearest living player.',
+            'online: guest purchases, chest actions, and ship edits now retry safely after temporary connection backpressure.',
+            'online: data-channel send races now fail closed and enter the normal reconnect path instead of crashing or freezing a guest.',
+            'online: immediate signaling startup and cleanup failures now return to a usable menu instead of leaving a hidden paused run.',
+            'online: asynchronous pre-code host failures now release provisional run state even when signaling teardown also breaks.',
+            'online: failed direct-link reconnects now clear stale host identity and time out instead of waiting forever.',
+            'online: host shutdown now removes reconnectable player state immediately instead of retaining zombie sessions for sixty seconds.',
+            'online: failed peer hello and authority attachment now enter bounded cleanup instead of hanging or throwing outside the connection owner.',
+            'online: guests now retry when the direct link opens but the authoritative world never arrives, instead of synchronizing forever.',
+            'online: host heartbeats and guest watchdogs now recover silent half-open links, including while gameplay is paused.',
+            'online: delayed, dropped, and out-of-order host snapshots now have explicit newest-state convergence coverage.',
+            'online: added a free public signaling blueprint and an end-to-end hosted relay smoke test.',
+            'online: production builds now use the live public signaling relay with polling fallback and websocket upgrade.',
+            'online: native hosts keep networking alive while their window is in the background.',
+            'stability: hardened saves, multiplayer packets, settings, audio, collisions, and desktop signing.',
+            'security: leaderboard reads now request only displayed fields and reject scores outside the safe integer range.',
+            'fix: custom seed and developer keypads now work under the packaged app security policy.',
+            'stability: enemy rendering no longer consumes weapon rng, so attack spread cannot change with host framerate.',
+            'stability: loot scatter and cluster-child timing now use injectable gameplay rng boundaries for reproducible tests.',
+            'ui: repaired the oversized main menu and made patch notes responsive, focusable, and reliably scrollable.'
         ]
     },
     {

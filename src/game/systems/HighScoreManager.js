@@ -1,22 +1,52 @@
 import { createClient } from '@supabase/supabase-js';
+import { APP_CONFIG } from '../../engine/AppConfig.js';
 
-const supabaseUrl = 'https://icbhgzetssqssefoirug.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImljYmhnemV0c3Nxc3NlZm9pcnVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Njg4MjM4NzAsImV4cCI6MjA4NDM5OTg3MH0.OHtHxXat3gspzOVBPpwfXX2czNcMeSCcnmHrK_xOY40';
-const supabase = createClient(supabaseUrl, supabaseKey);
+let supabase;
 
 export class HighScoreManager {
+    static isConfigured() {
+        return Boolean(
+            APP_CONFIG.supabaseUrl &&
+            APP_CONFIG.supabaseAnonKey
+        );
+    }
+
+    static getClient() {
+        if (!this.isConfigured()) return null;
+        supabase ??= createClient(
+            APP_CONFIG.supabaseUrl,
+            APP_CONFIG.supabaseAnonKey
+        );
+        return supabase;
+    }
+
     static async getHighScores() {
         try {
-            const { data, error } = await supabase
+            const client = this.getClient();
+            if (!client) return [];
+            const { data, error } = await client
                 .from('high_scores')
-                .select('*')
+                .select('name,score')
                 .order('score', { ascending: false })
                 .limit(10);
 
             if (error) throw error;
 
-            console.log('[HighScore] Loaded', data?.length || 0, 'scores from Supabase');
-            return data || [];
+            const scores = (data || []).flatMap(entry => {
+                if (
+                    typeof entry?.name !== 'string' ||
+                    !Number.isSafeInteger(entry?.score) ||
+                    entry.score < 0
+                ) {
+                    return [];
+                }
+                return [{
+                    name: entry.name.slice(0, 5),
+                    score: entry.score
+                }];
+            });
+            console.log('[HighScore] Loaded', scores.length, 'scores from Supabase');
+            return scores;
         } catch (e) {
             console.error('[HighScore] Failed to load:', e);
             return [];
@@ -25,9 +55,22 @@ export class HighScoreManager {
 
     static async addScore(name, score) {
         try {
-            const cleanName = name.toUpperCase().substring(0, 5);
+            const client = this.getClient();
+            if (!client) return [];
+            if (
+                typeof name !== 'string' ||
+                !Number.isSafeInteger(score) ||
+                score < 0
+            ) {
+                return [];
+            }
+            const cleanName = name
+                .toUpperCase()
+                .replace(/[^A-Z0-9 .-]/g, '')
+                .substring(0, 5);
+            if (!cleanName) return [];
 
-            const { error } = await supabase
+            const { error } = await client
                 .from('high_scores')
                 .insert([{ name: cleanName, score }]);
 
@@ -45,6 +88,8 @@ export class HighScoreManager {
 
     static async isHighScore(score) {
         try {
+            if (!Number.isSafeInteger(score) || score < 0) return false;
+            if (!this.isConfigured()) return false;
             const scores = await this.getHighScores();
             if (scores.length < 10) return true;
             return score > scores[scores.length - 1].score;
@@ -54,17 +99,4 @@ export class HighScoreManager {
         }
     }
 
-    static async clearScores() {
-        try {
-            const { error } = await supabase
-                .from('high_scores')
-                .delete()
-                .neq('id', 0); // Delete all rows
-
-            if (error) throw error;
-            console.log('[HighScore] Cleared all scores');
-        } catch (e) {
-            console.error('[HighScore] Failed to clear:', e);
-        }
-    }
 }

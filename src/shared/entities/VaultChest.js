@@ -1,4 +1,4 @@
-import { PartsLibrary, TILE_SIZE } from '../parts/Part.js';
+import { Assets } from '../../Assets.js';
 
 export class VaultChest {
     constructor(x, y, costType, costAmount, randomGen = null) {
@@ -13,6 +13,7 @@ export class VaultChest {
         this.opened = false; // "Opened" means successfully claimed after ambush
         this.locked = false;  // Triggered when paid (ambush active)
         this.ambushActive = false; // Waiting for ambush to clear
+        this.wasPaid = false;
         this.rotation = 0;
 
         // Get chest sprite from Assets
@@ -30,7 +31,7 @@ export class VaultChest {
     }
 
 
-    drawTooltip(renderer, player) {
+    drawTooltip(renderer, playerHp, gold) {
         if (this.opened || this.ambushActive) return;
 
         const ctx = renderer.ctx;
@@ -57,8 +58,8 @@ export class VaultChest {
 
         // Cost
         const canAfford = this.costType === 'hp'
-            ? player.hp > this.costAmount
-            : player.gold >= this.costAmount;
+            ? playerHp > this.costAmount
+            : gold >= this.costAmount;
 
         ctx.fillStyle = canAfford ? '#44ff44' : '#ff4444';
         const costText = this.costType === 'hp'

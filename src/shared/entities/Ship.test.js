@@ -1,0 +1,122 @@
+import '../../tests/setup.js';
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { Ship } from './Ship.js';
+
+test('ship placement rejects inherited and unknown part ids without throwing', () => {
+    const ship = new Ship();
+    ship.parts.clear();
+
+    for (const partId of ['toString', '__proto__', 'missing_part']) {
+        assert.equal(ship.canPlaceAt(0, 0, partId, 0), false);
+        assert.equal(ship.addPart(0, 0, partId, 0), false);
+    }
+
+    assert.equal(ship.parts.size, 0);
+});
+
+test('ship placement rejects non-finite geometry without corrupting its grid', () => {
+    const ship = new Ship();
+    ship.parts.clear();
+
+    for (const [x, y, rotation] of [
+        [NaN, 0, 0],
+        [0, Infinity, 0],
+        [0, 0, -Infinity]
+    ]) {
+        assert.equal(ship.canPlaceAt(x, y, 'core', rotation), false);
+        assert.equal(ship.addPart(x, y, 'core', rotation), false);
+    }
+
+    assert.equal(ship.parts.size, 0);
+    assert.equal(ship.addPart(0, 0, 'core', 0), true);
+});
+
+test('booster and accelerant parts contribute their actual module stats', () => {
+    const ship = new Ship();
+
+    assert.equal(
+        ship.addPart(2, 0, 'custom_1768392079955', 0),
+        true
+    );
+    assert.equal(
+        ship.addPart(-2, 0, 'custom_1767999991728', 0),
+        true
+    );
+
+    assert.equal(ship.stats.boosterCount, 1);
+    assert.equal(ship.stats.accelerantCount, 1);
+});
+
+test('ship cloning preserves valid layouts regardless of map insertion order', () => {
+    const ship = new Ship();
+    assert.equal(ship.addPart(2, 0, 'hull', 0), true);
+
+    const core = ship.getPart(0, 0);
+    const bridge = ship.getPart(1, 0);
+    const outer = ship.getPart(2, 0);
+    ship.parts = new Map([
+        ['0,0', core],
+        ['2,0', outer],
+        ['1,0', bridge],
+        ...[...ship.parts].filter(([key]) =>
+            !['0,0', '1,0', '2,0'].includes(key)
+        )
+    ]);
+
+    const clone = ship.clone();
+
+    assert.equal(clone.getUniqueParts().size, ship.getUniqueParts().size);
+    assert.equal(clone.getPart(2, 0)?.partId, 'hull');
+    assert.notEqual(clone.getPart(2, 0), outer);
+});
+
+test('cleared-room movement doubles acceleration and sustained speed', () => {
+    const normal = new Ship();
+    const cleared = normal.clone();
+    const input = { up: true };
+
+    normal.update(1 / 60, input, { movementMultiplier: 1 });
+    cleared.update(1 / 60, input, { movementMultiplier: 2 });
+
+    assert.ok(Math.abs(cleared.vy - normal.vy * 2) < 1e-9);
+
+    for (let i = 0; i < 300; i++) {
+        normal.update(1 / 60, input, { movementMultiplier: 1 });
+        cleared.update(1 / 60, input, { movementMultiplier: 2 });
+    }
+
+    assert.ok(Math.abs(normal.vy + 150) < 1e-9);
+    assert.ok(Math.abs(cleared.vy + 300) < 1e-9);
+});
+
+test('external client dash keeps the cap without applying ship dash twice', () => {
+    const ship = new Ship();
+    ship.vy = -400;
+
+    ship.update(0.1, { shift: true }, {
+        externalDashActive: true
+    });
+
+    assert.equal(ship.dashActiveTimer, 0);
+    assert.equal(ship.dashCooldown, 0);
+    assert.equal(ship.vy, -368);
+});
+
+test('null aim holds a slow ship heading and keeps velocity-facing fallback', () => {
+    const stationary = new Ship();
+    stationary.rotation = 1.25;
+
+    stationary.update(1 / 60, { aimAngle: null });
+
+    assert.equal(stationary.rotation, 1.25);
+
+    const moving = new Ship();
+    moving.rotation = 0;
+    moving.vx = 100;
+
+    moving.update(1 / 60, { aimAngle: null });
+
+    assert.ok(moving.rotation > 0);
+    assert.ok(moving.rotation < Math.PI / 2);
+});

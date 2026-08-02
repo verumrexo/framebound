@@ -1,0 +1,14 @@
+services:
+  - type: web
+    name: framebound-signaling
+    runtime: docker
+    plan: free
+    region: frankfurt
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: LEGACY_GAMEPLAY_ENABLED
+        value: "false"

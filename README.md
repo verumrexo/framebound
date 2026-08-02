@@ -1,74 +1,146 @@
-# framebound:uplink 
+<div align="center">
+  <img src="./src/assets/logo.png" alt="framebound" width="760">
 
-**v1.0.1 (beta) protocol:uplink** 
+  <p>a fast top-down space roguelike about movement, scavenging, and building a ship out of whatever survives.</p>
 
-congrats, you found the source code for the only space roguelike that won't make your computer scream for mercy. it's built with vanilla javascript and vite because we actually care about performance, unlike some people.
+  [![web build](https://github.com/verumrexo/framebound/actions/workflows/deploy.yml/badge.svg)](https://github.com/verumrexo/framebound/actions/workflows/deploy.yml)
+  [![desktop builds](https://github.com/verumrexo/framebound/actions/workflows/desktop.yml/badge.svg)](https://github.com/verumrexo/framebound/actions/workflows/desktop.yml)
+  [![version](https://img.shields.io/badge/version-1.1.0--beta-78ff96)](./package.json)
 
-## what's actually in here?
-- **physics that doesn't suck**: drift, boost, and crash into asteroids like a pro.
-- **ship building**: stop flying a bucket. find parts and actually build something that looks like it belongs in space.
-- **bosses that fight back**: they're symmetrical, they have actual hitboxes now (revolutionary, i know), and they will absolutely wreck you.
-- **weaponry for every vibe**: freeze rays, global-range sabers, cluster grenades. choose how you want to ruin an alien's day.
-- **economy (cringe, but necessary)**: gold, xp, shops, and crates. go buy some friends or something.
-- **cursed vaults**: high risk, high reward. if you die in an ambush room, don't come crying to me.
-- **custom cursors**: because the default white arrow is for boomers.
+  [play the browser preview](https://verumrexo.github.io/framebound/) ·
+  [roadmap](./ROADMAP.md) ·
+  [active idea backlog](./task2.md)
+</div>
 
-## how to play (if you can)
-[play it here or whatever](https://verumrexo.github.io/framebound/) (it's on github pages, obviously)
+## build a ship. try not to lose it.
 
-### controls
-- **wasd**: move (please don't ask how to use keys)
-- **mouse**: aim your feelings at the enemies
-- **left click**: fire
-- **shift**: boost away from your problems
-- **e**: talk to things / open chests
-- **tab**: look at your inventory (hangar)
-- **l**: dev terminal (you probably don't have the PIN anyway 🙄)
+framebound drops you into a hostile, room-based space run with a small ship and
+bad odds. clear rooms, collect parts, rebuild your ship, buy upgrades, and push
+through the floor boss without turning your lovingly assembled death machine
+into drifting scrap.
 
-## running a server (for you and your friends)
+- momentum-based movement with boost and dash
+- modular ship building with individual weapons, engines, armor, and utility parts
+- distinct projectile families, from green basic shots to long red rockets
+- seeded floors with combat rooms, shops, treasure rooms, vaults, wrecks, and bosses
+- persistent room debris and versioned run saves
+- xp, upgrades, gold, shops, loot, drones, and cursed vault encounters
+- offline play plus host-authoritative peer-to-peer co-op in active development
 
-want to host your own galaxy? fine. here's how you do it.
+## play
+
+### browser preview
+
+[play framebound on github pages](https://verumrexo.github.io/framebound/).
+
+the browser build is the quickest public preview. offline play is the stable
+reference experience.
+
+### desktop
+
+framebound already runs as a native tauri shell:
+
+- macos: `Framebound.app`
+- windows: installer `.exe`
+
+desktop artifacts are built and verified in github actions, but public signed
+installers are not released yet. the current macos development app is ad-hoc
+signed; apple developer-id signing and notarization are still required before a
+proper public download. see [desktop status](./DESKTOP.md).
+
+## controls
+
+| input | action |
+| --- | --- |
+| `w` `a` `s` `d` | move |
+| mouse | aim |
+| left click | fire |
+| `shift` | boost or dash |
+| `e` | interact |
+| `tab` | open the hangar |
+| `m` | open the floor map |
+| `esc` | pause |
+
+## online co-op
+
+the intended flow is deliberately simple:
+
+1. click **online play**;
+2. one player hosts and receives a short code;
+3. up to three friends enter that code;
+4. gameplay travels directly between the players.
+
+the host owns the simulation and save. xp and gold are shared, while parts,
+builds, upgrades, health pickups, and purchased shop rewards stay personal.
+dead players spectate and resurrect when the floor boss dies. if the host
+leaves, the run ends.
+
+the public signaling relay is live and the browser connection path passes.
+full second-device desktop gameplay proof is still open, and restrictive
+networks may need a future relay. the honest technical version lives in
+[multiplayer status](./MULTIPLAYER.md).
+
+## project status
+
+framebound is in active beta development.
+
+- the original gameplay and visual identity remain the source of truth;
+- large systems are being extracted from the old `game.js` without rewriting
+  the feel;
+- bugs and technical debt are fixed behind regression coverage;
+- creative or balance changes require an explicit design decision first.
+
+current execution work is tracked in the [technical roadmap](./ROADMAP.md).
+unfinished feature ideas remain active in [task2](./task2.md).
+
+## development
 
 ### requirements
-- [Node.js](https://nodejs.org/) (v16+ because we aren't cavemen)
-- a terminal (cmd, bash, powershell, whatever)
 
-### instructions
-1. **clone the repo**: `git clone https://github.com/verumrexo/framebound.git`
-2. **install dependencies**: `npm install`
-3. **start everything**: `npm start`
+- node.js 22.12 or newer
+- rust and cargo for desktop builds
 
-this command runs both the backend server and the frontend client concurrently.
+### quick start
 
-### running a standalone server
-if you only want to run the server (e.g. for hosting):
-`npm run server`
+```sh
+git clone https://github.com/verumrexo/framebound.git
+cd framebound
+npm install
+npm run dev
+```
 
-the server will start on port `3000` by default. you should see something like:
-`Server running on port 3000`
+vite serves the game with hot reload. no gameplay server is required for
+offline development.
 
-### connecting
-- **local play**: use `npm start`. the game will automatically connect to `localhost:3000`.
+### useful commands
 
-- **hosting for friends (advanced: port forwarding)**:
-    - forward port `3000` (TCP) on your router to your computer.
-    - friends join via the `direct connect` input in the lobby menu using your public IP (e.g., `ws://123.45.67.89:3000`).
+| command | purpose |
+| --- | --- |
+| `npm run dev` | start the browser development build |
+| `npm test` | run the canonical regression suite |
+| `npm run build` | create the production web build |
+| `npm run lint` | run correctness-focused javascript linting |
+| `npm run typecheck` | check the gradual typed javascript boundary |
+| `npm run desktop` | launch the native desktop shell with hot reload |
+| `npm run desktop:build` | build and verify the current platform artifact |
+| `npm run signaling:smoke` | verify the configured signaling relay |
 
-- **hosting for friends (easy: no port forwarding)**:
-    - if you are on a **mobile hotspot**, university wifi, or can't access your router, use a tunnel.
-    - **option 1: localtunnel (easiest)**
-        1. install global: `npm install -g localtunnel`
-        2. start your server: `npm run server`
-        3. in a new terminal, run: `lt --port 3000`
-        4. copy the url (e.g., `https://gorge-ous-ant.loca.lt`).
-        5. friends open the game (on github pages or locally), go to **online lobby**, and paste that url into the **direct connect** box.
+`npm start` also launches the legacy socket.io gameplay server. that path only
+exists as a development fallback while peer-to-peer co-op reaches full parity.
 
-    - **option 2: ngrok**
-        1. download [ngrok](https://ngrok.com/).
-        2. run `ngrok http 3000`.
-        3. give the forwarding url to your friends for the **direct connect** box.
+copy `.env.example` to `.env.local` only when local signaling, legacy server, or
+leaderboard configuration is needed. never put private keys in a `VITE_*`
+variable; browser builds expose them.
 
-- **deployment**: set the `VITE_SERVER_URL` environment variable in your frontend deployment (e.g., Vercel, Netlify) to your server's public URL (e.g., `wss://your-server.com`).
+## documentation
 
-## Troubleshooting
-If you encounter 'ERR_MODULE_NOT_FOUND', ensure you run 'npm install' to install dependencies before starting the server.
+- [desktop packaging and release status](./DESKTOP.md)
+- [peer-to-peer multiplayer design](./MULTIPLAYER.md)
+- [signaling deployment](./SIGNALING.md)
+- [save format and migration rules](./SAVE_FORMAT.md)
+- [gameplay parity traces](./GAMEPLAY_PARITY.md)
+- [part mechanics architecture](./PARTS.md)
+- [leaderboard trust model](./LEADERBOARD.md)
+- [technical audit](./AUDIT.md)
+- [technical roadmap](./ROADMAP.md)
+- [active feature and idea backlog](./task2.md)
