@@ -3,7 +3,14 @@ export class Input {
         this.canvas = canvas;
         this.keys = new Set();
         this.keysPressed = new Set(); // Track newly pressed keys this frame
-        this.mouse = { x: 0, y: 0, isDown: false, isRightDown: false };
+        this.mouse = {
+            x: 0,
+            y: 0,
+            isDown: false,
+            isRightDown: false,
+            wasPressed: false,
+            wasRightPressed: false
+        };
 
         window.addEventListener('keydown', (e) => {
             if (!this.keys.has(e.code)) {
@@ -24,8 +31,14 @@ export class Input {
         });
 
         window.addEventListener('mousedown', (e) => {
-            if (e.button === 0) this.mouse.isDown = true;
-            if (e.button === 2) this.mouse.isRightDown = true;
+            if (e.button === 0) {
+                if (!this.mouse.isDown) this.mouse.wasPressed = true;
+                this.mouse.isDown = true;
+            }
+            if (e.button === 2) {
+                if (!this.mouse.isRightDown) this.mouse.wasRightPressed = true;
+                this.mouse.isRightDown = true;
+            }
         });
         window.addEventListener('mouseup', (e) => {
             if (e.button === 0) this.mouse.isDown = false;
@@ -41,6 +54,8 @@ export class Input {
         this.keysPressed.clear();
         this.mouse.isDown = false;
         this.mouse.isRightDown = false;
+        this.mouse.wasPressed = false;
+        this.mouse.wasRightPressed = false;
 
     }
 
@@ -54,14 +69,16 @@ export class Input {
 
     clearPressed() {
         this.keysPressed.clear();
+        this.mouse.wasPressed = false;
+        this.mouse.wasRightPressed = false;
     }
 
     isMouseDown() {
-        return this.mouse.isDown;
+        return this.mouse.isDown || this.mouse.wasPressed;
     }
 
     isRightMouseDown() {
-        return this.mouse.isRightDown;
+        return this.mouse.isRightDown || this.mouse.wasRightPressed;
     }
 
     getMousePos() {

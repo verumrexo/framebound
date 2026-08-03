@@ -128,7 +128,10 @@ export class EnemyLifecycleSystem {
         const targets = this.livingTargets();
         if (targets.length === 0) return null;
 
-        if (enemy.type === 'circler' && enemy.coopTargetId) {
+        if (
+            isOrbitingEnemy(enemy) &&
+            enemy.coopTargetId
+        ) {
             const locked = targets.find(
                 target => target.id === enemy.coopTargetId
             );
@@ -149,7 +152,7 @@ export class EnemyLifecycleSystem {
 
         if (
             nearest &&
-            enemy.type === 'circler' &&
+            isOrbitingEnemy(enemy) &&
             nearestDistance <= (
                 enemy.engagementDist * 1.5
             ) ** 2
@@ -253,4 +256,10 @@ export class EnemyLifecycleSystem {
             game.enemies.splice(i, 1);
         }
     }
+}
+
+function isOrbitingEnemy(enemy) {
+    return enemy.type === 'circler' ||
+        enemy.behavior === 'orbiter' ||
+        enemy.behavior === 'flanker';
 }

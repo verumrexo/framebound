@@ -1,10 +1,31 @@
 // single source of truth for version info
 // update this file when making changes to the game
 
-export const VERSION = '1.1.0 (beta)';
-export const VERSION_NAME = 'system: authority';
+export const VERSION = '1.2.0 (beta)';
+export const VERSION_NAME = 'arsenal: apotheosis';
 
 export const CHANGELOG = [
+    {
+        ver: '1.2.0 (beta)',
+        name: 'arsenal: apotheosis',
+        date: new Date().toISOString().split('T')[0],
+        items: [
+            'overhaul: rebuilt weapon families, level-up evolution, modular enemies, and long-run balance as one connected system.',
+            'level-ups: choices now react to installed weapons, so missing weapon families cannot waste a card slot.',
+            'ballistic: added real fire-rate and damage scaling plus rounds that pierce extra targets.',
+            'laser: added real fire-rate and damage scaling plus energy arcs that chain through nearby targets.',
+            'missile: added reload, damage, speed, and blast-radius evolution across every launcher.',
+            'fix: ballistic and laser fire-rate upgrades now affect actual weapon cooldowns instead of only appearing in the hangar.',
+            'fix: every missile variant now explodes on impact instead of several warheads only exploding when their fuse expired.',
+            'fix: clicks completed between render frames are buffered for one update instead of disappearing.',
+            'balance: replaced exponential enemy hp and damage growth with a long-run curve that stays dangerous without turning every hull into a spreadsheet wall.',
+            'enemies: added the interceptor flanker, repair tender, and bulwark to floor-scaled room rosters.',
+            'enemies: repair tenders restore damaged allies and advertise the repair link with an in-world pulse.',
+            'architecture: enemy bodies and tuning now live in editable part blueprints, separate from behavior and spawn rules.',
+            'online: each player receives upgrade choices based on their own ship while xp remains shared.',
+            'save: old runs automatically gain the new arsenal stats without losing their ship, upgrades, or room state.'
+        ]
+    },
     {
         ver: '1.1.0 (beta)',
         name: 'system: authority',

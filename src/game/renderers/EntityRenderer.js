@@ -296,6 +296,27 @@ export class EntityRenderer {
                 ctx.shadowBlur = 0;
             }
             ctx.restore();
+            if (enemy.supportPulseTimer > 0) {
+                const alpha = Math.min(1, enemy.supportPulseTimer / 0.45);
+                ctx.save();
+                ctx.strokeStyle = `rgba(116, 255, 106, ${alpha})`;
+                ctx.shadowColor = '#74ff6a';
+                ctx.shadowBlur = 14;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(enemy.x, enemy.y, 35 + (1 - alpha) * 80, 0, Math.PI * 2);
+                ctx.stroke();
+                if (
+                    Number.isFinite(enemy.supportTargetX) &&
+                    Number.isFinite(enemy.supportTargetY)
+                ) {
+                    ctx.beginPath();
+                    ctx.moveTo(enemy.x, enemy.y);
+                    ctx.lineTo(enemy.supportTargetX, enemy.supportTargetY);
+                    ctx.stroke();
+                }
+                ctx.restore();
+            }
         } else if (enemy.sprite) {
              // Fallback sprite
              const color = (frozenTimer > 0) ? '#00ffff' : undefined;

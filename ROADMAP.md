@@ -722,6 +722,45 @@ supabase policy proof remains open.
 - docs describe the code that actually ships;
 - release smoke covers offline and two-client online play.
 
+## milestone 8 — arsenal: apotheosis
+
+goal: make parts, weapon families, level-ups, and enemy roles reinforce one
+build system instead of behaving like unrelated stat buckets.
+
+status: cleared locally on 2026-08-03 for framebound v1.2.0-beta. final balance
+still depends on longer human runs, because a green test suite cannot tell us
+whether floor six feels fun or like tax fraud.
+
+### shipped foundation
+
+- ballistic, laser, and missile upgrades now affect real cooldown and damage
+  paths in offline and host-authoritative co-op simulation;
+- level-up cards are filtered against each player's installed weapon families;
+- ballistic pierce, laser chaining, and missile blast-radius evolution create
+  distinct mechanical directions instead of three differently colored damage
+  percentages;
+- permanent arsenal stats migrate through old saves, room snapshots, and peer
+  snapshots without deleting old runs;
+- enemy hp and damage use separate long-run curves instead of doubling every
+  floor;
+- enemy bodies and tuning live in editable part blueprints, while room spawn
+  selection lives in a separate roster module;
+- interceptor, repair tender, and bulwark roles enter the roster gradually;
+- devtools can spawn every new enemy independently for layout and behavior
+  iteration;
+- the repair tender has a visible repair pulse, and enemy body parts can be
+  rearranged without rewriting its support behavior;
+- patch notes, hangar telemetry, automated gates, live browser checks, and the
+  signed macos bundle identify the release as `arsenal: apotheosis`.
+
+### next balance pass
+
+- collect full-run damage, pick-rate, and death-floor data from real playtests;
+- tune upgrade values and roster weights from those runs without changing the
+  approved family identities;
+- add new player parts only with their art, mount behavior, host authority,
+  save schema, renderer, and focused mechanic test defined together.
+
 ## priority queue
 
 the next concrete batches, in order:

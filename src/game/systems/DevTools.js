@@ -262,6 +262,9 @@ export class DevTools {
         createBtn('🚀 enemy: rocketeer', (x, y) => this.spawnEnemy(x, y, 'rocketeer'), '#ff8844');
         createBtn('🎯 enemy: sniper', (x, y) => this.spawnEnemy(x, y, 'sniper'), '#ffaa44');
         createBtn('🌀 enemy: circler', (x, y) => this.spawnEnemy(x, y, 'circler'), '#ff44ff');
+        createBtn('🛩️ enemy: interceptor', (x, y) => this.spawnEnemy(x, y, 'interceptor'), '#44aaff');
+        createBtn('🛠️ enemy: repair tender', (x, y) => this.spawnEnemy(x, y, 'repair_tender'), '#74ff6a');
+        createBtn('🛡️ enemy: bulwark', (x, y) => this.spawnEnemy(x, y, 'bulwark'), '#ff6644');
         createBtn('🐝 enemy: hive carrier', (x, y) => this.spawnEnemy(x, y, 'hive_carrier'), '#ff00ff');
 
         createBtn('👹 spawn boss', (x, y) => this.spawnBoss(x, y), '#ff00ff');

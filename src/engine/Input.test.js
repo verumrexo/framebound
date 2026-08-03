@@ -33,3 +33,25 @@ test('input releases held controls when the window loses focus', () => {
         globalThis.window = originalWindow;
     }
 });
+
+test('a complete click between frames survives for exactly one update', () => {
+    const originalWindow = globalThis.window;
+    const windowHandlers = new Map();
+    globalThis.window = {
+        addEventListener(type, handler) {
+            windowHandlers.set(type, handler);
+        }
+    };
+
+    try {
+        const input = new Input({});
+        windowHandlers.get('mousedown')({ button: 0 });
+        windowHandlers.get('mouseup')({ button: 0 });
+
+        assert.equal(input.isMouseDown(), true);
+        input.clearPressed();
+        assert.equal(input.isMouseDown(), false);
+    } finally {
+        globalThis.window = originalWindow;
+    }
+});

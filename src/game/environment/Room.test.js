@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 
 const { Room } = await import('./Room.js');
 const { RoomType } = await import('./RoomType.js');
+const { selectEnemyType } = await import('../../shared/enemies/EnemyRoster.js');
 
 test('room-clear checkpoint includes the clear score instead of losing it', () => {
     const calls = [];
@@ -35,6 +36,14 @@ test('room-clear checkpoint includes the clear score instead of losing it', () =
         ['notification', 125, 'ROOM CLEARED! +100', '#ffff00'],
         ['save', 125]
     ]);
+});
+
+test('floor rosters introduce new roles gradually', () => {
+    assert.equal(selectEnemyType(1, 0.1), 'striker');
+    assert.equal(selectEnemyType(2, 0.1), 'interceptor');
+    assert.equal(selectEnemyType(3, 0.05), 'bulwark');
+    assert.equal(selectEnemyType(4, 0.05), 'repair_tender');
+    assert.equal(selectEnemyType(5, 0.05, { vault: true }), 'hive_carrier');
 });
 
 test('shop entry creates its original four items synchronously and once', () => {

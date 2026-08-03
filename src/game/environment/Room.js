@@ -1,4 +1,5 @@
 import { Enemy } from '../../shared/entities/Enemy.js';
+import { selectEnemyType } from '../../shared/enemies/EnemyRoster.js';
 import { Boss } from '../../shared/entities/Boss.js';
 import { Asteroid } from '../../shared/entities/Asteroid.js';
 import { LootCrate } from '../../shared/entities/LootCrate.js';
@@ -280,35 +281,10 @@ export class Room {
             const roomX = Math.max(this.x + 50, Math.min(this.x + this.width - 50, ex));
             const roomY = Math.max(this.y + 50, Math.min(this.y + this.height - 50, ey));
 
-            let type = 'basic';
-            const r = this.random();
-
-            if (floor >= 5) {
-                if (r < 0.1) type = 'hive_carrier';
-                else if (r < 0.2) type = 'rocketeer';
-                else if (r < 0.4) type = 'sniper';
-                else if (r < 0.6) type = 'circler';
-                else if (r < 0.9) type = 'striker';
-                else type = 'basic';
-            } else if (floor >= 4) {
-                if (r < 0.1) type = 'rocketeer';
-                else if (r < 0.3) type = 'sniper';
-                else if (r < 0.5) type = 'circler';
-                else if (r < 0.8) type = 'striker';
-                else type = 'basic';
-            } else if (floor >= 3) {
-                if (r < 0.2) type = 'sniper';
-                else if (r < 0.4) type = 'circler';
-                else if (r < 0.7) type = 'striker';
-                else type = 'basic';
-            } else if (floor >= 2) {
-                if (r < 0.2) type = 'circler';
-                else if (r < 0.6) type = 'striker';
-                else type = 'basic';
-            } else {
-                if (r < 0.5) type = 'striker';
-                else type = 'basic';
-            }
+            const type = selectEnemyType(floor, this.random(), {
+                vault: true,
+                large: true
+            });
 
             // Deterministic ID for ambush: rX_rY_ambush_W_I
             const enemyId = `e_${this.gridX}_${this.gridY}_amb_${this.waveCount}_${i}`;
@@ -454,36 +430,9 @@ export class Room {
             const ex = this.x + pad + this.random() * (this.width - pad * 2);
             const ey = this.y + pad + this.random() * (this.height - pad * 2);
 
-            let type = 'basic';
-            const r = this.random();
-
-            // Floor-restricted spawns: sniper 3+, circler 2+, rocketeer 4+
-            if (r < 0.2 && floor >= 3) {
-                // 20% chance for Sniper (floor 3+)
-                type = 'sniper';
-            } else if (r < 0.35 && floor >= 2) {
-                // 15% chance for Circler (floor 2+)
-                type = 'circler';
-            } else if (is2x2Room && floor >= 4) {
-                // Rocketeer in 2x2 rooms (floor 4+)
-                if (i === 0) {
-                    type = 'rocketeer';
-                } else {
-                    // Mix of striker and basic for others
-                    type = this.random() < 0.3 ? 'striker' : 'basic';
-                }
-            } else if (is2x2Room) {
-                // Before floor 4, 2x2 rooms get strikers instead
-                type = this.random() < 0.3 ? 'striker' : 'basic';
-            } else {
-                // Smaller rooms
-                const r2 = this.random();
-                if (r2 < 0.1 && floor >= 4) {
-                    type = 'rocketeer';
-                } else if (r2 < 0.4) {
-                    type = 'striker';
-                }
-            }
+            const type = selectEnemyType(floor, this.random(), {
+                large: is2x2Room
+            });
 
             // Deterministic ID: rX_rY_I
             const enemyId = `e_${this.gridX}_${this.gridY}_${i}`;

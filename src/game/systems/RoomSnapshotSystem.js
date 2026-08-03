@@ -23,7 +23,9 @@ const ENEMY_STATE_KEYS = [
     'freezeMeter', 'frozenTimer', 'lastFreezeTick', 'isWarpingIn',
     'warpTimer', 'maxHp', 'hp', 'radius', 'speed', 'turnRate',
     'engagementDist', 'detectionDist', 'damageMultiplier',
-    'shootRate', 'shootCooldown', 'aimAngle', 'coopTargetId'
+    'shootRate', 'shootCooldown', 'aimAngle', 'coopTargetId',
+    'circleAngle', 'circleDirection', 'supportCooldown',
+    'supportPulseTimer', 'supportTargetX', 'supportTargetY'
 ];
 const PROJECTILE_STATE_KEYS = [
     'x', 'y', 'vx', 'vy', 'angle', 'type', 'owner', 'damage',
@@ -31,7 +33,8 @@ const PROJECTILE_STATE_KEYS = [
     'isBeam', 'beamLength', 'wavyTime', 'wavySpeed', 'wavyAmp',
     'baseAngle', 'speed', 'driftDirection', 'secondaryWavySpeed',
     'secondaryWavyAmp', 'homingStrength', 'spinAngle', 'clusterCount',
-    'explosionRadius', 'hitCount'
+    'explosionRadius', 'hitCount', 'remainingPierces', 'chainCount',
+    'blastRadiusMul'
 ];
 const DRONE_STATE_KEYS = [
     'x', 'y', 'owner', 'isDead', 'hp', 'speed', 'turnRate', 'radius',

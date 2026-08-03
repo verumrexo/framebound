@@ -4,6 +4,10 @@ import {
     snapshotActiveWorld,
     snapshotRooms
 } from './RoomSnapshotSystem.js';
+import {
+    isValidPermanentStats,
+    normalizePermanentStats
+} from '../../shared/combat/WeaponFamilies.js';
 
 const SAVE_KEY = 'framebound_save';
 const SAVE_VERSION = 2;
@@ -12,15 +16,6 @@ const MAX_SAVED_PARTS = 512;
 const MAX_VISITED_ROOMS = 512;
 const MAX_GRID_COORDINATE = 512;
 const MAX_SAVE_BYTES = 8 * 1024 * 1024;
-const PERMANENT_STAT_KEYS = [
-    'hpMul',
-    'regenAdd',
-    'velocityRateAdd',
-    'laserRateAdd',
-    'speedMul',
-    'turnMul',
-    'missileSpeedMul'
-];
 const PART_RUNTIME_KEYS = [
     'cooldown',
     'recoil',
@@ -335,11 +330,9 @@ export class SaveManager {
                 Math.abs(Number(value)) <= MAX_GRID_COORDINATE
             );
         const validPermanentStats = stats =>
-            stats === undefined ||
-            (object(stats) &&
-                PERMANENT_STAT_KEYS.every(key =>
-                    stats[key] === undefined || nonNegative(stats[key])
-                ));
+            stats === undefined || isValidPermanentStats(stats, {
+                allowLegacy: true
+            });
         const validBiome = biome =>
             biome === undefined ||
             (typeof biome === 'string' &&
@@ -403,12 +396,27 @@ export class SaveManager {
 
     static normalizeSave(data) {
         if (!SaveManager.isValidSave(data)) return null;
-        if (data.version === SAVE_VERSION) return data;
+        const normalizedStats = normalizePermanentStats(
+            data.playerShip.permanentStats
+        );
+        if (data.version === SAVE_VERSION) {
+            return {
+                ...data,
+                playerShip: {
+                    ...data.playerShip,
+                    permanentStats: normalizedStats
+                }
+            };
+        }
 
         return {
             ...data,
             version: SAVE_VERSION,
             migratedFrom: LEGACY_SAVE_VERSION,
+            playerShip: {
+                ...data.playerShip,
+                permanentStats: normalizedStats
+            },
             roomSnapshots: [],
             activeWorld: {
                 enemies: [],

@@ -349,13 +349,13 @@ export class HostGameSimulation {
         for (const peer of this.peers.values()) {
             peer.pendingLevelUpChoices = peer.suspended
                 ? null
-                : this.createPeerLevelUpChoices();
+                : this.createPeerLevelUpChoices(peer.ship);
         }
         return true;
     }
 
-    createPeerLevelUpChoices() {
-        return this.levelUpChoiceFactory?.().map(copyUpgradeChoice) || null;
+    createPeerLevelUpChoices(ship) {
+        return this.levelUpChoiceFactory?.(ship).map(copyUpgradeChoice) || null;
     }
 
     applyPeerLevelUp(peer, index) {

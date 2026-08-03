@@ -1,5 +1,9 @@
 import { PartsLibrary, TILE_SIZE } from '../../shared/parts/Part.js';
 import { Projectile } from '../../shared/entities/Projectile.js';
+import {
+    getFamilyDamageMultiplier,
+    getFamilyFireRateMultiplier
+} from '../../shared/combat/WeaponFamilies.js';
 import { dispatchPlayerShot } from './PlayerShotDispatcher.js';
 
 const WEAPON_SOUNDS = {
@@ -77,7 +81,10 @@ export class WeaponSystem {
             }
 
             const rampFactor = (def.stats.rampUp && partRef.rampLevel) ? 1 + partRef.rampLevel : 1;
-            let currentFireRateMul = levelBonus;
+            let currentFireRateMul = levelBonus * getFamilyFireRateMultiplier(
+                game.playerShip,
+                def.stats.weaponGroup
+            );
             if (def.stats.weaponGroup === 'laser') {
                 currentFireRateMul *= accelerantBonus;
             }
@@ -354,6 +361,7 @@ export class WeaponSystem {
                 speed *= game.playerShip.permanentStats.missileSpeedMul || 1.0;
             }
 
+            const family = def.stats.weaponGroup;
             const projectile = new this.ProjectileClass(
                 projectileX,
                 projectileY,
@@ -361,9 +369,23 @@ export class WeaponSystem {
                 def.stats.projectileType || 'bullet',
                 speed,
                 'player',
-                def.stats.damage || 10,
+                (def.stats.damage || 10) * getFamilyDamageMultiplier(
+                    game.playerShip,
+                    family
+                ),
                 def.stats.lifetime
             );
+
+            const permanent = game.playerShip?.permanentStats || {};
+            if (family === 'velocity') {
+                projectile.remainingPierces = Math.floor(
+                    permanent.velocityPierce || 0
+                );
+            } else if (family === 'laser') {
+                projectile.chainCount = Math.floor(permanent.laserChain || 0);
+            } else if (family === 'rocket') {
+                projectile.blastRadiusMul = permanent.rocketBlastMul || 1;
+            }
 
             if (def.stats.projectileType === 'railgun' ||
                 def.stats.projectileType === 'beam_freeze') {

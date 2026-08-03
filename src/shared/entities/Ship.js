@@ -1,5 +1,6 @@
 import { PartsLibrary, PartType, TILE_SIZE } from '../parts/Part.js';
 import { Collision } from '../CollisionSystem.js';
+import { createPermanentStats } from '../combat/WeaponFamilies.js';
 
 export class Ship {
     constructor() {
@@ -25,15 +26,7 @@ export class Ship {
         };
 
         // Permanent Upgrades (Level Up System)
-        this.permanentStats = {
-            hpMul: 1.0,
-            regenAdd: 0.0,
-            velocityRateAdd: 0.0,
-            laserRateAdd: 0.0,
-            speedMul: 1.0,
-            turnMul: 1.0,
-            missileSpeedMul: 1.0
-        };
+        this.permanentStats = createPermanentStats();
 
         this.hp = 0;
         this.maxHp = 0;

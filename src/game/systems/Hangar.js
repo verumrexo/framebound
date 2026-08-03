@@ -1,5 +1,6 @@
 import { Assets } from '../../Assets.js';
 import { PartsLibrary, TILE_SIZE } from '../../shared/parts/Part.js';
+import { getFamilyFireRateMultiplier } from '../../shared/combat/WeaponFamilies.js';
 
 export class Hangar {
     constructor(game) {
@@ -194,10 +195,19 @@ export class Hangar {
         const levelBonus = 1 + (this.game.level - 1) * 0.01;
 
         // Fire Rate Bonuses
-        const velocityFR = Math.round((levelBonus + (perm.velocityRateAdd || 0) - 1) * 100);
+        const velocityFR = Math.round((
+            levelBonus * getFamilyFireRateMultiplier(this.draftShip, 'velocity') - 1
+        ) * 100);
 
         const accelerantBonus = (1 + (stats.accelerantCount || 0) * 0.05);
-        const laserFR = Math.round(((levelBonus * (accelerantBonus + (perm.laserRateAdd || 0))) - 1) * 100);
+        const laserFR = Math.round((
+            levelBonus *
+            accelerantBonus *
+            getFamilyFireRateMultiplier(this.draftShip, 'laser') - 1
+        ) * 100);
+        const rocketFR = Math.round((
+            levelBonus * getFamilyFireRateMultiplier(this.draftShip, 'rocket') - 1
+        ) * 100);
 
         // Turn Speed Calc (Matching PlayerControlSystem)
         const baseTurnRate = 5.0;
@@ -213,6 +223,7 @@ export class Hangar {
             { label: 'max speed', value: `${Math.floor(800 * (1 + (stats.thrust * 0.05)) * levelBonus * (perm.speedMul || 1.0))} km/h`, color: '#89a889' },
             { label: 'velocity rate', value: `+${velocityFR}%`, color: '#ffaa44' },
             { label: 'laser rate', value: `+${laserFR}%`, color: '#ffaa44' },
+            { label: 'missile rate', value: `+${rocketFR}%`, color: '#ffaa44' },
             { label: 'missile speed', value: `+${missileSpeedBonus}%`, color: '#ffaa44' }
         ];
 
@@ -230,10 +241,17 @@ export class Hangar {
         // Permanent Upgrades List
         const upgradeRows = [];
 
-        if (perm.hpMul > 1.0) upgradeRows.push({ label: 'hull Integrity', value: `+${Math.round((perm.hpMul - 1) * 100)}%` });
+        if (perm.hpMul > 1.0) upgradeRows.push({ label: 'hull integrity', value: `+${Math.round((perm.hpMul - 1) * 100)}%` });
         if (perm.regenAdd > 0) upgradeRows.push({ label: 'hull regen', value: `+${perm.regenAdd}/s` });
-        if (perm.velocityRateAdd > 0) upgradeRows.push({ label: 'velocity Rate', value: `+${Math.round(perm.velocityRateAdd * 100)}%` });
+        if (perm.velocityRateAdd > 0) upgradeRows.push({ label: 'velocity rate', value: `+${Math.round(perm.velocityRateAdd * 100)}%` });
+        if (perm.velocityDamageMul > 1) upgradeRows.push({ label: 'ballistic damage', value: `+${Math.round((perm.velocityDamageMul - 1) * 100)}%` });
+        if (perm.velocityPierce > 0) upgradeRows.push({ label: 'ballistic pierce', value: `+${perm.velocityPierce}` });
         if (perm.laserRateAdd > 0) upgradeRows.push({ label: 'laser rate', value: `+${Math.round(perm.laserRateAdd * 100)}%` });
+        if (perm.laserDamageMul > 1) upgradeRows.push({ label: 'laser damage', value: `+${Math.round((perm.laserDamageMul - 1) * 100)}%` });
+        if (perm.laserChain > 0) upgradeRows.push({ label: 'laser chain', value: `+${perm.laserChain}` });
+        if (perm.rocketRateAdd > 0) upgradeRows.push({ label: 'missile rate', value: `+${Math.round(perm.rocketRateAdd * 100)}%` });
+        if (perm.rocketDamageMul > 1) upgradeRows.push({ label: 'missile damage', value: `+${Math.round((perm.rocketDamageMul - 1) * 100)}%` });
+        if (perm.rocketBlastMul > 1) upgradeRows.push({ label: 'blast radius', value: `+${Math.round((perm.rocketBlastMul - 1) * 100)}%` });
         if (perm.speedMul > 1.0) upgradeRows.push({ label: 'flight speed', value: `+${Math.round((perm.speedMul - 1) * 100)}%` });
         if (perm.turnMul > 1.0) upgradeRows.push({ label: 'turn speed', value: `+${Math.round((perm.turnMul - 1) * 100)}%` });
         if (perm.missileSpeedMul > 1.0) upgradeRows.push({ label: 'missile speed', value: `+${Math.round((perm.missileSpeedMul - 1) * 100)}%` });

@@ -5,6 +5,10 @@ import {
     restoreActiveWorld,
     restoreRoomSnapshots
 } from './RoomSnapshotSystem.js';
+import {
+    isValidPermanentStats,
+    normalizePermanentStats
+} from '../../shared/combat/WeaponFamilies.js';
 
 export class PeerWorldReplicator {
     constructor(game, {
@@ -58,9 +62,9 @@ export class PeerWorldReplicator {
 
         game.playerShip.parts = staged.parts;
         game.playerShip.stats = { ...staged.stats };
-        game.playerShip.permanentStats = {
-            ...staged.permanentStats
-        };
+        game.playerShip.permanentStats = normalizePermanentStats(
+            staged.permanentStats
+        );
         game.playerShip.maxHp = staged.maxHp;
         game.playerShip.hp = Math.min(self.hp, staged.maxHp);
         game.playerShip.isDead = self.isDead;
@@ -133,9 +137,9 @@ export class PeerWorldReplicator {
             game.playerShip.permanentStats,
             player.permanentStats
         )) {
-            game.playerShip.permanentStats = {
-                ...player.permanentStats
-            };
+            game.playerShip.permanentStats = normalizePermanentStats(
+                player.permanentStats
+            );
             game.playerShip.recalculateStats?.();
         }
         game.playerShip.hp = Math.min(player.hp, game.playerShip.maxHp);
@@ -245,30 +249,9 @@ function validPlayer(player) {
         player.hp >= 0 &&
         player.maxHp > 0 &&
         player.hp <= player.maxHp &&
-        validPermanentStats(player.permanentStats) &&
+        isValidPermanentStats(player.permanentStats, { allowLegacy: true }) &&
         typeof player.isDead === 'boolean' &&
         typeof player.suspended === 'boolean';
-}
-
-function validPermanentStats(stats) {
-    const keys = [
-        'hpMul',
-        'regenAdd',
-        'velocityRateAdd',
-        'laserRateAdd',
-        'speedMul',
-        'turnMul',
-        'missileSpeedMul'
-    ];
-    return stats !== null &&
-        typeof stats === 'object' &&
-        !Array.isArray(stats) &&
-        Object.keys(stats).every(key => keys.includes(key)) &&
-        keys.every(key =>
-            Number.isFinite(stats[key]) &&
-            stats[key] >= 0 &&
-            stats[key] <= 1000
-        );
 }
 
 function validLevelUp(levelUp) {
@@ -302,12 +285,19 @@ function validUpgradeChoice(choice) {
         [
             'maxHp',
             'regen',
-            'velocityRate',
-            'laserRate',
             'mobility',
-            'missileSpeed'
+            'velocityRateAdd',
+            'velocityDamageMul',
+            'velocityPierce',
+            'laserRateAdd',
+            'laserDamageMul',
+            'laserChain',
+            'rocketRateAdd',
+            'rocketDamageMul',
+            'missileSpeedMul',
+            'rocketBlastMul'
         ].includes(choice.stat) &&
-        ['add', 'multiply'].includes(choice.mode) &&
+        ['add', 'multiply', 'integer'].includes(choice.mode) &&
         typeof choice.desc === 'string' &&
         choice.desc.length > 0 &&
         choice.desc.length <= 200;

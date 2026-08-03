@@ -4,6 +4,14 @@ import {
     UI_FONTS,
     drawUiPanel
 } from '../ui/UiTheme.js';
+import { PartsLibrary } from '../../shared/parts/Part.js';
+import {
+    PERMANENT_STAT_KEYS,
+    getInstalledWeaponFamilies,
+    normalizePermanentStats
+} from '../../shared/combat/WeaponFamilies.js';
+
+const UNIVERSAL_UPGRADES = Object.freeze(['hull', 'regen', 'mobility']);
 
 export class LevelUpManager {
     constructor(game) {
@@ -42,20 +50,58 @@ export class LevelUpManager {
                 desc: 'increases hull regeneration per second'
             },
             {
-                id: 'velocity',
+                id: 'velocity_rate',
+                family: 'velocity',
                 name: ['oiled gears', 'autoloader', 'chain feed', 'hyper-cycling', 'bullet hell', 'lead storm'],
-                stat: 'velocityRate',
+                stat: 'velocityRateAdd',
                 type: 'add',
-                values: [0.05, 0.10, 0.15, 0.25, 0.40, 1.00],
+                values: [0.06, 0.10, 0.16, 0.24, 0.38, 0.70],
                 desc: 'increases fire rate for ballistic weapons'
             },
             {
-                id: 'laser',
-                name: ['polished lens', 'high-yield cap', 'flux agitator', 'resonance chamber', 'beam span', 'solar flare'],
-                stat: 'laserRate',
+                id: 'velocity_damage',
+                family: 'velocity',
+                name: ['dense rounds', 'tungsten feed', 'depleted core', 'mass driver', 'planet cracker', 'terminal velocity'],
+                stat: 'velocityDamageMul',
                 type: 'add',
-                values: [0.05, 0.10, 0.15, 0.25, 0.40, 1.00],
+                values: [0.08, 0.14, 0.22, 0.34, 0.55, 1.00],
+                desc: 'increases ballistic impact damage'
+            },
+            {
+                id: 'velocity_pierce',
+                family: 'velocity',
+                name: ['needlepoint', 'hardpoint', 'overpenetrator', 'linebreaker', 'rail doctrine', 'no safe angle'],
+                stat: 'velocityPierce',
+                type: 'integer',
+                values: [1, 1, 1, 2, 2, 3],
+                desc: 'ballistic rounds pass through extra targets'
+            },
+            {
+                id: 'laser_rate',
+                family: 'laser',
+                name: ['polished lens', 'high-yield cap', 'flux agitator', 'resonance chamber', 'beam span', 'solar flare'],
+                stat: 'laserRateAdd',
+                type: 'add',
+                values: [0.06, 0.10, 0.16, 0.24, 0.38, 0.70],
                 desc: 'increases fire rate for energy weapons'
+            },
+            {
+                id: 'laser_damage',
+                family: 'laser',
+                name: ['hot lens', 'overvoltage', 'plasma focus', 'corona chamber', 'star furnace', 'white horizon'],
+                stat: 'laserDamageMul',
+                type: 'add',
+                values: [0.08, 0.14, 0.22, 0.34, 0.55, 1.00],
+                desc: 'increases laser and beam damage'
+            },
+            {
+                id: 'laser_chain',
+                family: 'laser',
+                name: ['static arc', 'forked current', 'tesla relay', 'storm lattice', 'living lightning', 'god circuit'],
+                stat: 'laserChain',
+                type: 'integer',
+                values: [1, 1, 1, 2, 2, 3],
+                desc: 'energy hits arc into extra nearby targets'
             },
             {
                 id: 'mobility',
@@ -66,12 +112,40 @@ export class LevelUpManager {
                 desc: 'increases max speed and turn rate'
             },
             {
-                id: 'rocket',
-                name: ['solid fuel', 'liquid injection', 'ion thruster', 'plasma wake', 'grav-assist', 'void drive'],
-                stat: 'missileSpeed',
+                id: 'rocket_rate',
+                family: 'rocket',
+                name: ['quick rack', 'hot reload', 'rotary magazine', 'silo logic', 'launch storm', 'endless salvo'],
+                stat: 'rocketRateAdd',
                 type: 'add',
-                values: [0.10, 0.20, 0.35, 0.50, 1.00, 2.00],
+                values: [0.06, 0.10, 0.16, 0.24, 0.38, 0.70],
+                desc: 'increases fire rate for missile weapons'
+            },
+            {
+                id: 'rocket_damage',
+                family: 'rocket',
+                name: ['packed charge', 'shaped warhead', 'thermobaric mix', 'siege payload', 'sun eater', 'apocalypse tube'],
+                stat: 'rocketDamageMul',
+                type: 'add',
+                values: [0.08, 0.14, 0.22, 0.34, 0.55, 1.00],
+                desc: 'increases missile impact and blast damage'
+            },
+            {
+                id: 'rocket_speed',
+                family: 'rocket',
+                name: ['solid fuel', 'liquid injection', 'ion thruster', 'plasma wake', 'grav-assist', 'void drive'],
+                stat: 'missileSpeedMul',
+                type: 'add',
+                values: [0.10, 0.18, 0.28, 0.42, 0.70, 1.20],
                 desc: 'increases travel speed of all missiles'
+            },
+            {
+                id: 'rocket_blast',
+                family: 'rocket',
+                name: ['fragment jacket', 'pressure bloom', 'wide fuse', 'orbital yield', 'city killer', 'false vacuum'],
+                stat: 'rocketBlastMul',
+                type: 'add',
+                values: [0.08, 0.14, 0.22, 0.34, 0.55, 1.00],
+                desc: 'increases missile blast radius'
             }
         ];
 
@@ -88,10 +162,9 @@ export class LevelUpManager {
         this.game.peerNetwork?.beginSharedLevelUp?.();
     }
 
-    generateChoices(forceRarity = null) {
+    generateChoices(forceRarity = null, ship = this.game.playerShip) {
         const choices = [];
-        // Generate 3 unique upgrade categories
-        const availableUpgrades = [...this.upgrades];
+        const availableUpgrades = this.getAvailableUpgrades(ship);
         for (let i = 0; i < 3; i++) {
             if (availableUpgrades.length === 0) break;
             const typeIndex = Math.floor(Math.random() * availableUpgrades.length);
@@ -99,6 +172,14 @@ export class LevelUpManager {
             choices.push(this.generateChoiceForType(type, forceRarity));
         }
         return choices;
+    }
+
+    getAvailableUpgrades(ship = this.game.playerShip) {
+        const installed = getInstalledWeaponFamilies(ship, PartsLibrary);
+        return this.upgrades.filter(upgrade =>
+            UNIVERSAL_UPGRADES.includes(upgrade.id) ||
+            installed[upgrade.family] > 0
+        );
     }
 
     generateChoiceForType(type, forceRarity = null) {
@@ -299,6 +380,10 @@ export class LevelUpManager {
             let prefix = "+";
             if (choice.mode === 'multiply') valStr = `${Math.round(choice.value * 100)}%`;
             else if (choice.stat === 'regen') valStr = `${choice.value}/s`;
+            else if (choice.mode === 'integer') {
+                valStr = `${choice.value} target${choice.value === 1 ? '' : 's'}`;
+                prefix = '+';
+            }
             else valStr = `${Math.round(choice.value * 100)}%`; // Default percent
 
             ctx.fillText(prefix + valStr, cx, y + 140);
@@ -337,23 +422,18 @@ export class LevelUpManager {
 }
 
 export function applyUpgradeToShip(ship, upgrade) {
-    const stats = ship.permanentStats;
+    const stats = normalizePermanentStats(ship.permanentStats);
+    ship.permanentStats = stats;
 
     if (upgrade.stat === 'maxHp') {
         stats.hpMul = (stats.hpMul || 1.0) + upgrade.value;
     } else if (upgrade.stat === 'regen') {
         stats.regenAdd = (stats.regenAdd || 0) + upgrade.value;
-    } else if (upgrade.stat === 'velocityRate') {
-        stats.velocityRateAdd =
-            (stats.velocityRateAdd || 0) + upgrade.value;
-    } else if (upgrade.stat === 'laserRate') {
-        stats.laserRateAdd = (stats.laserRateAdd || 0) + upgrade.value;
     } else if (upgrade.stat === 'mobility') {
         stats.speedMul = (stats.speedMul || 1.0) + upgrade.value;
         stats.turnMul = (stats.turnMul || 1.0) + upgrade.value;
-    } else if (upgrade.stat === 'missileSpeed') {
-        stats.missileSpeedMul =
-            (stats.missileSpeedMul || 1.0) + upgrade.value;
+    } else if (PERMANENT_STAT_KEYS.includes(upgrade.stat)) {
+        stats[upgrade.stat] += upgrade.value;
     } else {
         return false;
     }

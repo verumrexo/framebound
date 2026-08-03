@@ -1,6 +1,7 @@
 import { Projectile } from './Projectile.js';
 import { TILE_SIZE } from '../parts/PartDefinitions.js';
 import { PartsLibrary } from '../parts/Part.js';
+import { getEnemyBlueprint } from '../enemies/EnemyBlueprints.js';
 
 export class Enemy {
     constructor(x, y, type = 'basic', floorLevel = 1, randomGen = null, id = null) {
@@ -21,253 +22,44 @@ export class Enemy {
         this.isWarpingIn = true;
         this.warpTimer = 1.0 + (this.random() * 1.0);
 
-        if (type === 'striker') {
-            // Striker uses user-designed ship with weapon turrets
-            this.rotationOffset = 0;
-            this.maxHp = 120;
-            this.hp = this.maxHp;
-            this.radius = TILE_SIZE * 1.5;
-            this.speed = 160;
-            this.turnRate = 3.5;
-            this.engagementDist = 500;
-            this.detectionDist = 1200;
-            this.damageMultiplier = 0.3; // Nerf damage to 30%
-
-            // Ship-based parts from user design
-            this.shipParts = [
-                { x: 0, y: 0, partId: "core", rotation: 0 },
-                { x: 0, y: 1, partId: "custom_1767997148612", rotation: 1 },
-                { x: 0, y: -1, partId: "custom_1767997148612", rotation: 3 },
-                { x: -1, y: 0, partId: "lps", rotation: 3 }
-            ];
-
-            // Initialize weapon cooldowns for each weapon part
-            this.weaponCooldowns = [];
-            this.activeBursts = []; // Initialize burst state
-            for (const part of this.shipParts) {
-                const def = PartsLibrary[part.partId];
-                if (def && def.type === 'weapon') {
-                    this.weaponCooldowns.push({
-                        part: part,
-                        def: def,
-                        cooldown: this.random() * (def.stats.cooldown || 2),
-                        chargeTimer: 0,
-                        lockedAngle: null
-                    });
-                }
-            }
-
-            this.sprite = null; // Uses parts instead
-            this.shootRate = 0; // Not used, weapons have individual cooldowns
-            this.projectileType = null; // Not used, weapons define their own
-        } else if (type === 'rocketeer') {
-            // Rocketeer - Heavy rocket platform with 4x RocketHE
-            this.rotationOffset = 0;
-            this.maxHp = 200;
-            this.hp = this.maxHp;
-            this.radius = TILE_SIZE * 2.0;
-            this.speed = 80; // Slower due to weight
-            this.turnRate = 2.0;
-            this.engagementDist = 600; // Keep distance
-            this.detectionDist = 1200;
-            this.damageMultiplier = 0.4; // 40% damage to balance 4 rocket launchers
-
-            // Ship parts from user's friend's design
-            this.shipParts = [
-                { x: -1, y: -1, partId: "core", rotation: 0 },
-                { x: -1, y: -2, partId: "hull", rotation: 0 },
-                { x: -2, y: -1, partId: "hull", rotation: 0 },
-                { x: -1, y: 0, partId: "hull", rotation: 0 },
-                { x: 0, y: -1, partId: "hull", rotation: 0 },
-                { x: 0, y: -3, partId: "custom_1768036702131", rotation: 0 },
-                { x: 0, y: 0, partId: "custom_1768036702131", rotation: 1 },
-                { x: -3, y: 0, partId: "custom_1768036702131", rotation: 2 },
-                { x: -3, y: -3, partId: "custom_1768036702131", rotation: 3 },
-                { x: -3, y: -1, partId: "custom_1767997495375", rotation: 1 }
-            ];
-
-            // Initialize weapon cooldowns
-            this.weaponCooldowns = [];
-            this.activeBursts = [];
-            for (const part of this.shipParts) {
-                const def = PartsLibrary[part.partId];
-                if (def && def.type === 'weapon') {
-                    this.weaponCooldowns.push({
-                        part: part,
-                        def: def,
-                        cooldown: this.random() * (def.stats.cooldown || 2),
-                        chargeTimer: 0,
-                        lockedAngle: null
-                    });
-                }
-            }
-
-            this.sprite = null;
-            this.shootRate = 0;
-            this.projectileType = null;
-        } else if (type === 'sniper') {
-            // Sniper - Long-range sniper, stationary until player gets close
-            this.rotationOffset = 0;
-            this.maxHp = 100;
-            this.hp = this.maxHp;
-            this.radius = TILE_SIZE * 1.8;
-            this.speed = 60; // Very slow, prefers to stay still
-            this.turnRate = 1.5; // Slow turn
-            this.engagementDist = 900; // Increased from 150 to 900 for long-range combat
-            this.detectionDist = 1500; // Can see very far
-            this.damageMultiplier = 0.6; // 60% damage
-
-            // Ship parts from user's friend's design
-            this.shipParts = [
-                { x: 1, y: -4, partId: "custom_1768857172136", rotation: 0 },
-                { x: 0, y: -3, partId: "custom_1768676906827", rotation: 1 },
-                { x: 0, y: -2, partId: "core", rotation: 1 },
-                { x: 0, y: -1, partId: "core", rotation: 1 },
-                { x: 0, y: 0, partId: "core", rotation: 1 },
-                { x: 0, y: 1, partId: "custom_1768676906827", rotation: 3 },
-                { x: 1, y: 1, partId: "custom_1768857172136", rotation: 0 },
-                { x: 0, y: -4, partId: "custom_1768410823264", rotation: 0 },
-                { x: 0, y: 2, partId: "custom_1768410823264", rotation: 0 },
-                { x: -2, y: -1, partId: "custom_1768035239205", rotation: 3 },
-                { x: -3, y: -1, partId: "custom_1767997495375", rotation: 1 }
-            ];
-
-            // Initialize weapon cooldowns
-            this.weaponCooldowns = [];
-            this.activeBursts = [];
-            for (const part of this.shipParts) {
-                const def = PartsLibrary[part.partId];
-                if (def && def.type === 'weapon') {
-                    this.weaponCooldowns.push({
-                        part: part,
-                        def: def,
-                        cooldown: this.random() * (def.stats.cooldown || 2)
-                    });
-                }
-            }
-
-            this.sprite = null;
-            this.shootRate = 0;
-            this.projectileType = null;
-        } else if (type === 'hive_carrier') {
-            // Hive Carrier - Cowardly drone spawner
-            this.rotationOffset = 0;
-            this.maxHp = 250;
-            this.hp = this.maxHp;
-            this.radius = TILE_SIZE * 4.0; // Large ship, needs bigger hitbox
-            this.speed = 120; // Moderate speed to run away
-            this.turnRate = 1.8;
-            this.engagementDist = 800; // Wants to stay far away
-            this.detectionDist = 1500;
-            this.damageMultiplier = 0.5;
-
-            // Parts layout provided by user
-            this.shipParts = [
-                { "x": -4, "y": -1, "partId": "custom_1769974460678", "rotation": 3 },
-                { "x": 0, "y": -1, "partId": "custom_1769974460678", "rotation": 1 },
-                { "x": -3, "y": -2, "partId": "custom_1768410823264", "rotation": 1 },
-                { "x": 2, "y": -2, "partId": "custom_1768410823264", "rotation": 1 },
-                { "x": -3, "y": 1, "partId": "custom_1768410823264", "rotation": 1 },
-                { "x": 2, "y": 1, "partId": "custom_1768410823264", "rotation": 1 },
-                { "x": -2, "y": -2, "partId": "custom_1768035239205", "rotation": 1 },
-                { "x": -2, "y": 1, "partId": "custom_1768035239205", "rotation": 1 },
-                { "x": 0, "y": 1, "partId": "custom_1767997148612", "rotation": 1 },
-                { "x": 0, "y": -2, "partId": "custom_1767997148612", "rotation": 3 }
-            ];
-
-            // Hive Carrier has NO direct weapons, only drones.
-            // We consciously DO NOT populate activeBursts or weaponCooldowns here.
-            this.weaponCooldowns = [];
-            this.activeBursts = [];
-
-            this.sprite = null;
-            this.shootRate = 0;
-            this.projectileType = null;
-        } else if (type === 'circler') {
-            // Circler - Fast approach, then circles player shooting rockets
-            this.rotationOffset = 0;
-            this.maxHp = 80;
-            this.hp = this.maxHp;
-            this.radius = TILE_SIZE * 1.3;
-            this.speed = 250; // Very fast initially
-            this.turnRate = 4.0; // Good turning for circling
-            this.engagementDist = 300; // Start circling at this range
-            this.detectionDist = 1200;
-            this.damageMultiplier = 0.5; // 50% damage
-
-            // Circling behavior
-            this.circleAngle = this.random() * Math.PI * 2; // Random starting angle
-            this.circleDirection = this.random() < 0.5 ? 1 : -1; // Clockwise or counter-clockwise
-
-            // Ship parts - booster and 2x rocketle
-            this.shipParts = [
-                { x: -2, y: -1, partId: "custom_1768392079955", rotation: 1 },
-                { x: 0, y: -1, partId: "rocketle", rotation: 1 },
-                { x: 0, y: 0, partId: "rocketle", rotation: 1 },
-                { x: 1, y: -1, partId: "custom_1767997148612", rotation: 0 }
-            ];
-
-            // Initialize weapon cooldowns
-            this.weaponCooldowns = [];
-            this.activeBursts = [];
-            for (const part of this.shipParts) {
-                const def = PartsLibrary[part.partId];
-                if (def && def.type === 'weapon') {
-                    this.weaponCooldowns.push({
-                        part: part,
-                        def: def,
-                        cooldown: this.random() * (def.stats.cooldown || 2)
-                    });
-                }
-            }
-
-            this.sprite = null;
-            this.shootRate = 0;
-            this.projectileType = null;
-        } else {
-            // Basic enemy with ship parts
-            this.rotationOffset = 0;
-            this.maxHp = 50;
-            this.hp = this.maxHp;
-            this.radius = TILE_SIZE * 1.2;
-            this.speed = 100;
-            this.turnRate = 2.5;
-            this.engagementDist = 300;
-            this.detectionDist = 1000;
-
-            // Ship-based parts from user design (centered)
-            this.shipParts = [
-                { x: 0, y: 0, partId: "custom_1768410823264", rotation: 0 },
-                { x: -1, y: 0, partId: "gun_basic", rotation: 0 },
-                { x: -1, y: -1, partId: "custom_1767997148612", rotation: 3 }
-            ];
-
-            // Initialize weapon cooldowns for each weapon part
-            this.weaponCooldowns = [];
-            this.activeBursts = [];
-            for (const part of this.shipParts) {
-                const def = PartsLibrary[part.partId];
-                if (def && def.type === 'weapon') {
-                    this.weaponCooldowns.push({
-                        part: part,
-                        def: def,
-                        cooldown: this.random() * (def.stats.cooldown || 2)
-                    });
-                }
-            }
-
-            this.sprite = null;
-            this.shootRate = 0;
-            this.projectileType = null;
-        }
+        const blueprint = getEnemyBlueprint(type);
+        this.behavior = blueprint.behavior;
+        this.shipParts = blueprint.parts;
+        this.activeBursts = [];
+        this.sprite = null;
+        this.shootRate = 0;
+        this.projectileType = null;
+        this.circleAngle = this.random() * Math.PI * 2;
+        this.circleDirection = this.random() < 0.5 ? 1 : -1;
+        this.supportCooldown = this.random() * 2;
+        this.supportPulseTimer = 0;
+        this.weaponCooldowns = this.shipParts.flatMap(part => {
+            const def = PartsLibrary[part.partId];
+            if (!def || def.type !== 'weapon') return [];
+            return [{
+                part,
+                def,
+                cooldown: this.random() * (def.stats.cooldown || 2),
+                chargeTimer: 0,
+                lockedAngle: null,
+                isCharging: false
+            }];
+        });
+        this.maxHp = blueprint.stats.maxHp;
+        this.hp = this.maxHp;
+        this.radius = TILE_SIZE * blueprint.stats.radiusTiles;
+        this.speed = blueprint.stats.speed;
+        this.turnRate = blueprint.stats.turnRate;
+        this.engagementDist = blueprint.stats.engagementDist;
+        this.detectionDist = blueprint.stats.detectionDist;
+        this.damageMultiplier = blueprint.stats.damageMultiplier;
 
         this.shootCooldown = this.random() * (this.shootRate || 2);
 
-        // Floor-based scaling: 2x HP and damage per floor
-        const floorMultiplier = Math.pow(2, this.floorLevel - 1);
-        this.maxHp *= floorMultiplier;
+        const scaling = getEnemyFloorScaling(this.floorLevel);
+        this.maxHp = Math.round(this.maxHp * scaling.hp);
         this.hp = this.maxHp;
-        this.damageMultiplier = (this.damageMultiplier || 1) * floorMultiplier;
+        this.damageMultiplier = (this.damageMultiplier || 1) * scaling.damage;
 
         // Interpolation
         this.interpolationBuffer = [];
@@ -513,6 +305,7 @@ export class Enemy {
             this.frozenTimer -= dt;
             return;
         }
+        if (this.supportPulseTimer > 0) this.supportPulseTimer -= dt;
 
         if (this.freezeMeter > 0) {
             this.freezeMeter -= dt * 0.5; // Decays
@@ -533,7 +326,7 @@ export class Enemy {
             let moveY = 0;
             let applyMovement = false;
 
-            if (this.type === 'circler') {
+            if (this.behavior === 'orbiter' || this.behavior === 'flanker') {
                 // CIRCLER LOGIC
                 const orbitRange = this.engagementDist * 1.5;
                 const isOrbiting = dist <= orbitRange;
@@ -541,8 +334,8 @@ export class Enemy {
                 if (isOrbiting) {
                     // ORBIT
                     const currentAngle = Math.atan2(this.y - playerY, this.x - playerX);
-                    const direction = 1;
-                    const orbitSpeed = 0.64;
+                    const direction = this.circleDirection;
+                    const orbitSpeed = this.behavior === 'flanker' ? 0.95 : 0.64;
                     const nextAngle = currentAngle + orbitSpeed * direction * dt;
                     const desiredRadius = this.engagementDist * 1.2;
                     const nextRadius = dist + (desiredRadius - dist) * 2.0 * dt;
@@ -580,7 +373,7 @@ export class Enemy {
                     applyMovement = true;
                 }
 
-            } else if (this.type === 'hive_carrier') {
+            } else if (this.behavior === 'carrier' || this.behavior === 'support') {
                 // HIVE CARRIER LOGIC - FLEE/COWARD
 
                 // Leash Logic (Room Based)
@@ -657,8 +450,9 @@ export class Enemy {
                     moveY = Math.sin(this.rotation) * this.speed * dt;
                 }
 
-                // Ensure no weapons
-                if (this.weaponCooldowns.length > 0) this.weaponCooldowns = [];
+                if (this.behavior === 'carrier' && this.weaponCooldowns.length > 0) {
+                    this.weaponCooldowns = [];
+                }
             } else {
                 // STANDARD ENEMY LOGIC
                 const targetRotation = Math.atan2(dy, dx);
@@ -677,6 +471,34 @@ export class Enemy {
                     moveX = Math.cos(this.rotation) * this.speed * dt;
                     moveY = Math.sin(this.rotation) * this.speed * dt;
                     applyMovement = true;
+                }
+            }
+
+            if (this.behavior === 'support') {
+                this.supportCooldown -= dt;
+                if (this.supportCooldown <= 0) {
+                    const damaged = allEnemies
+                        .filter(other =>
+                            other !== this &&
+                            !other.isDead &&
+                            other.hp < other.maxHp &&
+                            Math.hypot(other.x - this.x, other.y - this.y) <= 600
+                        )
+                        .sort((a, b) =>
+                            (a.hp / a.maxHp) - (b.hp / b.maxHp)
+                        )[0];
+                    if (damaged) {
+                        damaged.hp = Math.min(
+                            damaged.maxHp,
+                            damaged.hp + Math.max(8, damaged.maxHp * 0.08)
+                        );
+                        this.supportPulseTimer = 0.45;
+                        this.supportTargetX = damaged.x;
+                        this.supportTargetY = damaged.y;
+                        this.supportCooldown = 3;
+                    } else {
+                        this.supportCooldown = 0.5;
+                    }
                 }
             }
 
@@ -903,4 +725,12 @@ export class Enemy {
         }
     }
 
+}
+
+export function getEnemyFloorScaling(floorLevel) {
+    const floorIndex = Math.max(0, Math.floor(floorLevel || 1) - 1);
+    return {
+        hp: 1 + floorIndex * 0.55 + floorIndex * floorIndex * 0.06,
+        damage: 1 + floorIndex * 0.22 + floorIndex * floorIndex * 0.018
+    };
 }

@@ -1,6 +1,7 @@
 import { Ship } from '../../shared/entities/Ship.js';
 import { Portal } from '../../shared/entities/Portal.js';
 import { Biomes } from '../environment/Biomes.js';
+import { normalizePermanentStats } from '../../shared/combat/WeaponFamilies.js';
 import { RoomType } from '../environment/RoomType.js';
 import { SaveManager } from './SaveManager.js';
 import {
@@ -371,10 +372,9 @@ export class GameSessionSystem {
     stageSavedShip(savedShip) {
         const staged = new this.ShipClass();
         staged.parts.clear();
-        staged.permanentStats = {
-            ...staged.permanentStats,
-            ...(savedShip.permanentStats || {})
-        };
+        staged.permanentStats = normalizePermanentStats(
+            savedShip.permanentStats
+        );
 
         const coreIndex = savedShip.parts.findIndex(part =>
             part.partId === 'core' && part.x === 0 && part.y === 0
