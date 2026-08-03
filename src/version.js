@@ -15,9 +15,12 @@ export const CHANGELOG = [
             'desktop: build checkpoints now reject malformed macos bundles and fake or missing windows installers before ci upload.',
             'desktop: native shell warnings now fail the build instead of hiding in release logs.',
             'refactor: split game.js into focused systems while preserving the original update and draw order.',
+            'ui: added silkscreen and pixelify sans, expanded the original neon spectrum, and made cockpit telemetry optional with the eye candy setting.',
+            'fix: constrained the framebound logo to its menu panel at every supported window size.',
             'visuals: restored distinct projectile families, including green basic shots and long red rockets.',
             'save: room debris, loose rewards, cleared rooms, boss portals, ship parts, and run progress now survive continue and revisits correctly.',
             'fix: main menu return, hangar inventory, booster dash, cleared-room speed, and stale run-state bugs.',
+            'fix: resizing the desktop window now resizes the gameplay canvas instead of stretching the launch resolution.',
             'fix: returning to the main menu now marks the old run stopped so gameplay shortcuts cannot reopen hidden overlays.',
             'fix: offline and host run saves are cleared as soon as the final ship dies, closing the old force-quit continue exploit.',
             'fix: returning to the main menu can no longer lose a race with the old menu fade.',
@@ -46,7 +49,8 @@ export const CHANGELOG = [
             'fix: custom seed and developer keypads now work under the packaged app security policy.',
             'stability: enemy rendering no longer consumes weapon rng, so attack spread cannot change with host framerate.',
             'stability: loot scatter and cluster-child timing now use injectable gameplay rng boundaries for reproducible tests.',
-            'ui: repaired the oversized main menu and made patch notes responsive, focusable, and reliably scrollable.'
+            'ui: repaired the oversized main menu and made patch notes responsive, focusable, and reliably scrollable.',
+            'ui: rebuilt menus, settings, online play, combat telemetry, hangar, map, upgrades, and failure screens around one restrained industrial frame interface.'
         ]
     },
     {

@@ -20,17 +20,18 @@ export class Renderer {
     resize() {
         const dpr = 1; // High DPI disabled due to coordinate mismatches
 
-        // Logical size comes from the CSS layout
+        // Let the stylesheet follow the window. An inline pixel size would
+        // freeze clientWidth/clientHeight at the launch resolution.
+        this.canvas.style.width = '';
+        this.canvas.style.height = '';
+
+        // Logical size comes from the current CSS layout.
         this.width = this.canvas.clientWidth;
         this.height = this.canvas.clientHeight;
 
         // Physical buffer size
         this.canvas.width = Math.floor(this.width * dpr);
         this.canvas.height = Math.floor(this.height * dpr);
-
-        // Force CSS size to match the logical size exactly
-        this.canvas.style.width = this.width + 'px';
-        this.canvas.style.height = this.height + 'px';
 
         // Scale context
         this.ctx.scale(dpr, dpr);

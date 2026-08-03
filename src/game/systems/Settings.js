@@ -20,7 +20,8 @@ export class Settings {
             cursorColor: '#00ffff',
             cursorOutline: true,
             showDamageNumbers: true,
-            damageNumberMode: 'singular'
+            damageNumberMode: 'singular',
+            eyeCandy: true
         };
 
         // State for floaty sliders
@@ -62,9 +63,11 @@ export class Settings {
                 const parsed = this.normalizeGameSettings(JSON.parse(saved));
                 this.game.showDamageNumbers = parsed.showDamageNumbers;
                 this.game.damageNumberMode = parsed.damageNumberMode;
+                this.game.eyeCandy = parsed.eyeCandy;
             } else {
                 this.game.showDamageNumbers = this.defaults.showDamageNumbers;
                 this.game.damageNumberMode = this.defaults.damageNumberMode;
+                this.game.eyeCandy = this.defaults.eyeCandy;
             }
         } catch (e) {
             console.warn('[Settings] Failed to load game settings:', e);
@@ -136,7 +139,10 @@ export class Settings {
                     : this.defaults.showDamageNumbers,
             damageNumberMode: validModes.has(settings.damageNumberMode)
                 ? settings.damageNumberMode
-                : this.defaults.damageNumberMode
+                : this.defaults.damageNumberMode,
+            eyeCandy: typeof settings.eyeCandy === 'boolean'
+                ? settings.eyeCandy
+                : this.defaults.eyeCandy
         };
     }
 
@@ -144,7 +150,8 @@ export class Settings {
         try {
             localStorage.setItem('framebound_game_settings', JSON.stringify({
                 showDamageNumbers: this.game.showDamageNumbers,
-                damageNumberMode: this.game.damageNumberMode
+                damageNumberMode: this.game.damageNumberMode,
+                eyeCandy: this.game.eyeCandy !== false
             }));
         } catch (e) {
             console.warn('[Settings] Failed to save game settings:', e);
@@ -197,135 +204,9 @@ export class Settings {
         const settings = this.game.cursorSettings;
 
         parentOverlay.innerHTML = `
-            <style>
-                .settings-container {
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    width: 700px;
-                    padding: 20px;
-                }
-                .settings-content {
-                    width: 100%;
-                    display: grid;
-                    grid-template-columns: 1fr 1fr;
-                    gap: 30px;
-                    max-height: 70vh;
-                    overflow-y: auto;
-                    padding-right: 15px;
-                    scrollbar-width: thin;
-                }
-                .setting-group-label {
-                    grid-column: span 2;
-                    color: #444;
-                    font-size: 10px;
-                    border-bottom: 2px solid #222;
-                    padding-bottom: 8px;
-                    margin-top: 20px;
-                    text-transform: lowercase;
-                    letter-spacing: 4px;
-                }
-                .setting-row {
-                    display: flex;
-                    flex-direction: column;
-                    gap: 12px;
-                }
-                .label-row {
-                    display: flex;
-                    justify-content: space-between;
-                    font-size: 12px;
-                    color: #888;
-                    text-transform: lowercase;
-                }
-                .val-display {
-                    color: #00ffff;
-                    font-shadow: 0 0 10px rgba(0, 255, 255, 0.5);
-                    min-width: 45px;
-                    text-align: right;
-                }
-                
-                /* THE FLOATY SLIDER */
-                .slider-outer {
-                    position: relative;
-                    width: 100%;
-                    height: 24px;
-                    display: flex;
-                    align-items: center;
-                    cursor: pointer;
-                }
-                .slider-track {
-                    width: 100%;
-                    height: 4px;
-                    background: #111;
-                    border: 1px solid #333;
-                    border-radius: 2px;
-                }
-                .slider-fill {
-                    position: absolute;
-                    left: 0;
-                    height: 4px;
-                    background: linear-gradient(90deg, #004444, #00ffff);
-                    border-radius: 2px;
-                    pointer-events: none;
-                    box-shadow: 0 0 15px rgba(0, 255, 255, 0.3);
-                }
-                .slider-thumb {
-                    position: absolute;
-                    width: 14px;
-                    height: 20px;
-                    background: #00ffff;
-                    border: 1px solid white;
-                    box-shadow: 0 0 15px #00ffff, inset 0 0 5px white;
-                    border-radius: 2px;
-                    pointer-events: none;
-                    transform: translateX(-50%);
-                    z-index: 2;
-                }
-                .slider-input {
-                    position: absolute;
-                    width: 100%;
-                    height: 100%;
-                    opacity: 0;
-                    cursor: pointer;
-                    z-index: 3;
-                }
-
-                .checkbox-row {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    color: #888;
-                    font-size: 12px;
-                    text-transform: lowercase;
-                    padding: 5px 0;
-                }
-                .setting-checkbox {
-                    width: 18px;
-                    height: 18px;
-                    cursor: pointer;
-                    accent-color: #00ffff;
-                }
-                .color-row {
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    color: #888;
-                    font-size: 12px;
-                    text-transform: lowercase;
-                    padding: 5px 0;
-                }
-                .color-picker {
-                    width: 40px;
-                    height: 24px;
-                    border: 1px solid #333;
-                    background: #111;
-                    cursor: pointer;
-                    padding: 0;
-                }
-            </style>
-
             <div class="settings-container">
-                <h2 style="color: #00ffff; margin-bottom: 40px; font-size: 32px; text-shadow: 0 0 20px #00ffff; text-transform: lowercase; letter-spacing: -2px;">terminal config</h2>
+                <div class="ui-kicker">frame operating parameters</div>
+                <h2 class="settings-title">system settings</h2>
                 
                 <div class="settings-content">
                     <div class="setting-group-label">acoustic output</div>
@@ -352,7 +233,7 @@ export class Settings {
                         <div class="label-row">
                             <span>reticle geometry</span>
                         </div>
-                        <select id="sel-cursorShape" style="background: #111; color: #00ffff; border: 1px solid #333; padding: 8px; font-family: 'Press Start 2P'; font-size: 10px; width: 100%; cursor: pointer; text-transform: lowercase;">
+                        <select id="sel-cursorShape" class="ui-select">
                             <option value="dot" ${settings.shape === 'dot' ? 'selected' : ''}>nanopoint</option>
                             <option value="circle" ${settings.shape === 'circle' ? 'selected' : ''}>orbital ring</option>
                             <option value="3-lines" ${settings.shape === '3-lines' ? 'selected' : ''}>tri-focus</option>
@@ -377,6 +258,11 @@ export class Settings {
                     <div class="setting-group-label">combat telemetry</div>
 
                     <div class="checkbox-row">
+                        <span>eye candy</span>
+                        <input type="checkbox" id="chk-eyeCandy" class="setting-checkbox" ${this.game.eyeCandy !== false ? 'checked' : ''}>
+                    </div>
+
+                    <div class="checkbox-row">
                         <span>damage popups</span>
                         <input type="checkbox" id="chk-showDamage" class="setting-checkbox" ${this.game.showDamageNumbers ? 'checked' : ''}>
                     </div>
@@ -385,14 +271,14 @@ export class Settings {
                         <div class="label-row">
                             <span>damage logic</span>
                         </div>
-                        <select id="sel-damageMode" style="background: #111; color: #00ffff; border: 1px solid #333; padding: 8px; font-family: 'Press Start 2P'; font-size: 10px; width: 100%; cursor: pointer; text-transform: lowercase;">
+                        <select id="sel-damageMode" class="ui-select">
                             <option value="singular" ${this.game.damageNumberMode === 'singular' ? 'selected' : ''}>discrete</option>
                             <option value="additive" ${this.game.damageNumberMode === 'additive' ? 'selected' : ''}>accumulative</option>
                         </select>
                     </div>
                 </div>
 
-                <button id="btn-settings-back" class="menu-btn" style="width: 280px; margin-top: 50px; font-size: 14px;">return to main_process</button>
+                <button id="btn-settings-back" class="menu-btn settings-back" data-index="esc">back</button>
             </div>
         `;
 
@@ -438,9 +324,11 @@ export class Settings {
 
             const chkShowDamage = document.getElementById('chk-showDamage');
             const selDamageMode = document.getElementById('sel-damageMode');
+            const chkEyeCandy = document.getElementById('chk-eyeCandy');
 
             if (chkShowDamage) chkShowDamage.onchange = (e) => { this.game.showDamageNumbers = e.target.checked; this.saveGameSettings(); };
             if (selDamageMode) selDamageMode.onchange = (e) => { this.game.damageNumberMode = e.target.value; this.saveGameSettings(); };
+            if (chkEyeCandy) chkEyeCandy.onchange = (e) => { this.game.eyeCandy = e.target.checked; this.saveGameSettings(); };
 
             if (btnBack) btnBack.onclick = () => {
                 this.stopUpdating();

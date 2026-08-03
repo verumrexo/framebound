@@ -38,7 +38,8 @@ test('stored settings reject markup and clamp malformed numeric values', (t) => 
         })],
         ['framebound_game_settings', JSON.stringify({
             showDamageNumbers: 'yes',
-            damageNumberMode: '<script>'
+            damageNumberMode: '<script>',
+            eyeCandy: 'absolutely'
         })]
     ]);
     globalThis.localStorage = {
@@ -59,9 +60,51 @@ test('stored settings reject markup and clamp malformed numeric values', (t) => 
         });
         assert.equal(game.showDamageNumbers, true);
         assert.equal(game.damageNumberMode, 'singular');
+        assert.equal(game.eyeCandy, true);
         assert.equal(settings.sliderStates.cursorThickness.current, 10);
         assert.equal(settings.sliderStates.cursorLength.current, 5);
         assert.equal(settings.sliderStates.cursorGap.current, 3);
+    } finally {
+        globalThis.localStorage = originalStorage;
+    }
+});
+
+test('eye candy can be disabled and remains a strict boolean', () => {
+    const settings = Object.create(Settings.prototype);
+    settings.defaults = {
+        showDamageNumbers: true,
+        damageNumberMode: 'singular',
+        eyeCandy: true
+    };
+
+    assert.equal(settings.normalizeGameSettings({ eyeCandy: false }).eyeCandy, false);
+    assert.equal(settings.normalizeGameSettings({ eyeCandy: 0 }).eyeCandy, true);
+});
+
+test('eye candy is persisted with the other game settings', () => {
+    const originalStorage = globalThis.localStorage;
+    let saved = null;
+    globalThis.localStorage = {
+        setItem: (key, value) => { saved = [key, JSON.parse(value)]; }
+    };
+
+    try {
+        const settings = Object.create(Settings.prototype);
+        settings.game = {
+            showDamageNumbers: true,
+            damageNumberMode: 'singular',
+            eyeCandy: false
+        };
+        settings.saveGameSettings();
+
+        assert.deepEqual(saved, [
+            'framebound_game_settings',
+            {
+                showDamageNumbers: true,
+                damageNumberMode: 'singular',
+                eyeCandy: false
+            }
+        ]);
     } finally {
         globalThis.localStorage = originalStorage;
     }

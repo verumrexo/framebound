@@ -19,6 +19,8 @@ function createHarness(overrides = {}) {
         arc: (...args) => calls.push(['arc', ...args]),
         stroke: () => calls.push(['stroke']),
         fill: () => calls.push(['fill']),
+        moveTo: (...args) => calls.push(['moveTo', ...args]),
+        lineTo: (...args) => calls.push(['lineTo', ...args]),
         save: () => calls.push(['save']),
         restore: () => calls.push(['restore']),
         translate: (...args) => calls.push(['translate', ...args])
@@ -47,13 +49,18 @@ function createHarness(overrides = {}) {
             hp: 75,
             maxHp: 100,
             stats: { boosterCount: 0 },
-            getUniqueParts: () => []
+            getUniqueParts: () => new Set()
         },
         input: { getMousePos: () => ({ x: 100, y: 150 }) },
         xp: 25,
         xpToNext: 100,
         level: 2,
         floor: 3,
+        x: 640,
+        y: 360,
+        rotation: 0,
+        enemies: [],
+        eyeCandy: false,
         gold: 9,
         vx: 3,
         vy: 4,
@@ -102,20 +109,40 @@ test('normal hud preserves bars, minimap anchoring, frame accounting, and final 
     assert.deepEqual(
         calls.filter(call => call[0] === 'text').map(call => call[1]),
         [
-            'integrity',
+            'ap // frame integrity',
             '75/100',
             '75%',
-            'tab for hangar',
-            'lvl 2 | floor 3',
-            '$ 9',
-            'speed: 5',
-            'score: 12',
-            'fps: 60',
-            '1.1.0 [beta] | seed: 17'
+            'level 2',
+            'xp 25/100',
+            'floor // 3',
+            'credits // 9',
+            'score // 12',
+            'spd // 5',
+            'tab // hangar',
+            'fps 60',
+            '1.1.0 // beta // seed: 17'
         ]
     );
     assert.ok(calls.find(call => call[0] === 'minimap'));
     assert.deepEqual(calls.slice(-2).map(call => call[0]), ['notifications', 'cursor']);
+});
+
+test('eye candy adds cockpit telemetry without replacing the required hud', () => {
+    const { game, calls, hud } = createHarness({ eyeCandy: true });
+    game.enemies = [{ isDead: false }, { isDead: true }];
+
+    hud.draw();
+
+    const text = calls.filter(call => call[0] === 'text').map(call => call[1]);
+    assert.ok(text.includes('ap // frame integrity'));
+    assert.ok(text.includes('heading // n 000'));
+    assert.ok(text.includes('weapon bus // linked'));
+    assert.ok(text.includes('contacts // 01'));
+    assert.ok(text.includes('nav // x 640  y 360'));
+    game.vx = 12;
+    game.vy = 5;
+    hud.draw();
+    assert.deepEqual(hud.speedHistory, [5, 13]);
 });
 
 test('hangar, ship builder, and game-over modes keep their original precedence', () => {
@@ -135,7 +162,7 @@ test('hangar, ship builder, and game-over modes keep their original precedence',
     gameOver.game.isGameOver = true;
     gameOver.hud.draw();
     assert.ok(gameOver.calls.find(call => call[0] === 'text' && call[1] === 'frame destroyed'));
-    assert.ok(gameOver.calls.find(call => call[0] === 'text' && call[1] === 'FINAL SCORE: 12'));
+    assert.ok(gameOver.calls.find(call => call[0] === 'text' && call[1] === 'final score // 12'));
 });
 
 test('item tooltip keeps bobbed world hit testing, positioning, and hangar content', () => {
@@ -164,7 +191,7 @@ test('minigun indicator keeps peak priority and chooses the lower remaining peak
     const first = { partId: 'mini', peakMeter: 2, cooldown: 0, rampLevel: 3 };
     const second = { partId: 'mini', peakMeter: 1, cooldown: 0, rampLevel: 3 };
     const { game, calls } = createHarness();
-    game.playerShip.getUniqueParts = () => [first, second];
+    game.playerShip.getUniqueParts = () => new Set([first, second]);
     const hud = new HudRenderer(game, {
         partsLibrary: {
             mini: { stats: { rampUp: true, peakDuration: 5 } }

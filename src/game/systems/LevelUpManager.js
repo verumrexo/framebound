@@ -1,4 +1,10 @@
 
+import {
+    UI_COLORS,
+    UI_FONTS,
+    drawUiPanel
+} from '../ui/UiTheme.js';
+
 export class LevelUpManager {
     constructor(game) {
         this.game = game;
@@ -222,23 +228,27 @@ export class LevelUpManager {
         const ctx = renderer.ctx;
 
         // Overlay
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+        ctx.fillStyle = 'rgba(3, 4, 3, 0.88)';
         ctx.fillRect(0, 0, renderer.width, renderer.height);
 
         // Header
-        ctx.fillStyle = '#fff';
-        ctx.font = "bold 24px 'Press Start 2P'";
+        ctx.fillStyle = UI_COLORS.green;
+        ctx.font = UI_FONTS.small;
         ctx.textAlign = 'center';
-        ctx.fillText("system upgrade ready", renderer.width / 2, 100);
+        ctx.fillText('frame enhancement // authorization required', renderer.width / 2, 74);
 
-        ctx.font = "12px 'Press Start 2P'";
-        ctx.fillStyle = '#aaa';
+        ctx.font = UI_FONTS.large;
+        ctx.fillStyle = UI_COLORS.bright;
+        ctx.fillText('select enhancement', renderer.width / 2, 118);
+
+        ctx.font = UI_FONTS.small;
+        ctx.fillStyle = UI_COLORS.muted;
         ctx.fillText(
             this.selectionPending
                 ? "waiting for crew"
-                : "select an enhancement",
+                : "one selection will be installed immediately",
             renderer.width / 2,
-            130
+            144
         );
 
         if (this.selectionPending || this.choices.length < 3) return;
@@ -257,18 +267,14 @@ export class LevelUpManager {
             const y = startY;
             const isHover = (i === this.hoveredIndex);
 
-            // Card BG
-            ctx.fillStyle = '#111';
-            ctx.fillRect(x, y, cw, ch);
-
-            // Border (Rarity Color)
-            ctx.strokeStyle = choice.rarity.color;
-            ctx.lineWidth = isHover ? 4 : 2;
+            drawUiPanel(ctx, x, y, cw, ch, choice.rarity.color);
+            ctx.strokeStyle = isHover ? choice.rarity.color : UI_COLORS.line;
+            ctx.lineWidth = isHover ? 2 : 1;
             ctx.strokeRect(x, y, cw, ch);
 
             if (isHover) {
                 ctx.fillStyle = choice.rarity.color;
-                ctx.globalAlpha = 0.1;
+                ctx.globalAlpha = 0.08;
                 ctx.fillRect(x, y, cw, ch);
                 ctx.globalAlpha = 1.0;
             }
@@ -278,18 +284,17 @@ export class LevelUpManager {
 
             // Rarity Label
             ctx.fillStyle = choice.rarity.color;
-            ctx.font = "10px 'Press Start 2P'";
+            ctx.font = UI_FONTS.tiny;
             ctx.textAlign = 'center';
-            ctx.fillText(choice.rarity.name, cx, y + 30);
+            ctx.fillText(`${String(i + 1).padStart(2, '0')} // ${choice.rarity.name}`, cx, y + 30);
 
             // Upgrade Name
-            ctx.fillStyle = '#fff';
-            // Wrap text if needed? Basic Implementation first
-            ctx.font = "12px 'Press Start 2P'";
+            ctx.fillStyle = UI_COLORS.bright;
+            ctx.font = UI_FONTS.label;
             this.wrapText(ctx, choice.name, cx, y + 70, cw - 20, 16);
 
             // Stat Value
-            ctx.font = "24px 'Press Start 2P'";
+            ctx.font = UI_FONTS.title;
             let valStr = "";
             let prefix = "+";
             if (choice.mode === 'multiply') valStr = `${Math.round(choice.value * 100)}%`;
@@ -299,8 +304,8 @@ export class LevelUpManager {
             ctx.fillText(prefix + valStr, cx, y + 140);
 
             // Description
-            ctx.fillStyle = '#888';
-            ctx.font = "8px 'Press Start 2P'";
+            ctx.fillStyle = UI_COLORS.muted;
+            ctx.font = UI_FONTS.tiny;
             this.wrapText(ctx, choice.desc, cx, y + 200, cw - 20, 12);
         }
     }

@@ -1,4 +1,5 @@
 import { RoomType } from '../environment/RoomType.js';
+import { UI_COLORS, UI_FONTS } from './UiTheme.js';
 
 export class FullscreenMap {
     constructor(game) {
@@ -122,12 +123,16 @@ export class FullscreenMap {
         ctx.save();
 
         // Darkened background behind map
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+        ctx.fillStyle = 'rgba(3, 4, 3, 0.9)';
         ctx.fillRect(0, 0, renderer.width, renderer.height);
 
         // Map Panel
-        ctx.fillStyle = '#1a1a20';
+        ctx.fillStyle = '#0b0d0b';
         ctx.fillRect(dims.x, dims.y, dims.width, dims.height);
+        ctx.strokeStyle = UI_COLORS.line;
+        ctx.strokeRect(dims.x, dims.y, dims.width, dims.height);
+        ctx.fillStyle = UI_COLORS.green;
+        ctx.fillRect(dims.x, dims.y, 3, dims.height);
 
         // Grid pattern
         ctx.strokeStyle = 'rgba(255, 255, 255, 0.03)';
@@ -195,7 +200,7 @@ export class FullscreenMap {
                 if (room === hoveredRoom) {
                     ctx.fillStyle = '#222';
                     ctx.shadowBlur = 20;
-                    ctx.shadowColor = '#00ffff';
+                    ctx.shadowColor = UI_COLORS.amber;
                 }
 
                 ctx.fillRect(pos.x, pos.y, w, h);
@@ -212,7 +217,7 @@ export class FullscreenMap {
                     color = '#222';
                 }
 
-                if (room === hoveredRoom) color = '#00ffff';
+                if (room === hoveredRoom) color = UI_COLORS.amber;
 
                 ctx.strokeStyle = color;
                 ctx.lineWidth = (room === this.game.currentRoom || room === hoveredRoom) ? 2 : 1;
@@ -223,8 +228,8 @@ export class FullscreenMap {
 
                 // "TELEPORT" Text on Hover
                 if (room === hoveredRoom && isVisited && room !== this.game.currentRoom) {
-                    ctx.fillStyle = '#00ffff';
-                    ctx.font = '16px "Press Start 2P"';
+                    ctx.fillStyle = UI_COLORS.amber;
+                    ctx.font = UI_FONTS.small;
                     ctx.textAlign = 'center';
                     ctx.textBaseline = 'middle';
                     ctx.fillText('teleport', pos.x + w / 2, pos.y + h / 2 + 20);
@@ -234,8 +239,8 @@ export class FullscreenMap {
 
         // 3. Draw Player
         const pPos = transform.worldToMap(this.game.x, this.game.y);
-        ctx.fillStyle = '#44ff44';
-        ctx.shadowColor = '#44ff44';
+        ctx.fillStyle = UI_COLORS.greenBright;
+        ctx.shadowColor = UI_COLORS.greenBright;
         ctx.shadowBlur = 10;
         ctx.beginPath();
         ctx.arc(pPos.x, pPos.y, 6, 0, Math.PI * 2);
@@ -245,14 +250,18 @@ export class FullscreenMap {
         // 4. Instructions
         ctx.restore(); // Drop clip
 
-        ctx.fillStyle = '#fff';
-        ctx.textAlign = 'center';
-        ctx.font = '24px "Press Start 2P"';
-        ctx.fillText('tactical map', renderer.width / 2, dims.y - 20);
+        ctx.textAlign = 'left';
+        ctx.fillStyle = UI_COLORS.green;
+        ctx.font = UI_FONTS.tiny;
+        ctx.fillText('navigation matrix // visited sectors', dims.x, dims.y - 42);
+        ctx.fillStyle = UI_COLORS.bright;
+        ctx.font = UI_FONTS.title;
+        ctx.fillText('tactical map', dims.x, dims.y - 14);
 
-        ctx.font = '14px "Press Start 2P"';
-        ctx.fillStyle = '#888';
-        ctx.fillText('[m] or [esc] to close', renderer.width / 2, dims.y + dims.height + 30);
+        ctx.textAlign = 'right';
+        ctx.font = UI_FONTS.small;
+        ctx.fillStyle = UI_COLORS.muted;
+        ctx.fillText('m / esc // close', dims.x + dims.width, dims.y + dims.height + 28);
     }
 
     drawRoomIcon(ctx, room, cx, cy, scale) {
