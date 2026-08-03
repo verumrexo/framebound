@@ -3,6 +3,7 @@ import { PartsLibrary, TILE_SIZE } from '../../shared/parts/Part.js';
 import { ItemPickup } from '../../shared/entities/ItemPickup.js';
 import { Collision } from '../../shared/CollisionSystem.js';
 import { hasLoadedSound } from './GameAudio.js';
+import { damageSourceFromProjectile } from './CombatTelemetry.js';
 
 export class ProjectileSystem {
     constructor(game, {
@@ -77,7 +78,13 @@ function updateProjectiles(dt, random) {
                                 const dist = Math.hypot(enemy.x - p.x, enemy.y - p.y);
                                 const hX = p.x + Math.cos(p.angle) * dist;
                                 const hY = p.y + Math.sin(p.angle) * dist;
-                                this.spawnDamageNumber(hX, hY, p.damage);
+                                this.spawnDamageNumber(
+                                    hX,
+                                    hY,
+                                    p.damage,
+                                    false,
+                                    damageSourceFromProjectile(p)
+                                );
                                 p.targetHits.set(enemy, now);
                                 const isFreeze = p.type === 'beam_freeze';
                                 const hitVol = isFreeze ? 0.05 : 0.3;
@@ -95,7 +102,13 @@ function updateProjectiles(dt, random) {
                         if (hitResult.hit) {
                             enemy.takeDamage(p.damage, p.type);
                             applyEnergyChain(this, p, enemy);
-                            this.spawnDamageNumber(p.x, p.y, p.damage);
+                            this.spawnDamageNumber(
+                                p.x,
+                                p.y,
+                                p.damage,
+                                false,
+                                damageSourceFromProjectile(p)
+                            );
                             this.audio.play('hit', { volume: 0.5, pitch: 1.3, randomizePitch: 0.1 });
                             consumeDirectHit(p, enemy);
                             markExplosion(p);
@@ -127,7 +140,13 @@ function updateProjectiles(dt, random) {
                                 applyEnergyChain(this, p, boss);
                                 const hX = p.x + Math.cos(p.angle) * bx;
                                 const hY = p.y + Math.sin(p.angle) * bx;
-                                this.spawnDamageNumber(hX, hY, p.damage);
+                                this.spawnDamageNumber(
+                                    hX,
+                                    hY,
+                                    p.damage,
+                                    false,
+                                    damageSourceFromProjectile(p)
+                                );
                                 p.targetHits.set(boss, now);
                                 const isFreeze = p.type === 'beam_freeze';
                                 const hitVol = isFreeze ? 0.08 : 0.4;
@@ -148,7 +167,13 @@ function updateProjectiles(dt, random) {
                         if (hitResult.hit) {
                             boss.takeDamage(p.damage, p.type);
                             applyEnergyChain(this, p, boss);
-                            this.spawnDamageNumber(p.x, p.y, p.damage);
+                            this.spawnDamageNumber(
+                                p.x,
+                                p.y,
+                                p.damage,
+                                false,
+                                damageSourceFromProjectile(p)
+                            );
                             this.audio.play('hit', { volume: 0.8, pitch: 0.8 });
                             consumeDirectHit(p, boss);
                             markExplosion(p);
@@ -162,6 +187,7 @@ function updateProjectiles(dt, random) {
                     if (p.isDead && !p.isBeam) break;
                     const wreck = this.shipwrecks[j];
                     if (wreck.isDead) continue;
+                    if (!p.isBeam && hasHitTarget(p, wreck)) continue;
                     const dx = p.x - wreck.x;
                     const dy = p.y - wreck.y;
                     if (dx * dx + dy * dy > 400 * 400) continue;
@@ -185,7 +211,7 @@ function updateProjectiles(dt, random) {
                     } else {
                         const hitResult = wreck.takeDamage(p.damage, p.x, p.y);
                         if (hitResult && hitResult.destroyed !== undefined) {
-                            p.isDead = true;
+                            consumeDirectHit(p, wreck);
                             markExplosion(p);
                             this.audio.play('hit', { volume: 0.4, pitch: 0.8 });
                             if (hitResult.destroyed && hitResult.shouldDrop) {
@@ -203,6 +229,7 @@ function updateProjectiles(dt, random) {
                 for (const asteroid of this.asteroids) {
                     if (p.isDead && !p.isBeam) break;
                     if (asteroid.isDead || asteroid.isBroken) continue;
+                    if (!p.isBeam && hasHitTarget(p, asteroid)) continue;
                     if (p.isBeam) {
                         if (Collision.beamCircle(p.x, p.y, p.angle, p.beamLength, p.radius || 10, asteroid.x, asteroid.y, asteroid.radius)) {
                             const now = Date.now();
@@ -222,7 +249,7 @@ function updateProjectiles(dt, random) {
                         const minDist = (p.radius || 4) + asteroid.radius;
                         if (distSq < minDist * minDist) {
                             if (asteroid.takeDamage(p.damage)) this.spawnAsteroidLoot(asteroid);
-                            p.isDead = true;
+                            consumeDirectHit(p, asteroid);
                             markExplosion(p);
                             this.audio.play('hit', { volume: 0.4, pitch: 0.5 });
                         }
@@ -233,6 +260,7 @@ function updateProjectiles(dt, random) {
                 for (const crate of this.lootCrates) {
                     if (p.isDead && !p.isBeam) break;
                     if (crate.isOpened) continue;
+                    if (!p.isBeam && hasHitTarget(p, crate)) continue;
                     if (p.isBeam) {
                         const tdx = crate.x - p.x;
                         const tdy = crate.y - p.y;
@@ -258,7 +286,7 @@ function updateProjectiles(dt, random) {
                         if (distSq < minDist * minDist) {
                             if (crate.takeDamage(p.damage)) this.spawnCrateLoot(crate);
                             else crate.rotSpeed += (random() - 0.5) * 3;
-                            p.isDead = true;
+                            consumeDirectHit(p, crate);
                             markExplosion(p);
                             this.audio.play('hit', { volume: 0.3, pitch: 1.2 });
                         }
@@ -269,6 +297,7 @@ function updateProjectiles(dt, random) {
                 for (const drone of this.drones) {
                     if (p.isDead && !p.isBeam) break;
                     if (drone.isDead || drone.owner !== 'enemy') continue;
+                    if (!p.isBeam && hasHitTarget(p, drone)) continue;
                     if (p.isBeam) {
                         const tdx = drone.x - p.x;
                         const tdy = drone.y - p.y;
@@ -292,10 +321,10 @@ function updateProjectiles(dt, random) {
                         const minDist = (p.radius || 4) + (drone.radius || 8);
                         if (distSq < minDist * minDist) {
                             drone.takeDamage(p.damage);
-                            p.isDead = true;
+                            consumeDirectHit(p, drone);
                             markExplosion(p);
                             this.audio.play('hit', { volume: 0.3, pitch: 1.5 });
-                            break;
+                            if (p.isDead) break;
                         }
                     }
                 }
@@ -413,7 +442,13 @@ function updateProjectiles(dt, random) {
                         if (distSq < (radius + (enemy.radius || 20)) ** 2) {
                             const aoeDmg = Math.ceil(p.damage * 0.5);
                             enemy.takeDamage(aoeDmg, p.type);
-                            this.spawnDamageNumber(enemy.x, enemy.y, aoeDmg);
+                            this.spawnDamageNumber(
+                                enemy.x,
+                                enemy.y,
+                                aoeDmg,
+                                false,
+                                damageSourceFromProjectile(p)
+                            );
                         }
                     }
 
@@ -426,7 +461,13 @@ function updateProjectiles(dt, random) {
                         if (distSq < (radius + (boss.radius || 60)) ** 2) {
                             const aoeDmg = Math.ceil(p.damage * 0.5);
                             boss.takeDamage(aoeDmg, p.type);
-                            this.spawnDamageNumber(boss.x, boss.y, aoeDmg);
+                            this.spawnDamageNumber(
+                                boss.x,
+                                boss.y,
+                                aoeDmg,
+                                false,
+                                damageSourceFromProjectile(p)
+                            );
                             if (!boss.isDead) boss.flash = 5;
                         }
                     }
@@ -542,7 +583,13 @@ function applyEnergyChain(game, projectile, primaryTarget) {
 
         damage *= 0.55;
         next.takeDamage(damage, projectile.type);
-        game.spawnDamageNumber(next.x, next.y, damage);
+        game.spawnDamageNumber(
+            next.x,
+            next.y,
+            damage,
+            false,
+            damageSourceFromProjectile(projectile)
+        );
         game.spawnExplosion(next.x, next.y, 8, 0.18, '#35f2ff');
         if (game.network?.isConnected && next.id !== undefined) {
             game.network.sendEnemyHit(next.id, damage, next.isDead);

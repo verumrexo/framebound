@@ -73,3 +73,26 @@ test('transient effects expire without skipping adjacent entries', () => {
     assert.deepEqual(game.explosions, [{ life: 0.75 }]);
     assert.deepEqual(game.notifications, [{ life: 0.75 }]);
 });
+
+test('damage numbers preserve weapon attribution and do not merge families', () => {
+    const recorded = [];
+    const { game, system } = createSystem({
+        damageNumberMode: 'additive',
+        combatTelemetry: {
+            record: (...args) => recorded.push(args)
+        }
+    });
+    system.spawnDamageNumber(20, 30, 7, false, {
+        family: 'velocity',
+        partKey: 'dart@-1,0'
+    });
+    system.spawnDamageNumber(20, 30, 8, false, {
+        family: 'laser',
+        partKey: 'lps@1,0'
+    });
+
+    assert.equal(game.damageNumbers.length, 2);
+    assert.deepEqual(recorded.map(call => call[0]), [7, 8]);
+    assert.equal(game.damageNumbers[0].source.family, 'velocity');
+    assert.equal(game.damageNumbers[1].source.family, 'laser');
+});

@@ -1,7 +1,7 @@
 import { PartType } from './PartDefinitions.js';
 
 const PART_TYPES = new Set(Object.values(PartType));
-const WEAPON_GROUPS = new Set(['velocity', 'laser', 'rocket', 'utility']);
+const WEAPON_GROUPS = new Set(['velocity', 'laser', 'rocket', 'drone', 'utility']);
 
 /** @param {unknown} library */
 export function validatePartsLibrary(library) {
@@ -62,6 +62,22 @@ export function validatePartDefinition(libraryId, definition) {
             )
         ) {
             throw new TypeError(`weapon ${libraryId} has an unknown group`);
+        }
+    }
+
+    if (definition.type === PartType.DRONE) {
+        for (const key of [
+            'droneSpawnCooldown',
+            'droneCapacity',
+            'droneDamage',
+            'droneAttackCooldown'
+        ]) {
+            if (!positiveNumber(definition.stats[key])) {
+                throw new TypeError(`drone part ${libraryId} must have a positive ${key}`);
+            }
+        }
+        if (definition.stats.weaponGroup !== 'drone') {
+            throw new TypeError(`drone part ${libraryId} must use the drone group`);
         }
     }
 

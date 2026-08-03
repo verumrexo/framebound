@@ -49,7 +49,8 @@ test('weapon family helpers expose installed hardware and real multipliers', () 
     assert.deepEqual(getInstalledWeaponFamilies(ship, parts), {
         velocity: 1,
         laser: 1,
-        rocket: 0
+        rocket: 0,
+        drone: 0
     });
     assert.equal(getFamilyFireRateMultiplier(ship, 'velocity'), 1.25);
     assert.equal(getFamilyDamageMultiplier(ship, 'rocket'), 1.4);

@@ -1,4 +1,5 @@
-import { PartsLibrary } from '../../shared/parts/Part.js';
+import { PartsLibrary, PartType } from '../../shared/parts/Part.js';
+import { WEAPON_FAMILIES } from '../../shared/combat/WeaponFamilies.js';
 import { Hangar } from '../systems/Hangar.js';
 import { drawCustomCursor } from './CursorRenderer.js';
 import {
@@ -121,6 +122,7 @@ export class HudRenderer {
         if (game.eyeCandy !== false) {
             this.drawCockpitHud(speed);
         }
+        this.drawSalvageSweepStatus();
 
         const frameTime = this.now();
         game.frameCount++;
@@ -202,7 +204,11 @@ export class HudRenderer {
         this.drawCockpitCorner(centerX - bracketX, centerY + bracketY, 1, -1);
         this.drawCockpitCorner(centerX + bracketX, centerY + bracketY, -1, -1);
 
-        this.drawWeaponBank(18, 116);
+        let leftPanelY = 116;
+        leftPanelY += this.drawWeaponBank(18, leftPanelY) + 10;
+        const utilityHeight = this.drawUtilityBank(18, leftPanelY);
+        if (utilityHeight > 0) leftPanelY += utilityHeight + 10;
+        this.drawDamageTelemetry(18, leftPanelY);
 
         const rightX = width - 268;
         const rightY = Math.max(236, (game.minimap?.y || 18) + (game.minimap?.size || 200) + 18);
@@ -266,14 +272,39 @@ export class HudRenderer {
         ctx.restore();
     }
 
+    drawSalvageSweepStatus() {
+        const sweep = this.game.salvageSweep;
+        if (!sweep || sweep.status === 'idle') return;
+        const { ctx, width, height } = this.game.renderer;
+        const panelWidth = 320;
+        const x = width / 2 - panelWidth / 2;
+        const y = height - 112;
+        const isReady = sweep.status === 'ready';
+        const isActive = sweep.status === 'sweeping';
+        const accent = isReady || isActive ? UI_COLORS.cyan : UI_COLORS.amber;
+        drawUiPanel(ctx, x, y, panelWidth, 38, accent);
+        ctx.font = UI_FONTS.small;
+        ctx.textAlign = 'center';
+        ctx.fillStyle = accent;
+        let label = `salvage sweep // charging ${Math.ceil(
+            sweep.room?.sweepChargeRemaining ?? 0
+        )}`;
+        if (isReady) label = 'sweep ready // r to engage';
+        if (isActive) label = 'salvage sweep // active';
+        ctx.fillText(label, width / 2, y + 24);
+    }
+
     drawWeaponBank(x, y) {
         const ctx = this.game.renderer.ctx;
         const weapons = Array.from(this.game.playerShip.getUniqueParts())
             .map(part => ({ part, def: this.partsLibrary[part.partId] }))
-            .filter(({ def }) => Number.isFinite(def?.stats?.damage))
-            .slice(0, 3);
+            .filter(({ def }) => def?.type === PartType.WEAPON);
+        const columns = weapons.length > 6 ? 2 : 1;
+        const rows = Math.max(1, Math.ceil(weapons.length / columns));
+        const columnWidth = 250;
+        const height = 31 + rows * 25;
 
-        drawUiPanel(ctx, x, y, 250, 31 + Math.max(1, weapons.length) * 25, UI_COLORS.cyan);
+        drawUiPanel(ctx, x, y, columnWidth * columns, height, UI_COLORS.cyan);
         ctx.font = UI_FONTS.tiny;
         ctx.textAlign = 'left';
         ctx.fillStyle = UI_COLORS.muted;
@@ -282,18 +313,120 @@ export class HudRenderer {
         if (weapons.length === 0) {
             ctx.fillStyle = UI_COLORS.dim;
             ctx.fillText('no hardpoints detected', x + 13, y + 46);
-            return;
+            return height;
         }
 
         weapons.forEach(({ part, def }, index) => {
-            const rowY = y + 46 + index * 25;
+            const column = Math.floor(index / rows);
+            const row = index % rows;
+            const columnX = x + column * columnWidth;
+            const rowY = y + 46 + row * 25;
             const maxCooldown = Math.max(0.001, Number(def.stats.cooldown) || 1);
             const cooldown = Math.max(0, Number(part.cooldown) || 0);
             const readiness = Math.max(0, 1 - cooldown / maxCooldown);
-            ctx.fillStyle = readiness >= 1 ? UI_COLORS.green : UI_COLORS.amber;
-            ctx.fillText(`${index + 1} // ${String(def.name || def.id).toLowerCase()}`, x + 13, rowY);
-            drawUiBar(ctx, x + 164, rowY - 8, 71, 4, readiness, readiness >= 1 ? UI_COLORS.green : UI_COLORS.amber);
+            const familyColor = WEAPON_FAMILIES[def.stats.weaponGroup]?.color || UI_COLORS.cyan;
+            ctx.fillStyle = readiness >= 1 ? familyColor : UI_COLORS.amber;
+            ctx.fillText(`${index + 1} // ${String(def.name || def.id).toLowerCase()}`, columnX + 13, rowY);
+            drawUiBar(ctx, columnX + 164, rowY - 8, 71, 4, readiness, readiness >= 1 ? familyColor : UI_COLORS.amber);
         });
+        return height;
+    }
+
+    drawUtilityBank(x, y) {
+        const game = this.game;
+        const utilities = [];
+        for (const part of game.playerShip.getUniqueParts()) {
+            const def = this.partsLibrary[part.partId];
+            if (!def) continue;
+            if (def.type === PartType.SHIELD) {
+                const max = Math.max(0.001, def.stats.shieldCooldown || 1);
+                utilities.push({
+                    label: String(def.name || def.id).toLowerCase(),
+                    readiness: Math.max(0, 1 - (part.shieldCooldown || 0) / max),
+                    color: UI_COLORS.cyan
+                });
+            } else if (def.type === PartType.DRONE) {
+                const rate = 1 + Math.max(0, game.playerShip.permanentStats?.droneRateAdd || 0);
+                const maxMs = Math.max(1, def.stats.droneSpawnCooldown * 1000 / rate);
+                const elapsed = part.lastDroneSpawn
+                    ? this.dateNow() - part.lastDroneSpawn
+                    : maxMs;
+                utilities.push({
+                    label: `${String(def.name || def.id).toLowerCase()} deploy`,
+                    readiness: Math.max(0, Math.min(1, elapsed / maxMs)),
+                    color: WEAPON_FAMILIES.drone.color
+                });
+            }
+        }
+        if ((game.playerShip.stats.boosterCount || 0) > 0) {
+            const max = Math.max(0.001, game.dashMaxCooldown || 10);
+            utilities.push({
+                label: 'boost system',
+                readiness: Math.max(0, 1 - (game.dashCooldown || 0) / max),
+                color: UI_COLORS.green
+            });
+        }
+        if (utilities.length === 0) return 0;
+
+        const ctx = game.renderer.ctx;
+        const height = 31 + utilities.length * 25;
+        drawUiPanel(ctx, x, y, 250, height, UI_COLORS.mint);
+        ctx.font = UI_FONTS.tiny;
+        ctx.textAlign = 'left';
+        ctx.fillStyle = UI_COLORS.muted;
+        ctx.fillText('utility bus // linked', x + 13, y + 21);
+        utilities.forEach((utility, index) => {
+            const rowY = y + 46 + index * 25;
+            ctx.fillStyle = utility.readiness >= 1
+                ? utility.color
+                : UI_COLORS.amber;
+            ctx.fillText(utility.label, x + 13, rowY);
+            drawUiBar(
+                ctx,
+                x + 164,
+                rowY - 8,
+                71,
+                4,
+                utility.readiness,
+                utility.readiness >= 1 ? utility.color : UI_COLORS.amber
+            );
+        });
+        return height;
+    }
+
+    drawDamageTelemetry(x, y) {
+        const game = this.game;
+        const playerId = game.peerNetwork?.replicator?.selfId || 'host';
+        const entries = game.combatTelemetry?.entriesFor?.(playerId) || [];
+        if (entries.length === 0) return 0;
+
+        const visible = entries.slice(0, 6);
+        const total = entries.reduce((sum, entry) => sum + entry.damage, 0) || 1;
+        const ctx = game.renderer.ctx;
+        const height = 38 + visible.length * 25;
+        drawUiPanel(ctx, x, y, 250, height, UI_COLORS.orange);
+        ctx.font = UI_FONTS.tiny;
+        ctx.textAlign = 'left';
+        ctx.fillStyle = UI_COLORS.muted;
+        ctx.fillText('damage telemetry // run', x + 13, y + 21);
+        visible.forEach((entry, index) => {
+            const rowY = y + 46 + index * 25;
+            const color = WEAPON_FAMILIES[entry.family]?.color || UI_COLORS.bright;
+            const location = entry.key.includes('@')
+                ? ` ${entry.key.slice(entry.key.indexOf('@'))}`
+                : '';
+            ctx.fillStyle = color;
+            ctx.fillText(
+                `${String(entry.label).toLowerCase()}${location}`,
+                x + 13,
+                rowY
+            );
+            ctx.textAlign = 'right';
+            ctx.fillText(Math.round(entry.damage), x + 235, rowY);
+            ctx.textAlign = 'left';
+            drawUiBar(ctx, x + 13, rowY + 5, 222, 3, entry.damage / total, color);
+        });
+        return height;
     }
 
     drawCockpitCorner(x, y, directionX, directionY) {
@@ -363,10 +496,10 @@ export class HudRenderer {
             ctx.lineWidth = 6;
             ctx.stroke();
             ctx.fillStyle = ctx.strokeStyle;
-            ctx.font = "bold 10px 'Press Start 2P'";
+            ctx.font = UI_FONTS.tiny;
             ctx.textAlign = 'center';
             ctx.fillText('peak', 0, -45);
-            ctx.font = "6px 'Press Start 2P'";
+            ctx.font = UI_FONTS.tiny;
             ctx.fillText(`${part.peakMeter.toFixed(1)}s`, 0, 48);
         } else if (part.cooldown > 1 && part.rampLevel === 0) {
             const maxCooldown = def.stats.overheatCooldown || 7;
@@ -377,7 +510,7 @@ export class HudRenderer {
             ctx.lineWidth = 4;
             ctx.stroke();
             ctx.fillStyle = '#ff3300';
-            ctx.font = "bold 10px 'Press Start 2P'";
+            ctx.font = UI_FONTS.tiny;
             ctx.textAlign = 'center';
             ctx.fillText('overheat', 0, -45);
         } else if (part.rampLevel > 0) {

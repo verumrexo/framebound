@@ -1,8 +1,16 @@
 import { Sprite } from "../../engine/Sprite.js";
 import { Projectile } from "./Projectile.js";
+import { resolveDroneBlueprint } from '../combat/DroneBlueprints.js';
 
 export class Drone {
-    constructor(x, y, ownerPart, owner = 'player', randomGen = null) {
+    constructor(
+        x,
+        y,
+        ownerPart,
+        owner = 'player',
+        randomGen = null,
+        config = {}
+    ) {
         if (isNaN(x) || isNaN(y)) {
             console.error(`[Drone] CREATED WITH NaN! Owner: ${owner}`, x, y);
         }
@@ -14,17 +22,20 @@ export class Drone {
         this.ownerPlayerId = owner === 'player' ? 'host' : null;
         this.isDead = false;
 
-        // Stats
-        this.hp = 20;
-        this.speed = 220;
-        this.turnRate = 4.0;
+        const blueprint = resolveDroneBlueprint(config.type);
+        this.droneType = blueprint.id;
+        this.hp = config.hp || blueprint.hp;
+        this.maxHp = this.hp;
+        this.speed = config.speed || blueprint.speed;
+        this.turnRate = config.turnRate || blueprint.turnRate;
         this.radius = 8;
         this.rotation = this.random() * Math.PI * 2;
 
         // Attack
         this.cooldown = 0;
-        this.maxCooldown = 0.8;
-        this.range = 300;
+        this.maxCooldown = config.attackCooldown || 0.8;
+        this.damage = config.damage || 5;
+        this.range = config.range || blueprint.range;
 
         // Boid/Behavior
         this.target = null;
@@ -275,7 +286,25 @@ export class Drone {
     shoot(game, angle) {
         this.cooldown = this.maxCooldown;
         // Small laser projectile
-        const p = new Projectile(this.x, this.y, angle, 'small_laser', 500, this.owner, 5, 0.8, this.random);
+        const p = new Projectile(
+            this.x,
+            this.y,
+            angle,
+            'small_laser',
+            500,
+            this.owner,
+            this.damage,
+            0.8,
+            this.random
+        );
+        if (this.owner === 'player') {
+            p.weaponFamily = 'drone';
+            p.sourcePartId = this.ownerPart?.partId || 'drone';
+            p.sourcePartKey = this.ownerPart
+                ? `${p.sourcePartId}@${this.ownerPart.x},${this.ownerPart.y}`
+                : 'drone';
+            p.sourcePartName = this.ownerPart?.droneLabel || 'swarm hive';
+        }
         game.projectiles.push(p);
 
         game.audio.play('shoot_dart', { volume: 0.3, pitch: 1.5 });

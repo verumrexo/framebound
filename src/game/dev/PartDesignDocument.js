@@ -10,6 +10,7 @@ const SUPPORTED_TYPES = new Set([
     'accelerant',
     'rocket_bay',
     'booster',
+    'drone',
     'shield'
 ]);
 

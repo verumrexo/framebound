@@ -252,6 +252,11 @@ export class PeerNetworkManager {
         });
     }
 
+    sendSalvageSweep() {
+        if (!this.isGuest || !this.client?.connected) return false;
+        return this.sendOrQueueAction('sweep', {});
+    }
+
     sendShipEdit(parts) {
         if (
             !this.isGuest ||

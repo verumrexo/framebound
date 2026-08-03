@@ -8,7 +8,17 @@ const DRONE_MAKER_ID = 'custom_1769974460678';
 const PARTS = {
     [DRONE_MAKER_ID]: {
         width: 2,
-        height: 1
+        height: 1,
+        type: 'drone',
+        name: 'swarm hive',
+        stats: {
+            weaponGroup: 'drone',
+            droneSpawnCooldown: 5,
+            droneCapacity: 8,
+            droneDamage: 5,
+            droneAttackCooldown: 0.8,
+            droneType: 'striker'
+        }
     }
 };
 
@@ -43,6 +53,8 @@ function createHarness({
         asteroids: [],
         lootCrates: [],
         playerShip: {
+            isDead: false,
+            permanentStats: {},
             getUniqueParts: () => parts
         },
         showNotification: (...args) => {
@@ -107,7 +119,7 @@ test('friendly hives preserve rotated spawn geometry and feedback', () => {
     ]);
 });
 
-test('the existing friendly limit still counts enemy drones too', () => {
+test('enemy drones do not consume a player drone capacity', () => {
     const drones = Array.from(
         { length: 8 },
         () => new DroneStub(0, 0, null, 'enemy')
@@ -125,9 +137,12 @@ test('the existing friendly limit still counts enemy drones too', () => {
 
     system.spawnFriendlyDrones();
 
-    assert.equal(game.drones.length, 8);
-    assert.equal(part.lastDroneSpawn, undefined);
-    assert.deepEqual(calls, []);
+    assert.equal(game.drones.length, 9);
+    assert.equal(part.lastDroneSpawn, 7001);
+    assert.deepEqual(calls, [
+        ['notification', 'drone deployed', '#00ffff'],
+        ['audio', 'reload', { volume: 0.5, pitch: 2 }]
+    ]);
 });
 
 test('guest hives deploy drones from the guest ship position', () => {
@@ -140,6 +155,7 @@ test('guest hives deploy drones from the guest ship position', () => {
     const guest = {
         id: 'guest_1',
         ship: {
+            permanentStats: {},
             getUniqueParts: () => [guestPart]
         },
         x: 500,
@@ -198,7 +214,7 @@ test('enemy hives stop at twelve enemy drones and retain their spawner', () => {
     assert.equal(secondPart.lastDroneSpawn, undefined);
     assert.deepEqual(calls, [[
         'notification',
-        'ENEMY DRONE SPAWNED',
+        'enemy drone spawned',
         '#ff00ff'
     ]]);
 });

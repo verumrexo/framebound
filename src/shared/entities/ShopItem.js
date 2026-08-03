@@ -41,26 +41,26 @@ export class ShopItem {
 
         // Name
         ctx.fillStyle = '#fff';
-        ctx.font = "bold 12px 'Press Start 2P', monospace";
+        ctx.font = "14px 'Silkscreen', 'Pixelify Sans', monospace";
         ctx.textAlign = 'center';
-        ctx.fillText(this.data.name, this.x, tooltipY + 20);
+        ctx.fillText(String(this.data.name).toLowerCase(), this.x, tooltipY + 20);
 
         // Description/Stats
         ctx.fillStyle = '#aaa';
-        ctx.font = "12px 'Press Start 2P', monospace";
-        ctx.fillText(this.data.description, this.x, tooltipY + 40);
+        ctx.font = "13px 'Pixelify Sans', 'Silkscreen', monospace";
+        ctx.fillText(String(this.data.description).toLowerCase(), this.x, tooltipY + 40);
 
         // Part stats if available
         if (this.partDef && this.partDef.stats) {
             const stats = this.partDef.stats;
             ctx.fillStyle = '#888';
-            ctx.font = "8px 'Press Start 2P'";
+            ctx.font = "11px 'Pixelify Sans', 'Silkscreen', monospace";
             ctx.fillText(`hp: ${stats.hp || 0} | mass: ${stats.mass || 0}`, this.x, tooltipY + 56);
         }
 
         // Buy prompt
         ctx.fillStyle = canAfford ? '#44ff44' : '#ff4444';
-        ctx.font = "bold 10px 'Press Start 2P'";
+        ctx.font = "13px 'Pixelify Sans', 'Silkscreen', monospace";
         const promptText = canAfford ? '[e] buy' : 'not enough gold!';
         ctx.fillText(promptText, this.x, tooltipY + tooltipH - 8);
 

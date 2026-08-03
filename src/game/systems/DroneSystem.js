@@ -1,9 +1,10 @@
 import { Drone } from '../../shared/entities/Drone.js';
 import { PartsLibrary } from '../../shared/parts/Part.js';
-import { TILE_SIZE } from '../../shared/parts/PartDefinitions.js';
+import {
+    PartType,
+    TILE_SIZE
+} from '../../shared/parts/PartDefinitions.js';
 
-const DRONE_MAKER_PART_ID = 'custom_1769974460678';
-const FRIENDLY_DRONE_LIMIT = 8;
 const ENEMY_DRONE_LIMIT = 12;
 
 export class DroneSystem {
@@ -28,15 +29,34 @@ export class DroneSystem {
 
     spawnFriendlyDrones() {
         const game = this.game;
-        if (game.drones.length >= FRIENDLY_DRONE_LIMIT) return;
-
         const now = this.now();
         for (const player of this.getFriendlyPlayers()) {
-            for (const part of player.ship.getUniqueParts()) {
-                if (part.partId !== DRONE_MAKER_PART_ID) continue;
+            const droneParts = [...player.ship.getUniqueParts()].filter(part =>
+                this.partsLibrary[part.partId]?.type === PartType.DRONE
+            );
+            const capacity = droneParts.reduce(
+                (total, part) => total + (
+                    this.partsLibrary[part.partId]?.stats?.droneCapacity || 0
+                ),
+                0
+            ) + Math.floor(player.ship.permanentStats?.droneCapacityAdd || 0);
+            const activeCount = game.drones.filter(drone =>
+                drone.owner === 'player' && drone.ownerPlayerId === player.id
+            ).length;
+            if (activeCount >= capacity) continue;
+
+            for (const part of droneParts) {
+                const def = this.partsLibrary[part.partId];
+                const rate = 1 + Math.max(
+                    0,
+                    player.ship.permanentStats?.droneRateAdd || 0
+                );
+                const spawnCooldown = (
+                    def.stats.droneSpawnCooldown * 1000
+                ) / rate;
                 if (
                     part.lastDroneSpawn &&
-                    now - part.lastDroneSpawn <= 5000
+                    now - part.lastDroneSpawn <= spawnCooldown
                 ) {
                     continue;
                 }
@@ -57,15 +77,29 @@ export class DroneSystem {
                 const drone = new this.DroneClass(
                     position.x,
                     position.y,
-                    part
+                    part,
+                    'player',
+                    null,
+                    {
+                        type: def.stats.droneType,
+                        damage: def.stats.droneDamage * (
+                            player.ship.permanentStats?.droneDamageMul || 1
+                        ),
+                        attackCooldown: def.stats.droneAttackCooldown
+                    }
                 );
+                drone.ownerPart.droneLabel = def.name.toLowerCase();
                 drone.ownerPlayerId = player.id;
                 game.drones.push(drone);
                 game.showNotification('drone deployed', '#00ffff');
                 game.audio.play('reload', { volume: 0.5, pitch: 2.0 });
                 part.lastDroneSpawn = now;
 
-                if (game.drones.length >= FRIENDLY_DRONE_LIMIT) return;
+                const playerDroneCount = game.drones.filter(candidate =>
+                    candidate.owner === 'player' &&
+                    candidate.ownerPlayerId === player.id
+                ).length;
+                if (playerDroneCount >= capacity) break;
             }
         }
     }
@@ -94,7 +128,8 @@ export class DroneSystem {
             if (enemy.isDead || !enemy.shipParts) continue;
 
             for (const part of enemy.shipParts) {
-                if (part.partId !== DRONE_MAKER_PART_ID) continue;
+                const def = this.partsLibrary[part.partId];
+                if (def?.type !== PartType.DRONE) continue;
 
                 const now = this.now();
                 if (part.lastDroneSpawn && now - part.lastDroneSpawn <= 2000) {
@@ -121,11 +156,17 @@ export class DroneSystem {
                     position.x,
                     position.y,
                     part,
-                    'enemy'
+                    'enemy',
+                    null,
+                    {
+                        type: def.stats.droneType,
+                        damage: def.stats.droneDamage,
+                        attackCooldown: def.stats.droneAttackCooldown
+                    }
                 );
                 drone.spawnerEnemy = enemy;
                 game.drones.push(drone);
-                game.showNotification('ENEMY DRONE SPAWNED', '#ff00ff');
+                game.showNotification('enemy drone spawned', '#ff00ff');
                 part.lastDroneSpawn = now;
             }
         }

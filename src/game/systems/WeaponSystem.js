@@ -375,6 +375,15 @@ export class WeaponSystem {
                 ),
                 def.stats.lifetime
             );
+            projectile.weaponFamily = family;
+            projectile.sourcePartId = def.id;
+            projectile.sourcePartKey = partRef
+                ? `${def.id}@${partRef.x},${partRef.y}`
+                : def.id;
+            projectile.sourcePartName = String(def.name || def.id).toLowerCase();
+            projectile.sourcePlayerId = game.sourcePlayerId ||
+                game.peerNetwork?.replicator?.selfId ||
+                'host';
 
             const permanent = game.playerShip?.permanentStats || {};
             if (family === 'velocity') {

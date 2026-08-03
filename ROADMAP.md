@@ -750,6 +750,20 @@ whether floor six feels fun or like tax fraud.
   iteration;
 - the repair tender has a visible repair pulse, and enemy body parts can be
   rearranged without rewriting its support behavior;
+- new runs choose a balanced ballistic, laser, or missile starter package and
+  never roll a drone carrier;
+- rocketle and lps now sit near the same ideal starter damage budget as three
+  darts, while needlepoint pierces real debris and scales above common rarity;
+- swarm hive is a real fourth combat family backed by data-driven drone
+  blueprints, per-player ownership, and future-safe upgrade hooks;
+- the cockpit separates weapon cooldowns, installed utility cooldowns, and
+  exact per-part damage contribution instead of truncating new hardpoints;
+- cleared rooms charge a host-authoritative five-second salvage system whose
+  one-second clockwise laser sweep destroys remaining crates and asteroids;
+- crates and asteroids produce stable destruction fragments that persist
+  through room snapshots instead of rerolling glitter every rendered frame;
+- the hangar, pickups, shops, treasure caches, and vault prompts use the current
+  lowercase cockpit typography and more legible part telemetry;
 - patch notes, hangar telemetry, automated gates, live browser checks, and the
   signed macos bundle identify the release as `arsenal: apotheosis`.
 

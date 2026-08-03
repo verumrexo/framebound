@@ -57,6 +57,17 @@ test('level-up requests can only choose one of the offered cards', () => {
     assert.throws(() => createAction(4, 'level_up', { index: 3 }));
 });
 
+test('salvage sweep requests carry no client-authored damage or targets', () => {
+    const action = decodePeerMessage(createAction(5, 'sweep', {
+        damage: 999999,
+        targetIds: ['everything'],
+        ready: true
+    }), { direction: 'client' });
+
+    assert.equal(action.action, 'sweep');
+    assert.deepEqual(action.payload, {});
+});
+
 test('wrong versions, directions, malformed state, and huge packets are rejected', () => {
     assert.equal(decodePeerMessage(JSON.stringify({
         version: 999,

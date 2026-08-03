@@ -70,6 +70,11 @@ export class PeerWorldReplicator {
         game.playerShip.isDead = self.isDead;
 
         this.selfId = state.self;
+        game.combatTelemetry?.replaceFor?.(
+            state.self,
+            state.combatTelemetry || []
+        );
+        game.salvageSweep?.applyRemoteState?.(state.salvageSweep);
         this.applyPlayerState(self, true);
         this.reconcileRemotePlayers(state.players, true);
         this.lastTick = tick;
@@ -99,6 +104,11 @@ export class PeerWorldReplicator {
         this.game.xp = state.xp;
         this.game.gold = state.gold;
         this.game.xpToNext = state.xpToNext;
+        this.game.combatTelemetry?.replaceFor?.(
+            this.selfId,
+            state.combatTelemetry || []
+        );
+        this.game.salvageSweep?.applyRemoteState?.(state.salvageSweep);
         this.applyInventory(state.inventory, false);
         this.applySharedPause(state);
         this.lastTick = tick;
@@ -196,6 +206,8 @@ function validFullState(state) {
         Number.isFinite(state.gold) &&
         Number.isFinite(state.xpToNext) &&
         typeof state.paused === 'boolean' &&
+        validCombatTelemetry(state.combatTelemetry) &&
+        validSalvageSweep(state.salvageSweep) &&
         validLevelUp(state.levelUp) &&
         validInventory(state.inventory) &&
         isValidSnapshotData(state.roomSnapshots, state.activeWorld) &&
@@ -212,6 +224,40 @@ function validFullState(state) {
         );
 }
 
+function validCombatTelemetry(entries) {
+    return entries === undefined || (
+        Array.isArray(entries) &&
+        entries.length <= 256 &&
+        entries.every(entry =>
+            entry !== null &&
+            typeof entry === 'object' &&
+            ['key', 'partId', 'label', 'family'].every(key =>
+                typeof entry[key] === 'string' &&
+                entry[key].length > 0 &&
+                entry[key].length <= 128
+            ) &&
+            Number.isFinite(entry.damage) &&
+            entry.damage >= 0
+        )
+    );
+}
+
+function validSalvageSweep(state) {
+    return state === undefined || state === null || (
+        typeof state === 'object' &&
+        ['idle', 'charging', 'ready', 'sweeping'].includes(state.status) &&
+        (state.roomKey === null || typeof state.roomKey === 'string') &&
+        Number.isFinite(state.originX) &&
+        Number.isFinite(state.originY) &&
+        Number.isFinite(state.elapsed) &&
+        state.elapsed >= 0 &&
+        (state.chargeRemaining === null || (
+            Number.isFinite(state.chargeRemaining) &&
+            state.chargeRemaining >= 0
+        ))
+    );
+}
+
 function validSnapshotState(state) {
     return state !== null &&
         typeof state === 'object' &&
@@ -225,6 +271,8 @@ function validSnapshotState(state) {
         Number.isFinite(state.gold) &&
         Number.isFinite(state.xpToNext) &&
         typeof state.paused === 'boolean' &&
+        validCombatTelemetry(state.combatTelemetry) &&
+        validSalvageSweep(state.salvageSweep) &&
         validInventory(state.inventory) &&
         Array.isArray(state.players) &&
         state.players.length > 0 &&
@@ -294,6 +342,9 @@ function validUpgradeChoice(choice) {
             'laserChain',
             'rocketRateAdd',
             'rocketDamageMul',
+            'droneRateAdd',
+            'droneDamageMul',
+            'droneCapacityAdd',
             'missileSpeedMul',
             'rocketBlastMul'
         ].includes(choice.stat) &&

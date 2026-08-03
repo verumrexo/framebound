@@ -6,18 +6,23 @@ import {
 import { recoverShip } from './PlayerRecoverySystem.js';
 import { applyUpgradeToShip } from './LevelUpManager.js';
 import { WeaponSystem } from './WeaponSystem.js';
+import { applyRandomStarterLoadout } from '../../shared/combat/StarterLoadouts.js';
 
 export class HostGameSimulation {
     constructor(game, {
         ShipClass = Ship,
         WeaponSystemClass = WeaponSystem,
         random = () => game.levelGen?.random?.() ?? Math.random(),
+        starterLoadout = null,
         maxPlayers = 4
     } = {}) {
         this.game = game;
         this.ShipClass = ShipClass;
         this.WeaponSystemClass = WeaponSystemClass;
         this.random = random;
+        this.starterLoadout = starterLoadout || (
+            ShipClass === Ship ? applyRandomStarterLoadout : null
+        );
         this.maxPlayers = maxPlayers;
         this.peers = new Map();
         this.nextPlayerId = 1;
@@ -30,9 +35,10 @@ export class HostGameSimulation {
 
         const playerId = `guest_${this.nextPlayerId++}`;
         const ship = new this.ShipClass();
+        this.starterLoadout?.(ship, this.random);
         ship.x = this.game.x;
         ship.y = this.game.y;
-        const runtime = this.createWeaponRuntime(ship);
+        const runtime = this.createWeaponRuntime(ship, playerId);
         this.peers.set(playerId, {
             id: playerId,
             displayName: profile.displayName,
@@ -153,6 +159,15 @@ export class HostGameSimulation {
             return this.applyPeerLevelUp(peer, payload.index);
         }
 
+        if (action === 'sweep') {
+            const player = this.getPlayerContext(playerId);
+            if (!this.game.salvageSweep?.triggerFor?.(player)) return false;
+            return {
+                type: 'room_state',
+                payload: { salvageSweep: true }
+            };
+        }
+
         // Explicit transition claims stay rejected. The host derives room and
         // portal crossings from authoritative ship positions instead.
         return false;
@@ -189,6 +204,8 @@ export class HostGameSimulation {
             xp: this.game.xp,
             gold: this.game.gold,
             xpToNext: this.game.xpToNext,
+            combatTelemetry: this.game.combatTelemetry?.snapshotFor?.(playerId) || [],
+            salvageSweep: this.game.salvageSweep?.snapshot?.() || null,
             paused: Boolean(this.game.paused),
             levelUp: this.snapshotLevelUpFor(playerId),
             inventory: { ...this.inventoryFor(playerId) },
@@ -278,7 +295,7 @@ export class HostGameSimulation {
         return state;
     }
 
-    createWeaponRuntime(ship) {
+    createWeaponRuntime(ship, playerId = 'host') {
         const context = {
             playerShip: ship,
             x: ship.x,
@@ -287,7 +304,8 @@ export class HostGameSimulation {
             projectiles: this.game.projectiles,
             audio: this.game.audio,
             designer: { active: false },
-            network: null
+            network: null,
+            sourcePlayerId: playerId
         };
         const weaponSystem = new this.WeaponSystemClass(context, {
             random: this.random
@@ -462,7 +480,7 @@ export class HostGameSimulation {
         staged.isDead = peer.ship.isDead;
         peer.ship = staged;
         peer.inventory = inventory;
-        peer.runtime = this.createWeaponRuntime(staged);
+        peer.runtime = this.createWeaponRuntime(staged, peer.id);
         return true;
     }
 

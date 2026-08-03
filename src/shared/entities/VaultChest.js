@@ -50,9 +50,9 @@ export class VaultChest {
         ctx.strokeRect(tooltipX, tooltipY, tooltipW, tooltipH);
 
         // Name
-        const name = this.costType === 'hp' ? 'Blood Vault' : 'Gilded Vault';
+        const name = this.costType === 'hp' ? 'blood vault' : 'gilded vault';
         ctx.fillStyle = this.costType === 'hp' ? '#ff4444' : '#ffd700';
-        ctx.font = "12px 'Press Start 2P'";
+        ctx.font = "14px 'Silkscreen', 'Pixelify Sans', monospace";
         ctx.textAlign = 'center';
         ctx.fillText(name, this.x, tooltipY + 20);
 
@@ -63,10 +63,11 @@ export class VaultChest {
 
         ctx.fillStyle = canAfford ? '#44ff44' : '#ff4444';
         const costText = this.costType === 'hp'
-            ? `Sacrifice ${this.costAmount} HP`
-            : `Pay ${this.costAmount} Gold`;
+            ? `sacrifice ${this.costAmount} hp`
+            : `pay ${this.costAmount} gold`;
 
-        ctx.fillText(`[E] ${costText} `, this.x, tooltipY + 45);
+        ctx.font = "13px 'Pixelify Sans', 'Silkscreen', monospace";
+        ctx.fillText(`[e] ${costText} `, this.x, tooltipY + 45);
 
         ctx.textAlign = 'left';
     }

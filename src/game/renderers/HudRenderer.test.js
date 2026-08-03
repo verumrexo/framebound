@@ -61,6 +61,9 @@ function createHarness(overrides = {}) {
         rotation: 0,
         enemies: [],
         eyeCandy: false,
+        combatTelemetry: { entriesFor: () => [] },
+        peerNetwork: null,
+        salvageSweep: { status: 'idle' },
         gold: 9,
         vx: 3,
         vy: 4,
@@ -143,6 +146,61 @@ test('eye candy adds cockpit telemetry without replacing the required hud', () =
     game.vy = 5;
     hud.draw();
     assert.deepEqual(hud.speedHistory, [5, 13]);
+});
+
+test('eye candy lists every weapon and opens separate utility and damage panels', () => {
+    const parts = [
+        { partId: 'dart', cooldown: 0, x: -1, y: 0 },
+        { partId: 'laser', cooldown: 1, x: 1, y: 0 },
+        { partId: 'shield', shieldCooldown: 1.5, x: 0, y: 1 }
+    ];
+    const { game, calls } = createHarness({
+        eyeCandy: true,
+        combatTelemetry: {
+            entriesFor: () => [{
+                key: 'dart@-1,0',
+                partId: 'dart',
+                label: 'dart',
+                family: 'velocity',
+                damage: 25
+            }]
+        }
+    });
+    game.playerShip.getUniqueParts = () => new Set(parts);
+    const hud = new HudRenderer(game, {
+        partsLibrary: {
+            dart: { id: 'dart', name: 'dart', type: 'weapon', stats: { cooldown: 1, weaponGroup: 'velocity' } },
+            laser: { id: 'laser', name: 'laser', type: 'weapon', stats: { cooldown: 2, weaponGroup: 'laser' } },
+            shield: { id: 'shield', name: 'aegis', type: 'shield', stats: { shieldCooldown: 3 } }
+        },
+        drawCursor: () => {},
+        now: () => 100,
+        dateNow: () => 0
+    });
+
+    hud.draw();
+
+    const text = calls.filter(call => call[0] === 'text').map(call => call[1]);
+    assert.ok(text.includes('1 // dart'));
+    assert.ok(text.includes('2 // laser'));
+    assert.ok(text.includes('utility bus // linked'));
+    assert.ok(text.includes('damage telemetry // run'));
+    assert.ok(text.includes('dart @-1,0'));
+});
+
+test('salvage sweep prompt remains visible without eye candy', () => {
+    const { calls, hud } = createHarness({
+        salvageSweep: {
+            status: 'ready',
+            room: { sweepChargeRemaining: 0 }
+        }
+    });
+
+    hud.draw();
+
+    assert.ok(calls.find(call =>
+        call[0] === 'text' && call[1] === 'sweep ready // r to engage'
+    ));
 });
 
 test('hangar, ship builder, and game-over modes keep their original precedence', () => {

@@ -19,6 +19,13 @@ export const WEAPON_FAMILIES = Object.freeze({
         rateStat: 'rocketRateAdd',
         damageStat: 'rocketDamageMul',
         color: '#ff8a3d'
+    }),
+    drone: Object.freeze({
+        id: 'drone',
+        label: 'drone',
+        rateStat: 'droneRateAdd',
+        damageStat: 'droneDamageMul',
+        color: '#57d8ff'
     })
 });
 
@@ -36,6 +43,9 @@ export const PERMANENT_STAT_DEFAULTS = Object.freeze({
     velocityDamageMul: 1,
     laserDamageMul: 1,
     rocketDamageMul: 1,
+    droneRateAdd: 0,
+    droneDamageMul: 1,
+    droneCapacityAdd: 0,
     velocityPierce: 0,
     laserChain: 0,
     rocketBlastMul: 1

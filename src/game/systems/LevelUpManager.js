@@ -73,7 +73,7 @@ export class LevelUpManager {
                 name: ['needlepoint', 'hardpoint', 'overpenetrator', 'linebreaker', 'rail doctrine', 'no safe angle'],
                 stat: 'velocityPierce',
                 type: 'integer',
-                values: [1, 1, 1, 2, 2, 3],
+                values: [1, 2, 2, 3, 3, 4],
                 desc: 'ballistic rounds pass through extra targets'
             },
             {
@@ -146,6 +146,33 @@ export class LevelUpManager {
                 type: 'add',
                 values: [0.08, 0.14, 0.22, 0.34, 0.55, 1.00],
                 desc: 'increases missile blast radius'
+            },
+            {
+                id: 'drone_rate',
+                family: 'drone',
+                name: ['tight loop', 'fast cradle', 'hot launch', 'swarm clock', 'instant hive', 'everywhere at once'],
+                stat: 'droneRateAdd',
+                type: 'add',
+                values: [0.08, 0.14, 0.22, 0.34, 0.55, 1.00],
+                desc: 'reduces drone deployment time'
+            },
+            {
+                id: 'drone_damage',
+                family: 'drone',
+                name: ['sharp logic', 'hunter code', 'kill routine', 'predator mesh', 'red queen', 'machine hunger'],
+                stat: 'droneDamageMul',
+                type: 'add',
+                values: [0.08, 0.14, 0.22, 0.34, 0.55, 1.00],
+                desc: 'increases damage dealt by deployed drones'
+            },
+            {
+                id: 'drone_capacity',
+                family: 'drone',
+                name: ['spare berth', 'double rack', 'nest expansion', 'cloud bay', 'legion protocol', 'grey tide'],
+                stat: 'droneCapacityAdd',
+                type: 'integer',
+                values: [1, 2, 3, 4, 6, 8],
+                desc: 'increases the active drone limit'
             }
         ];
 

@@ -49,3 +49,23 @@ those are ordinary bullets would be dumb and fragile.
 
 this contract protects the architecture. it does not pre-design the mechanics.
 we will still decide what each part actually does before implementing it.
+
+## shipped family foundation
+
+the current runtime recognizes four explicit combat families:
+
+- ballistic owns impact damage, fire rate, and target/debris piercing;
+- laser owns energy damage, fire rate, and target chaining;
+- missile owns explosive damage, reload speed, projectile speed, and blast size;
+- drone owns deploy rate, drone damage, and carrier capacity.
+
+drone parts are not starter equipment. each drone carrier declares a serializable
+blueprint id plus its deploy cooldown, capacity, damage, and attack cooldown.
+`DroneSystem` owns deployment, `DroneBlueprints.js` owns movement/body tuning,
+and the host owns every spawned drone. future drone types can therefore add a
+new blueprint and part definition without another hardcoded swarm-hive branch.
+
+new runs currently choose one of three drone-free packages with approximately
+the same ideal single-target damage budget: three darts, two lps emitters, or
+one rocketle. their exact values live in `StarterLoadouts.js`, not in session
+startup code.

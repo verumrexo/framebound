@@ -123,3 +123,20 @@ test('family damage and mechanic upgrades mutate the centralized stats', () => {
     assert.equal(ship.permanentStats.velocityDamageMul, 1.22);
     assert.equal(ship.permanentStats.velocityPierce, 1);
 });
+
+test('drone upgrades stay exclusive to ships carrying a drone system', () => {
+    const { manager, ship } = createHarness();
+    assert.equal(
+        manager.getAvailableUpgrades(ship).some(upgrade => upgrade.family === 'drone'),
+        false
+    );
+
+    ship.getUniqueParts = () => new Set([
+        { partId: 'gun_basic' },
+        { partId: 'custom_1769974460678' }
+    ]);
+    const available = manager.getAvailableUpgrades(ship);
+    assert.ok(available.some(upgrade => upgrade.id === 'drone_rate'));
+    assert.ok(available.some(upgrade => upgrade.id === 'drone_damage'));
+    assert.ok(available.some(upgrade => upgrade.id === 'drone_capacity'));
+});

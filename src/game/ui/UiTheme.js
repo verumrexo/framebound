@@ -18,9 +18,9 @@ export const UI_COLORS = Object.freeze({
 export const UI_FONTS = Object.freeze({
     tiny: '11px "Pixelify Sans", "Silkscreen", monospace',
     small: '13px "Pixelify Sans", "Silkscreen", monospace',
-    label: '14px "Silkscreen", "Press Start 2P", monospace',
-    title: '22px "Silkscreen", "Press Start 2P", monospace',
-    large: '32px "Silkscreen", "Press Start 2P", monospace'
+    label: '14px "Silkscreen", "Pixelify Sans", monospace',
+    title: '22px "Silkscreen", "Pixelify Sans", monospace',
+    large: '32px "Silkscreen", "Pixelify Sans", monospace'
 });
 
 export function drawUiPanel(ctx, x, y, width, height, accent = UI_COLORS.green) {

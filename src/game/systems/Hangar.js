@@ -1,6 +1,9 @@
 import { Assets } from '../../Assets.js';
 import { PartsLibrary, TILE_SIZE } from '../../shared/parts/Part.js';
-import { getFamilyFireRateMultiplier } from '../../shared/combat/WeaponFamilies.js';
+import {
+    WEAPON_FAMILIES,
+    getFamilyFireRateMultiplier
+} from '../../shared/combat/WeaponFamilies.js';
 
 export class Hangar {
     constructor(game) {
@@ -153,35 +156,41 @@ export class Hangar {
     }
 
     static updateTooltip(tooltipEl, def) {
-        let statsHtml = '';
+        const stats = [];
         if (def.stats) {
-            if (def.stats.hp) statsHtml += `<div style="color:#ff4444">integrity: +${def.stats.hp}</div>`;
-            if (def.stats.mass) statsHtml += `<div style="color:#888">mass: ${def.stats.mass}t</div>`;
-            if (def.stats.damage) statsHtml += `<div style="color:#ffaa44">damage: ${def.stats.damage}</div>`;
-            if (def.stats.cooldown) statsHtml += `<div style="color:#aaa">cooldown: ${def.stats.cooldown}s</div>`;
-            if (def.stats.chargeTime) statsHtml += `<div style="color:#aaa">charge: ${def.stats.chargeTime}s</div>`;
-            if (def.stats.regen) statsHtml += `<div style="color:#44ff44">regen: +${def.stats.regen}/s</div>`;
-            if (def.stats.thrust || def.type === 'thruster') statsHtml += `<div style="color:#89a889">thrust: +${def.width * def.height}</div>`;
-            if (def.type === 'accelerant') statsHtml += `<div style="color:#ffaa44">laser fire rate: +5%</div>`;
-            if (def.type === 'rocket_bay') statsHtml += `<div style="color:#ffaa44">rocket payload: +1</div>`;
-            if (def.type === 'booster') statsHtml += `<div style="color:#89a889">enables dash system</div>`;
+            if (def.stats.hp) stats.push(['integrity', `+${def.stats.hp}`, '#ff4d5a']);
+            if (def.stats.mass) stats.push(['mass', `${def.stats.mass}t`, '#bde9df']);
+            if (def.stats.damage) stats.push(['damage', def.stats.damage, '#ff8a3d']);
+            if (def.stats.cooldown) stats.push(['cooldown', `${def.stats.cooldown}s`, '#ffc857']);
+            if (def.stats.chargeTime) stats.push(['charge', `${def.stats.chargeTime}s`, '#ffc857']);
+            if (def.stats.regen) stats.push(['regen', `+${def.stats.regen}/s`, '#74ff6a']);
+            if (def.stats.thrust || def.type === 'thruster') stats.push(['thrust', `+${def.width * def.height}`, '#55ffc2']);
+            if (def.type === 'accelerant') stats.push(['laser fire rate', '+5%', '#ff8a3d']);
+            if (def.type === 'rocket_bay') stats.push(['rocket payload', '+1', '#ff8a3d']);
+            if (def.type === 'booster') stats.push(['system', 'dash enabled', '#55ffc2']);
         }
 
         let rarityColor = '#0f0'; // Common
         if (def && def.rarity === 'rare') rarityColor = '#0088ff';
         if (def && def.rarity === 'epic') rarityColor = '#aa00ff';
         if (def && def.rarity === 'legendary') rarityColor = '#ffaa00';
+        const familyColor = WEAPON_FAMILIES[def.stats?.weaponGroup]?.color || rarityColor;
+        tooltipEl.style.setProperty('--tooltip-accent', familyColor);
 
         tooltipEl.innerHTML = `
-            <div style="font-size: 16px; color: ${rarityColor}; margin-bottom: 5px; border-bottom: 1px solid rgba(0,255,0,0.3); text-transform: uppercase;">
-                ${def.name}
+            <div class="workshop-tooltip-kicker">part telemetry // ${def.rarity || 'common'}</div>
+            <div class="workshop-tooltip-name" style="color:${familyColor}">
+                ${String(def.name).toLowerCase()}
             </div>
-            <div style="font-size: 8px; color: ${rarityColor}; margin-bottom: 8px; font-weight: bold;">
-                [${def.rarity || 'common'}]
+            <div class="workshop-tooltip-meta">
+                <span style="color:${rarityColor}">${def.rarity || 'common'}</span>
+                <span>${def.type}${def.stats.weaponGroup ? ` // ${def.stats.weaponGroup}` : ''}</span>
+                <span>${def.width}x${def.height}</span>
             </div>
-            <div style="font-size: 8px; color: #888; margin-bottom: 8px;">class: ${def.type} ${def.stats.weaponGroup ? `[${def.stats.weaponGroup}]` : ''} (${def.width}x${def.height})</div>
-            <div style="display: flex; flex-direction: column; gap: 2px;">
-                ${statsHtml}
+            <div class="workshop-tooltip-stats">
+                ${stats.map(([label, value, color]) => `
+                    <span>${label}</span><strong style="color:${color}">${value}</strong>
+                `).join('')}
             </div>
         `;
     }
@@ -231,12 +240,16 @@ export class Hangar {
             rows.push({ label: 'extra rockets', value: `+${stats.rocketBayCount}`, color: '#ffaa44' });
         }
 
-        statPanel.innerHTML = rows.map(r => `
-            <div style="display: flex; justify-content: space-between; border-bottom: 1px dotted rgba(255,255,255,0.1); padding: 2px 0;">
-                <span style="color: #888;">${r.label}:</span>
-                <span style="color: ${r.color}; text-align: right;">${r.value}</span>
+        statPanel.innerHTML = `
+            <div class="workshop-stat-group">
+                <div class="workshop-stat-heading">frame performance</div>
+                ${rows.slice(0, 4).map(statRow).join('')}
             </div>
-        `).join('');
+            <div class="workshop-stat-group">
+                <div class="workshop-stat-heading">combat routing</div>
+                ${rows.slice(4).map(statRow).join('')}
+            </div>
+        `;
 
         // Permanent Upgrades List
         const upgradeRows = [];
@@ -258,13 +271,10 @@ export class Hangar {
 
         if (upgradeRows.length > 0) {
             statPanel.innerHTML += `
-                <div style="margin-top: 15px; margin-bottom: 5px; color: #00ff00; border-bottom: 1px solid #00ff00;">augmentations</div>
-                ${upgradeRows.map(r => `
-                    <div style="display: flex; justify-content: space-between; padding: 2px 0;">
-                        <span style="color: #aaa;">${r.label}:</span>
-                        <span style="color: #00ff00; text-align: right;">${r.value}</span>
-                    </div>
-                `).join('')}
+                <div class="workshop-stat-group workshop-augments">
+                    <div class="workshop-stat-heading">augmentations</div>
+                    ${upgradeRows.map(r => statRow({ ...r, color: '#74ff6a' })).join('')}
+                </div>
             `;
         }
     }
@@ -272,6 +282,7 @@ export class Hangar {
     toggle() {
         this.active = !this.active;
         this.ui.style.display = this.active ? 'block' : 'none';
+        this.tooltip.style.display = 'none';
 
         if (this.active) {
             // OPENING: Pause game and Clone Ship
@@ -521,4 +532,13 @@ export class Hangar {
         renderer.ctx.restore();
 
     }
+}
+
+function statRow(row) {
+    return `
+        <div class="workshop-stat-row">
+            <span>${row.label}</span>
+            <strong style="color:${row.color}">${row.value}</strong>
+        </div>
+    `;
 }

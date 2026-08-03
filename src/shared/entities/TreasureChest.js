@@ -40,14 +40,14 @@ export class TreasureChest {
 
         // Name
         ctx.fillStyle = '#ffd700';
-        ctx.font = "12px 'Press Start 2P'";
+        ctx.font = "14px 'Silkscreen', 'Pixelify Sans', monospace";
         ctx.textAlign = 'center';
-        ctx.fillText('Treasure Chest', this.x, tooltipY + 20);
+        ctx.fillText('treasure cache', this.x, tooltipY + 20);
 
         // Open prompt
         ctx.fillStyle = '#44ff44';
-        ctx.font = "12px 'Press Start 2P'";
-        ctx.fillText('[E] Open', this.x, tooltipY + 40);
+        ctx.font = "13px 'Pixelify Sans', 'Silkscreen', monospace";
+        ctx.fillText('[e] open', this.x, tooltipY + 40);
 
         ctx.textAlign = 'left';
     }

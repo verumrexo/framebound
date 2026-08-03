@@ -21,6 +21,7 @@ export class Ship {
             rocketCount: 0,
             velocityCount: 0,
             rocketBayCount: 0,
+            droneCount: 0,
             boosterCount: 0,
             turnSpeed: 0
         };
@@ -359,6 +360,7 @@ export class Ship {
             rocketCount: 0,
             velocityCount: 0,
             rocketBayCount: 0,
+            droneCount: 0,
             turnSpeed: 0,
             boosterCount: 0
         };
@@ -382,6 +384,7 @@ export class Ship {
             }
             if (def.type === PartType.ROCKET_BAY) this.stats.rocketBayCount++;
             if (def.type === PartType.BOOSTER) this.stats.boosterCount++;
+            if (def.type === PartType.DRONE) this.stats.droneCount++;
         }
 
         // Apply Permanent Upgrades

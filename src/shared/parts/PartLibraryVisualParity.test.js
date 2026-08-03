@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { PartsLibrary } from './Part.js';
 
-test('existing part pixels, anchors, footprints, and mount offsets stay exact', () => {
+test('existing part art and approved family metadata stay exact', () => {
     const manifest = Object.keys(PartsLibrary).sort().map(id => {
         const definition = PartsLibrary[id];
         return {
@@ -25,7 +25,7 @@ test('existing part pixels, anchors, footprints, and mount offsets stay exact', 
     assert.equal(manifest.length, 30);
     assert.equal(
         hash,
-        '96ebc3c47664079b29629bf3037f61d3d74c66ad6b8dea72cff868595ecdaa64'
+        '529e15a197e0d00b51600e35e334a232dbc80db8bbbcc50c39e4547b87669e2d'
     );
 });
 

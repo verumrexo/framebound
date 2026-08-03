@@ -1,3 +1,5 @@
+import { UI_FONTS } from '../ui/UiTheme.js';
+
 export class FramePresentationSystem {
     constructor(game) {
         this.game = game;
@@ -7,12 +9,12 @@ export class FramePresentationSystem {
         const game = this.game;
 
         if (!game.running) {
-            this.drawStatus('CONNECTING...');
+            this.drawStatus('connecting...');
             return;
         }
 
         if (!game.playerShip) {
-            this.drawStatus('WAITING FOR UPLINK...');
+            this.drawStatus('waiting for uplink...');
             return;
         }
 
@@ -31,7 +33,7 @@ export class FramePresentationSystem {
 
         renderer.clear();
         renderer.ctx.fillStyle = 'white';
-        renderer.ctx.font = "20px 'Press Start 2P'";
+        renderer.ctx.font = UI_FONTS.title;
         renderer.ctx.textAlign = 'center';
         renderer.ctx.fillText(
             text,

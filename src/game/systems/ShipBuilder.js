@@ -2,6 +2,7 @@ import { Assets } from '../../Assets.js';
 import { PartsLibrary, TILE_SIZE } from '../../shared/parts/Part.js';
 import { Ship } from '../../shared/entities/Ship.js';
 import { Hangar } from './Hangar.js';
+import { UI_FONTS } from '../ui/UiTheme.js';
 
 export class ShipBuilder {
     constructor(game) {
@@ -387,7 +388,7 @@ export class ShipBuilder {
                 renderer.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
                 renderer.ctx.fillRect(-CELL_STRIDE * 5, -CELL_STRIDE * 6 - 40, CELL_STRIDE * 10, 35);
                 renderer.ctx.fillStyle = '#89a889';
-                renderer.ctx.font = '600 11px "SFMono-Regular", Consolas, monospace';
+                renderer.ctx.font = UI_FONTS.label;
                 renderer.ctx.textAlign = 'center';
                 renderer.ctx.fillText(label, 0, -CELL_STRIDE * 6 - 15);
             }
@@ -421,8 +422,8 @@ export class ShipBuilder {
 
         // Draw grid(s)
         if (this.turretEditorMode) {
-            drawGrid(gridOffset, 'BASE HULL');
-            drawGrid(secondGridOffset, 'TURRET');
+            drawGrid(gridOffset, 'base hull');
+            drawGrid(secondGridOffset, 'turret');
         } else {
             drawGrid(0, null);
 
@@ -464,7 +465,7 @@ export class ShipBuilder {
 
             // Draw label with background
             renderer.ctx.fillStyle = '#ffaa00';
-            renderer.ctx.font = '600 12px "SFMono-Regular", Consolas, monospace';
+            renderer.ctx.font = UI_FONTS.label;
             renderer.ctx.textAlign = 'left';
             renderer.ctx.fillText('front', arrowX + arrowSize + 20, arrowY + 5);
         }

@@ -49,7 +49,7 @@ test('gold vault tooltip uses the game gold value passed by the caller', () => {
     vault.drawTooltip(renderer, 100, 75);
 
     assert.deepEqual(textCalls.at(-1), {
-        text: '[E] Pay 50 Gold ',
+        text: '[e] pay 50 gold ',
         fillStyle: '#44ff44'
     });
 });

@@ -1,6 +1,7 @@
 import { EntityRenderer } from './EntityRenderer.js';
 import { drawProjectile } from './ProjectileRenderer.js';
 import { drawDebugHitboxes } from './DebugHitboxRenderer.js';
+import { UI_FONTS } from '../ui/UiTheme.js';
 
 export class WorldSceneRenderer {
     constructor(game, {
@@ -103,6 +104,7 @@ export class WorldSceneRenderer {
                 this.drawProjectile(renderer, projectile));
             game.drones.forEach(drone =>
                 this.entityRenderer.drawDrone(renderer, drone));
+            game.salvageSweep?.draw?.(renderer);
 
             this.drawDebugHitboxes(game, shipCos, shipSin);
 
@@ -143,7 +145,7 @@ export class WorldSceneRenderer {
         if (game.floor === 1 && room.gridX === 0 && room.gridY === 0) {
             ctx.save();
             ctx.textAlign = 'center';
-            ctx.font = "bold 24px 'Press Start 2P'";
+            ctx.font = UI_FONTS.title;
             ctx.fillStyle = 'rgba(0, 255, 255, 0.4)';
             const centerX = room.x + room.width / 2;
             const centerY = room.y + room.height / 2;

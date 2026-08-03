@@ -49,6 +49,8 @@ import { GameplayOverlaySystem } from '../game/systems/GameplayOverlaySystem.js'
 import { FrameRuntimeSystem } from '../game/systems/FrameRuntimeSystem.js';
 import { FramePresentationSystem } from '../game/renderers/FramePresentationSystem.js';
 import { PeerNetworkManager } from './PeerNetworkManager.js';
+import { CombatTelemetry } from '../game/systems/CombatTelemetry.js';
+import { SalvageSweepSystem } from '../game/systems/SalvageSweepSystem.js';
 
 export class Game {
     constructor(canvas) {
@@ -169,6 +171,8 @@ export class Game {
         this.peerNetwork = new PeerNetworkManager(this);
 
         this.damageNumbers = [];
+        this.combatTelemetry = new CombatTelemetry();
+        this.salvageSweep = new SalvageSweepSystem(this);
         this.showDamageNumbers = true;
         this.damageNumberMode = 'singular';
 
@@ -236,8 +240,8 @@ export class Game {
         return this.roomTransitions.teleportToRoom(room);
     }
 
-    spawnDamageNumber(x, y, amount, isPlayer = false) {
-        this.effects.spawnDamageNumber(x, y, amount, isPlayer);
+    spawnDamageNumber(x, y, amount, isPlayer = false, source = null) {
+        this.effects.spawnDamageNumber(x, y, amount, isPlayer, source);
     }
 
     autoSave() {

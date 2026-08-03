@@ -53,6 +53,10 @@ export function snapshotRooms(game) {
             gridY: room.gridY,
             visited: Boolean(room.visited),
             cleared: Boolean(room.cleared),
+            sweepUsed: Boolean(room.sweepUsed),
+            sweepChargeRemaining: Number.isFinite(room.sweepChargeRemaining)
+                ? room.sweepChargeRemaining
+                : null,
             locked: Boolean(room.locked),
             shopUsed: Boolean(room.shopUsed),
             ambushStarted: Boolean(room.ambushStarted),
@@ -116,6 +120,10 @@ export function restoreRoomSnapshots(game, snapshots) {
 
         room.visited = state.visited;
         room.cleared = state.cleared;
+        room.sweepUsed = Boolean(state.sweepUsed);
+        room.sweepChargeRemaining = Number.isFinite(state.sweepChargeRemaining)
+            ? state.sweepChargeRemaining
+            : null;
         room.locked = state.locked;
         room.shopUsed = state.shopUsed;
         room.ambushStarted = state.ambushStarted;
@@ -266,12 +274,13 @@ function snapshotAsteroid(entity) {
         type: entity.type,
         state: pickState(entity, [
             'x', 'y', 'isDead', 'isBroken', 'radius', 'maxHp', 'hp',
-            'rotation', 'rotSpeed', 'vx', 'vy'
+            'rotation', 'rotSpeed', 'vx', 'vy', 'breakAge'
         ]),
         vertices: (entity.vertices || []).map(vertex => ({
             x: vertex.x,
             y: vertex.y
-        }))
+        })),
+        breakFragments: structuredClone(entity.breakFragments || [])
     };
 }
 
@@ -285,6 +294,10 @@ function restoreAsteroid(data) {
     );
     applyState(entity, data.state, Object.keys(data.state));
     entity.vertices = data.vertices.map(vertex => ({ ...vertex }));
+    entity.breakFragments = structuredClone(data.breakFragments || []);
+    if (entity.isBroken && entity.breakFragments.length === 0) {
+        entity.createBreakFragments();
+    }
     return entity;
 }
 
@@ -293,8 +306,9 @@ function snapshotLootCrate(entity) {
         size: `${entity.wTiles}x${entity.hTiles}`,
         state: pickState(entity, [
             'x', 'y', 'vx', 'vy', 'rotation', 'rotSpeed', 'isDead',
-            'isOpened', 'maxHp', 'hp', 'variant'
-        ])
+            'isOpened', 'maxHp', 'hp', 'variant', 'breakAge'
+        ]),
+        breakFragments: structuredClone(entity.breakFragments || [])
     };
 }
 
@@ -306,6 +320,11 @@ function restoreLootCrate(data) {
         deterministicRandom
     );
     applyState(entity, data.state, Object.keys(data.state));
+    entity.refreshVariantColors();
+    entity.breakFragments = structuredClone(data.breakFragments || []);
+    if (entity.isOpened && entity.breakFragments.length === 0) {
+        entity.createBreakFragments();
+    }
     return entity;
 }
 
@@ -518,6 +537,18 @@ function validRoomSnapshot(value) {
         'ambushStarted', 'waveWaiting'
     ].every(key => typeof value[key] === 'boolean')) return false;
     if (
+        value.sweepUsed !== undefined &&
+        typeof value.sweepUsed !== 'boolean'
+    ) return false;
+    if (
+        value.sweepChargeRemaining !== undefined &&
+        value.sweepChargeRemaining !== null &&
+        (
+            !Number.isFinite(value.sweepChargeRemaining) ||
+            value.sweepChargeRemaining < 0
+        )
+    ) return false;
+    if (
         !Number.isInteger(value.waveCount) ||
         value.waveCount < 0 ||
         !Number.isInteger(value.maxWaves) ||
@@ -605,13 +636,15 @@ function validAsteroidSnapshot(value) {
             isObject(vertex) &&
             Number.isFinite(vertex.x) &&
             Number.isFinite(vertex.y)
-        );
+        ) &&
+        (value.breakFragments == null || isSafeJson(value.breakFragments));
 }
 
 function validLootCrateSnapshot(value) {
     return isObject(value) &&
         typeof value.size === 'string' &&
-        validStateSnapshot(value.state, ['x', 'y']);
+        validStateSnapshot(value.state, ['x', 'y']) &&
+        (value.breakFragments == null || isSafeJson(value.breakFragments));
 }
 
 function validShipwreckSnapshot(value) {

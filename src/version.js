@@ -23,7 +23,18 @@ export const CHANGELOG = [
             'enemies: repair tenders restore damaged allies and advertise the repair link with an in-world pulse.',
             'architecture: enemy bodies and tuning now live in editable part blueprints, separate from behavior and spawn rules.',
             'online: each player receives upgrade choices based on their own ship while xp remains shared.',
-            'save: old runs automatically gain the new arsenal stats without losing their ship, upgrades, or room state.'
+            'save: old runs automatically gain the new arsenal stats without losing their ship, upgrades, or room state.',
+            'starters: new runs now roll one balanced ballistic, laser, or missile package instead of always receiving two darts and one rocketle.',
+            'balance: rocketle damage is reduced and lps damage is raised so all three starter packages land near the same theoretical damage budget.',
+            'fix: needlepoint now pierces rocks and crates, and its uncommon roll is stronger than its common roll.',
+            'hud: weapon, utility, and exact per-part damage telemetry now live in separate cockpit panels; utility telemetry only appears when a matching module is installed.',
+            'drones: swarm hive is now a real drone-family part with data-driven blueprints and upgrade hooks for future drone types.',
+            'salvage: cleared rooms charge a one-use clockwise laser sweep that destroys remaining boxes and rocks after five seconds.',
+            'visuals: destroyed boxes and rocks now leave stable physical fragments instead of rerolling glitter noise every frame.',
+            'save: destruction fragments and salvage-sweep progress now survive room revisits, continue, and host-authoritative snapshots.',
+            'ui: ground-part names, hangar telemetry, shops, treasure caches, and vault prompts now use the current lowercase cockpit language and font stack.',
+            'fix: the hangar tooltip closes with the hangar instead of getting stranded over gameplay.',
+            'fix: the weapon bus now lists newly installed weapon parts instead of silently truncating the list to three.'
         ]
     },
     {

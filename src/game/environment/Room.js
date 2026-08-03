@@ -36,6 +36,8 @@ export class Room {
         this.locked = false;
         this.visited = false;
         this.cleared = false;
+        this.sweepUsed = false;
+        this.sweepChargeRemaining = null;
         this.waveTimer = null;
 
         // Shop room properties

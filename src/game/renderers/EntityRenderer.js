@@ -1,5 +1,6 @@
 import { Assets } from '../../Assets.js';
 import { TILE_SIZE, PartsLibrary } from '../../shared/parts/Part.js';
+import { UI_FONTS } from '../ui/UiTheme.js';
 
 export class EntityRenderer {
 
@@ -416,7 +417,7 @@ export class EntityRenderer {
         }
 
         ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-        ctx.font = '8px "Press Start 2P"';
+        ctx.font = UI_FONTS.tiny;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(`${Math.ceil(entity.hp)} /${Math.ceil(entity.maxHp)}`, barCenterX, barY + barH / 2 + 1);
@@ -437,14 +438,27 @@ export class EntityRenderer {
         const pixelSize = 4;
 
         if (crate.isOpened) {
-            ctx.fillStyle = '#222';
-            ctx.fillRect(-hw, -hh, w, h);
-
-            ctx.fillStyle = crate.detailColor;
-            for (let i = 0; i < 8; i++) {
-                const x = (crate.random() - 0.5) * w;
-                const y = (crate.random() - 0.5) * h;
-                ctx.fillRect(x, y, pixelSize * 2, pixelSize * 2);
+            for (const fragment of crate.breakFragments || []) {
+                ctx.save();
+                ctx.translate(fragment.x, fragment.y);
+                ctx.rotate(fragment.rotation);
+                ctx.fillStyle = fragment.color;
+                ctx.globalAlpha = fragment.width <= 6 ? 0.75 : 0.58;
+                ctx.fillRect(
+                    -fragment.width / 2,
+                    -fragment.height / 2,
+                    fragment.width,
+                    fragment.height
+                );
+                ctx.strokeStyle = 'rgba(220, 252, 255, 0.22)';
+                ctx.lineWidth = 1;
+                ctx.strokeRect(
+                    -fragment.width / 2,
+                    -fragment.height / 2,
+                    fragment.width,
+                    fragment.height
+                );
+                ctx.restore();
             }
         } else {
             ctx.fillStyle = crate.baseColor;
@@ -503,7 +517,7 @@ export class EntityRenderer {
             }
         };
 
-        if (asteroid.vertices && asteroid.vertices.length > 0) {
+        if (!asteroid.isBroken && asteroid.vertices && asteroid.vertices.length > 0) {
             for (let i = 0; i < asteroid.vertices.length; i++) {
                 const next = (i + 1) % asteroid.vertices.length;
                 drawPixelLine(
@@ -516,14 +530,23 @@ export class EntityRenderer {
         }
 
         if (asteroid.isBroken) {
-            ctx.globalAlpha = 0.4;
             ctx.fillStyle = asteroid.type === 'rock'
                 ? '#444'
                 : asteroid.type === 'crystal_blue' ? '#008888' : '#885500';
-            for (let i = 0; i < 6; i++) {
-                const x = (asteroid.random() - 0.5) * asteroid.radius * 1.5;
-                const y = (asteroid.random() - 0.5) * asteroid.radius * 1.5;
-                ctx.fillRect(x, y, pixelSize, pixelSize);
+            ctx.globalAlpha = 0.62;
+            for (const fragment of asteroid.breakFragments || []) {
+                ctx.save();
+                ctx.translate(fragment.x, fragment.y);
+                ctx.rotate(fragment.rotation);
+                for (let index = 0; index < fragment.points.length - 1; index++) {
+                    drawPixelLine(
+                        fragment.points[index].x,
+                        fragment.points[index].y,
+                        fragment.points[index + 1].x,
+                        fragment.points[index + 1].y
+                    );
+                }
+                ctx.restore();
             }
         }
         ctx.restore();
@@ -662,7 +685,7 @@ export class EntityRenderer {
         }
 
         ctx.fillStyle = '#ffd700';
-        ctx.font = "bold 10px 'Press Start 2P'";
+        ctx.font = UI_FONTS.small;
         ctx.textAlign = 'center';
         ctx.fillText(`${item.data.price}g`, 0, item.radius + 18);
 
@@ -759,12 +782,12 @@ export class EntityRenderer {
         }
 
         renderer.ctx.fillStyle = '#fff';
-        renderer.ctx.font = "12px 'Press Start 2P'";
+        renderer.ctx.font = UI_FONTS.small;
         renderer.ctx.textAlign = 'center';
         renderer.ctx.fillText('training dummy', dummy.x, dummy.y - (dummy.radius + 30));
 
         renderer.ctx.fillStyle = '#0f0';
-        renderer.ctx.font = "24px 'Press Start 2P'";
+        renderer.ctx.font = UI_FONTS.title;
         renderer.ctx.fillText(`${dummy.currentDps} dps`, dummy.x, dummy.y - (dummy.radius + 5));
         renderer.ctx.textAlign = 'start';
     }

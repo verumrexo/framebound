@@ -174,6 +174,31 @@ test('guest claims for interaction, transitions, and ship edits remain rejected'
     ), false);
 });
 
+test('host validates and triggers a guest salvage sweep from server position', () => {
+    const game = createGame();
+    let triggeringPlayer = null;
+    game.salvageSweep = {
+        triggerFor(player) {
+            triggeringPlayer = player;
+            return true;
+        }
+    };
+    const simulation = new HostGameSimulation(game, {
+        ShipClass: ShipStub,
+        WeaponSystemClass: WeaponSystemStub
+    });
+    const { playerId } = simulation.addPeer('connection-a', {
+        displayName: 'ace'
+    });
+
+    const event = simulation.requestAction(playerId, 'sweep', {});
+
+    assert.equal(event.type, 'room_state');
+    assert.equal(triggeringPlayer.id, playerId);
+    assert.equal(triggeringPlayer.x, 100);
+    assert.equal(triggeringPlayer.y, 200);
+});
+
 test('full resync identifies the local guest and includes authoritative run state', () => {
     const game = createGame();
     const simulation = new HostGameSimulation(game, {

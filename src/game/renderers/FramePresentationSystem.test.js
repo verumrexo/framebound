@@ -54,10 +54,10 @@ test('inactive presentation keeps the connecting screen at native center', () =>
 
     assert.deepEqual(calls, [
         ['clear', undefined],
-        ['status', 'CONNECTING...', 640, 360]
+        ['status', 'connecting...', 640, 360]
     ]);
     assert.equal(ctx.fillStyle, 'white');
-    assert.equal(ctx.font, "20px 'Press Start 2P'");
+    assert.equal(ctx.font, '22px "Silkscreen", "Pixelify Sans", monospace');
     assert.equal(ctx.textAlign, 'center');
 });
 
@@ -68,6 +68,6 @@ test('missing local player keeps the waiting-for-uplink screen', () => {
 
     assert.deepEqual(calls, [
         ['clear', undefined],
-        ['status', 'WAITING FOR UPLINK...', 640, 360]
+        ['status', 'waiting for uplink...', 640, 360]
     ]);
 });

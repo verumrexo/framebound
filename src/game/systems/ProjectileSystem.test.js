@@ -160,6 +160,58 @@ test('ballistic pierce crosses extra targets before being consumed', () => {
     assert.deepEqual(game.projectiles, []);
 });
 
+test('ballistic pierce crosses rocks and crates instead of dying on debris', () => {
+    const hits = [];
+    const asteroid = {
+        x: 0,
+        y: 0,
+        radius: 12,
+        isDead: false,
+        isBroken: false,
+        takeDamage: amount => {
+            hits.push(['asteroid', amount]);
+            return false;
+        }
+    };
+    const crate = {
+        x: 0,
+        y: 0,
+        radius: 12,
+        isOpened: false,
+        rotSpeed: 0,
+        takeDamage: amount => {
+            hits.push(['crate', amount]);
+            return false;
+        }
+    };
+    const projectile = {
+        owner: 'player',
+        type: 'bullet',
+        x: 0,
+        y: 0,
+        radius: 4,
+        damage: 10,
+        remainingPierces: 1,
+        isBeam: false,
+        isDead: false,
+        update() {}
+    };
+    const { game, system } = createGame([projectile], {
+        asteroids: [asteroid],
+        lootCrates: [crate]
+    });
+
+    system.update(0.016);
+
+    assert.deepEqual(hits, [
+        ['asteroid', 10],
+        ['crate', 10]
+    ]);
+    assert.deepEqual(game.projectiles, []);
+    assert.equal(projectile.hitTargets.has(asteroid), true);
+    assert.equal(projectile.hitTargets.has(crate), true);
+});
+
 test('laser chain and missile blast radius upgrades produce combat effects', () => {
     const damage = [];
     const explosions = [];

@@ -36,7 +36,8 @@ const ACTION_TYPES = new Set([
     'interact',
     'level_up',
     'ship_edit',
-    'transition'
+    'transition',
+    'sweep'
 ]);
 const EVENT_TYPES = new Set([
     'spawn',
@@ -330,6 +331,8 @@ function sanitizeAction(action, payload) {
         }
         return { index: payload.index };
     }
+
+    if (action === 'sweep') return {};
 
     if (!Array.isArray(payload.parts)) return null;
     if (
