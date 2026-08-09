@@ -8,6 +8,11 @@ function createManager() {
     manager.masterGain = gain(0.5);
     manager.musicGain = gain(0.4);
     manager.sfxGain = gain(0.6);
+    manager.sounds = new Map();
+    manager.defaultSounds = new Map();
+    manager.eventBindings = new Map();
+    manager.missingSoundWarnings = new Set();
+    manager.recentPlays = new Map();
     return manager;
 }
 
@@ -53,4 +58,43 @@ test('blocked audio storage never crashes startup or volume changes', (t) => {
     } finally {
         globalThis.localStorage = originalStorage;
     }
+});
+
+test('event bindings hot-swap a semantic event without replacing its fallback', () => {
+    const manager = createManager();
+    const fallback = {};
+    const custom = {};
+    manager.sounds.set('dash', fallback);
+    manager.sounds.set('forge:dash-1', custom);
+
+    assert.equal(manager.bindEvent('global:dash', 'forge:dash-1'), true);
+    assert.equal(manager.getEventBinding('global:dash'), 'forge:dash-1');
+    assert.equal(manager.sounds.get('dash'), fallback);
+    assert.equal(manager.unbindEvent('global:dash'), true);
+    assert.equal(manager.getEventBinding('global:dash'), null);
+});
+
+test('replace and restore default preserve the packaged buffer', () => {
+    const manager = createManager();
+    const packaged = {};
+    const replacement = {};
+    manager.sounds.set('hit', packaged);
+    manager.defaultSounds.set('hit', packaged);
+
+    assert.equal(manager.replace('hit', replacement), true);
+    assert.equal(manager.sounds.get('hit'), replacement);
+    assert.equal(manager.restoreDefault('hit'), true);
+    assert.equal(manager.sounds.get('hit'), packaged);
+});
+
+test('sound inspection and named preview use the loaded buffer', (t) => {
+    const manager = createManager();
+    const buffer = {};
+    manager.sounds.set('dash', buffer);
+    t.mock.method(manager, 'preview', audioBuffer => audioBuffer);
+
+    assert.equal(manager.hasSound('dash'), true);
+    assert.equal(manager.hasSound('missing'), false);
+    assert.equal(manager.previewSound('dash'), buffer);
+    assert.equal(manager.previewSound('missing'), undefined);
 });

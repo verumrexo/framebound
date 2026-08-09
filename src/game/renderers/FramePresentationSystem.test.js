@@ -19,8 +19,10 @@ function createGame(overrides = {}) {
             width: 1280,
             height: 720,
             ctx,
+            beginWorld: () => calls.push(['beginWorld']),
             clear: color => calls.push(['clear', color]),
-            present: () => calls.push(['present'])
+            present: () => calls.push(['present']),
+            clearHud: () => calls.push(['clearHud'])
         },
         starfield: {
             draw: (...args) => calls.push(['starfield', ...args])
@@ -39,10 +41,27 @@ test('active presentation preserves clear, starfield, world, present, and hud or
     new FramePresentationSystem(game).draw();
 
     assert.deepEqual(calls, [
+        ['beginWorld'],
         ['clear', '#000'],
         ['starfield', game.renderer, 120, 240],
         ['world'],
         ['present'],
+        ['clearHud'],
+        ['hud']
+    ]);
+});
+
+test('world overlays draw after compositing and before regular hud', () => {
+    const { game, calls } = createGame({
+        worldOverlays: { draw: () => calls.push(['overlays']) }
+    });
+
+    new FramePresentationSystem(game).draw();
+
+    assert.deepEqual(calls.slice(-4), [
+        ['present'],
+        ['clearHud'],
+        ['overlays'],
         ['hud']
     ]);
 });
@@ -53,7 +72,10 @@ test('inactive presentation keeps the connecting screen at native center', () =>
     new FramePresentationSystem(game).draw();
 
     assert.deepEqual(calls, [
+        ['beginWorld'],
         ['clear', undefined],
+        ['present'],
+        ['clearHud'],
         ['status', 'connecting...', 640, 360]
     ]);
     assert.equal(ctx.fillStyle, 'white');
@@ -67,7 +89,27 @@ test('missing local player keeps the waiting-for-uplink screen', () => {
     new FramePresentationSystem(game).draw();
 
     assert.deepEqual(calls, [
+        ['beginWorld'],
         ['clear', undefined],
+        ['present'],
+        ['clearHud'],
         ['status', 'waiting for uplink...', 640, 360]
     ]);
+});
+
+test('presentation updates camera extent from the authoritative renderer viewport', () => {
+    const { game } = createGame({
+        camera: {
+            width: 320,
+            height: 180,
+            resize(width, height) {
+                this.width = width;
+                this.height = height;
+            }
+        }
+    });
+
+    new FramePresentationSystem(game).draw();
+
+    assert.deepEqual({ width: game.camera.width, height: game.camera.height }, { width: 1280, height: 720 });
 });

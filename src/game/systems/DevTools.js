@@ -8,6 +8,7 @@ import { Enemy } from '../../shared/entities/Enemy.js';
 import { TreasureChest } from '../../shared/entities/TreasureChest.js';
 import { PartsLibrary } from '../../shared/parts/Part.js';
 import { Shipwreck } from '../../shared/entities/Shipwreck.js';
+import { SignalForgeWindow } from '../dev/SignalForgeWindow.js';
 
 export class DevTools {
     constructor(game) {
@@ -21,6 +22,7 @@ export class DevTools {
         this.spawnAmount = 1;
         this.pendingSpawnAction = null; // Function to execute on map click
         this.placementMode = false;
+        this.signalForge = new SignalForgeWindow(game);
 
         // Create UI
         this.ui = document.createElement('div');
@@ -159,19 +161,7 @@ export class DevTools {
             return btn;
         };
 
-        // 1. Anti-Aliasing (Smoothing)
-        createToggle('anti-aliasing', () => this.game.renderer.smoothingEnabled, (v) => this.game.renderer.setSmoothing(v));
-
-        // 2. CSS Pixelation
-        createToggle('css pixelation', () => this.game.renderer.pixelatedCSS !== false, (v) => this.game.renderer.setPixelation(v));
-
-        // 3. Resolution Scale
-        createSlider('resolution scale', '0.1', '1.0', '0.05',
-            () => this.game.renderer.resolutionScale,
-            (v) => this.game.renderer.setResolutionScale(v)
-        );
-
-        // 5. Grid Opacity
+        // Grid Opacity
         createSlider('grid opacity', '0', '0.5', '0.05',
             () => this.game.graphics.gridOpacity,
             (v) => this.game.graphics.gridOpacity = v
@@ -293,6 +283,11 @@ export class DevTools {
         createBtn('🔓 unlock parts', () => this.unlockAllParts(), '#00ffff', false);
 
         // --- EDITORS ---
+        createBtn('🔊 signal forge', () => {
+            this.active = false;
+            this.ui.style.display = 'none';
+            this.signalForge.open();
+        }, '#55f6ff', false);
         createBtn('🛠️ ship editor', () => this.openShipEditor(), '#00ffff', false);
         createBtn('📐 designer', () => this.openDesigner(), '#ff00ff', false);
         createBtn('🚫 disable devtools', () => this.logout(), '#ff4444', false);

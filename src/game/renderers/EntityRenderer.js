@@ -1,6 +1,12 @@
-import { Assets } from '../../Assets.js';
 import { TILE_SIZE, PartsLibrary } from '../../shared/parts/Part.js';
-import { UI_FONTS } from '../ui/UiTheme.js';
+import {
+    drawShipAssembly,
+    getChargeTip,
+    getMountedTurretPosition,
+    getShipAssemblyParts,
+    localToWorld
+} from './ShipAssemblyRenderer.js';
+import { SHIP_ASSEMBLY_PROFILES } from './ShipAssemblyCache.js';
 
 export class EntityRenderer {
 
@@ -8,138 +14,68 @@ export class EntityRenderer {
         if (ship.isDead) return;
 
         const ctx = renderer.ctx;
-        const CELL_STRIDE = TILE_SIZE;
         const rotation = ship.rotation;
+        const partsIter = typeof ship.getUniqueParts === 'function'
+            ? ship.getUniqueParts()
+            : ship.parts?.values();
+        const parts = getShipAssemblyParts(partsIter, PartsLibrary);
+        drawShipAssembly(ctx, ship, parts, { rotation, visualTint: ship.visualTint || ship.tint || null });
 
-        const shipCos = Math.cos(rotation);
-        const shipSin = Math.sin(rotation);
-
-        // Ensure we can iterate parts (RemotePlayer might store them differently?)
-        // Assuming ship has getUniqueParts() or parts Map
-        const partsIter = (typeof ship.getUniqueParts === 'function') ? ship.getUniqueParts() : ship.parts.values();
-
-        for (const partRef of partsIter) {
-            const def = PartsLibrary[partRef.partId];
-            if (!def) continue;
-
-            const isRotated = ((partRef.rotation || 0) % 2 !== 0);
-            const w = isRotated ? def.height : def.width;
-            const h = isRotated ? def.width : def.height;
-
-            const localCX = (partRef.x + (w - 1) / 2) * CELL_STRIDE;
-            const localCY = (partRef.y + (h - 1) / 2) * CELL_STRIDE;
-
-            const worldPartX = ship.x + (localCX * shipCos - localCY * shipSin);
-            const worldPartY = ship.y + (localCX * shipSin + localCY * shipCos);
+        for (const part of parts) {
+            const { def, partRef } = part;
+            const world = localToWorld(ship, part.localX, part.localY, rotation);
 
             if (def.type === 'weapon') {
-                // Draw base
-                if (def.baseSprite) {
-                    def.baseSprite.draw(ctx, worldPartX, worldPartY, rotation + (partRef.rotation || 0) * (Math.PI / 2), 0.5, 0.5);
-                } else if ((w === 1 && h === 2) || (w === 2 && h === 1)) {
-                    // Long Hull (1x2)
-                    if (Assets.LongHull) Assets.LongHull.draw(ctx, worldPartX, worldPartY, rotation + (partRef.rotation || 0) * (Math.PI / 2), 0.5, 0.5);
-                } else {
-                    // Standard Base
-                    if (Assets.PlayerBase) Assets.PlayerBase.draw(ctx, worldPartX, worldPartY, rotation, 0.5, 0.5);
-                }
+                const angle = Math.atan2(targetY - world.y, targetX - world.x);
+                const baseAngle = rotation + part.rotation * (Math.PI / 2);
+                const offset = getMountedTurretPosition(part, baseAngle, angle, partRef.recoil);
+                def.sprite.draw(
+                    ctx,
+                    world.x + offset.offsetX,
+                    world.y + offset.offsetY,
+                    angle + (def.rotationOffset || 0),
+                    null,
+                    null,
+                    'rgba(255,255,255,0.4)'
+                );
 
-                // Draw turret (aimed at target)
-                // Use input aim if available, otherwise targetX/Y passed in
-                let angle = 0;
-                // If it's a RemotePlayer, we might not have aim info perfectly synced yet, use rotation?
-                // Or extrapolate?
-                // For LocalPlayer, we use mouse/input.
-
-                // If aiming at specific point
-                angle = Math.atan2(targetY - worldPartY, targetX - worldPartX);
-
-                const baseAngle = rotation + (partRef.rotation || 0) * (Math.PI / 2);
-
-                let offsetX = 0;
-                let offsetY = 0;
-
-                if (def.turretDrawOffset) {
-                    if (typeof def.turretDrawOffset === 'object') {
-                        const ox = def.turretDrawOffset.x || 0;
-                        const oy = def.turretDrawOffset.y || 0;
-                        offsetX = Math.cos(baseAngle) * ox - Math.sin(baseAngle) * oy;
-                        offsetY = Math.sin(baseAngle) * ox + Math.cos(baseAngle) * oy;
-                    } else {
-                        offsetX = Math.cos(angle) * def.turretDrawOffset;
-                        offsetY = Math.sin(angle) * def.turretDrawOffset;
-                    }
-                }
-
-                if (partRef.recoil) {
-                    offsetX -= Math.cos(angle) * partRef.recoil;
-                    offsetY -= Math.sin(angle) * partRef.recoil;
-                }
-
-                if (def.baseSprite && (def.baseSprite.anchorX !== 0.5 || def.baseSprite.anchorY !== 0.5)) {
-                    const bpx = (def.baseSprite.anchorX - 0.5) * def.baseSprite.width * def.baseSprite.scale;
-                    const bpy = (def.baseSprite.anchorY - 0.5) * def.baseSprite.height * def.baseSprite.scale;
-                    offsetX += Math.cos(baseAngle) * bpx - Math.sin(baseAngle) * bpy;
-                    offsetY += Math.sin(baseAngle) * bpx + Math.cos(baseAngle) * bpy;
-                }
-
-                const drawX = worldPartX + offsetX;
-                const drawY = worldPartY + offsetY;
-
-                def.sprite.draw(ctx, drawX, drawY, angle + (def.rotationOffset || 0), null, null, 'rgba(255,255,255,0.4)');
-
-                // Charge Effect (Railway/Saber)
-                if ((partRef.chargeLeft > 0 || partRef.chargeReady) && (def.stats.projectileType === 'railgun' || def.stats.projectileType === 'saber')) {
-                    const pct = partRef.chargeReady ? 1.0 : (1.0 - (partRef.chargeLeft / def.stats.chargeTime));
-                    let barrelLen = (h > 1.5) ? CELL_STRIDE * 1.3 : CELL_STRIDE * 0.6;
-                    barrelLen += (def.turretDrawOffset || 0);
-                    const tipX = worldPartX + Math.cos(angle) * barrelLen;
-                    const tipY = worldPartY + Math.sin(angle) * barrelLen;
-
-                    const isSaber = def.stats.projectileType === 'saber';
-                    const baseRadius = isSaber ? 5 : 15;
+                if ((partRef.chargeLeft > 0 || partRef.chargeReady) &&
+                    (def.stats.projectileType === 'railgun' || def.stats.projectileType === 'saber')) {
+                    const pct = partRef.chargeReady ? 1 : 1 - (partRef.chargeLeft / def.stats.chargeTime);
+                    const tip = getChargeTip(part, world.x, world.y, angle);
+                    const baseRadius = def.stats.projectileType === 'saber' ? 5 : 15;
                     const radius = 5 + pct * baseRadius + Math.sin(Date.now() * 0.01) * 2;
                     ctx.save();
                     ctx.globalAlpha = 0.5 + Math.random() * 0.3;
-
                     ctx.beginPath();
-                    ctx.arc(tipX, tipY, radius, 0, Math.PI * 2);
+                    ctx.arc(tip.x, tip.y, radius, 0, Math.PI * 2);
                     ctx.fillStyle = '#00ffff';
                     ctx.fill();
-
                     ctx.globalAlpha = 0.8;
                     ctx.beginPath();
-                    ctx.arc(tipX, tipY, radius * 0.5, 0, Math.PI * 2);
+                    ctx.arc(tip.x, tip.y, radius * 0.5, 0, Math.PI * 2);
                     ctx.fillStyle = '#ffffff';
                     ctx.fill();
                     ctx.restore();
                 }
-            } else {
-                // Static Part
-                def.sprite.draw(ctx, worldPartX, worldPartY, rotation + (partRef.rotation || 0) * (Math.PI / 2), 0.5, 0.5);
-
-                // Shield
-                if (def.type === 'shield' && (!partRef.shieldCooldown || partRef.shieldCooldown <= 0)) {
-                    const pulse = 1.0 + Math.sin(Date.now() * 0.005) * 0.1;
-                    const scale = def.stats.shieldRadiusScale || 1.4;
-                    const radius = (CELL_STRIDE / 2) * scale * pulse;
-
-                    ctx.save();
-                    ctx.fillStyle = 'rgba(0, 200, 255, 0.15)';
-                    ctx.strokeStyle = 'rgba(0, 255, 255, 0.4)';
-                    ctx.lineWidth = 2;
-                    ctx.beginPath();
-                    ctx.arc(worldPartX, worldPartY, radius, 0, Math.PI * 2);
-                    ctx.fill();
-                    ctx.stroke();
-                    ctx.restore();
-                }
             }
 
-            // Core Effect (spinning energy core)
+            if (def.type === 'shield' && (!partRef.shieldCooldown || partRef.shieldCooldown <= 0)) {
+                const pulse = 1 + Math.sin(Date.now() * 0.005) * 0.1;
+                const radius = (TILE_SIZE / 2) * (def.stats.shieldRadiusScale || 1.4) * pulse;
+                ctx.save();
+                ctx.fillStyle = 'rgba(0, 200, 255, 0.15)';
+                ctx.strokeStyle = 'rgba(0, 255, 255, 0.4)';
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(world.x, world.y, radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.stroke();
+                ctx.restore();
+            }
+
             if (def.id === 'core' && def.coreEffectSprite) {
-                const spin = rotation + ((Date.now() % 10000) * 0.003);
-                def.coreEffectSprite.draw(ctx, worldPartX, worldPartY, spin);
+                def.coreEffectSprite.draw(ctx, world.x, world.y, rotation + ((Date.now() % 10000) * 0.003));
             }
         }
     }
@@ -166,9 +102,10 @@ export class EntityRenderer {
         // Render ship parts if available
         if (enemy.shipParts && enemy.shipParts.length > 0) {
             const ctx = renderer.ctx;
+            const rotation = enemy.rotation + (enemy.rotationOffset || 0);
+            const enemyColor = frozenTimer > 0 ? '#00ffff' : '#ff6666';
+            const parts = getShipAssemblyParts(enemy.shipParts, PartsLibrary);
             ctx.save();
-            ctx.translate(enemy.x, enemy.y);
-            ctx.rotate(enemy.rotation + (enemy.rotationOffset || 0));
 
             if (frozenTimer > 0 || freezeMeter > 0) {
                 const intensity = frozenTimer > 0 ? 1.0 : (freezeMeter / 3.0);
@@ -177,66 +114,43 @@ export class EntityRenderer {
                 ctx.globalAlpha = 0.8;
             }
 
-            for (const partData of enemy.shipParts) {
-                const def = PartsLibrary[partData.partId];
-                if (!def) continue;
+            drawShipAssembly(ctx, enemy, parts, {
+                rotation,
+                visualTint: enemyColor,
+                profile: SHIP_ASSEMBLY_PROFILES.enemy
+            });
+            ctx.translate(enemy.x, enemy.y);
+            ctx.rotate(rotation);
 
-                const isRotated = ((partData.rotation || 0) % 2 !== 0);
-                const w = isRotated ? def.height : def.width;
-                const h = isRotated ? def.width : def.height;
-                const drawX = (partData.x + (w - 1) / 2) * TILE_SIZE;
-                const drawY = (partData.y + (h - 1) / 2) * TILE_SIZE;
-
-                const baseAngle = (partData.rotation || 0) * (Math.PI / 2);
-
-                let drawAngle = baseAngle;
-                let turretX = drawX;
-                let turretY = drawY;
-
-                // Weapon aiming logic
+            for (const part of parts) {
+                const { def, partRef } = part;
                 if (def.type === 'weapon') {
-                    let offsetX = 0;
-                    let offsetY = 0;
-
-                    if (def.turretDrawOffset) {
-                        if (typeof def.turretDrawOffset === 'object') {
-                            const ox = def.turretDrawOffset.x || 0;
-                            const oy = def.turretDrawOffset.y || 0;
-                            offsetX = Math.cos(baseAngle) * ox - Math.sin(baseAngle) * oy;
-                            offsetY = Math.sin(baseAngle) * ox + Math.cos(baseAngle) * oy;
-                        } else {
-                            offsetX = Math.cos(baseAngle) * def.turretDrawOffset;
-                            offsetY = Math.sin(baseAngle) * def.turretDrawOffset;
-                        }
-                    }
-
-                    turretX = drawX + offsetX;
-                    turretY = drawY + offsetY;
-
-                    if (enemy.aimAngle !== undefined) {
-                        // drawAngle = AimAngle - (ShipRotation + RotationOffset)
-                        drawAngle = enemy.aimAngle - (enemy.rotation + (enemy.rotationOffset || 0));
-                    } else {
-                        drawAngle = 0;
-                    }
+                    const drawAngle = enemy.aimAngle === undefined
+                        ? 0
+                        : enemy.aimAngle - rotation;
+                    const baseAngle = part.rotation * (Math.PI / 2);
+                    const offset = getMountedTurretPosition(part, baseAngle, drawAngle, partRef.recoil, {
+                        numericOffsetAngle: baseAngle,
+                        includeBaseAnchor: false
+                    });
+                    def.sprite.draw(
+                        ctx,
+                        part.localX + offset.offsetX,
+                        part.localY + offset.offsetY,
+                        drawAngle + (def.rotationOffset || 0),
+                        null,
+                        null,
+                        null,
+                        enemyColor
+                    );
                 }
 
-                let enemyColor = '#ff6666';
-                if (frozenTimer > 0) enemyColor = '#00ffff';
-
-                if (def.type === 'weapon' && def.baseSprite) {
-                    def.baseSprite.draw(ctx, drawX, drawY, (partData.rotation || 0) * (Math.PI / 2), 0.5, 0.5, null, enemyColor);
-                }
-
-                def.sprite.draw(ctx, turretX, turretY, drawAngle + (def.rotationOffset || 0), null, null, null, enemyColor);
-
-                // Shield Visual
-                if (def.type === 'shield' && (!partData.shieldCooldown || partData.shieldCooldown <= 0)) {
+                if (def.type === 'shield' && (!partRef.shieldCooldown || partRef.shieldCooldown <= 0)) {
                     const pulse = 1.0 + Math.sin(Date.now() / 200) * 0.1;
                     const scale = (def.stats.shieldRadiusScale || 1.4) * pulse;
 
                     ctx.beginPath();
-                    ctx.arc(drawX, drawY, (def.width * TILE_SIZE / 2) * scale, 0, Math.PI * 2);
+                    ctx.arc(part.localX, part.localY, (def.width * TILE_SIZE / 2) * scale, 0, Math.PI * 2);
                     ctx.strokeStyle = '#00ffff';
                     ctx.lineWidth = 2;
                     ctx.shadowBlur = 10;
@@ -329,100 +243,6 @@ export class EntityRenderer {
             return; // Skip health bar while warping
         }
 
-        // Draw Health Bar
-        EntityRenderer.drawHealthBar(renderer, enemy);
-    }
-
-    static drawHealthBar(renderer, entity) {
-        if (!entity.maxHp || entity.maxHp <= 0) return;
-
-        let barCenterX = entity.x;
-        let topY = entity.y - (entity.radius || 20);
-
-        if (entity.shipParts && entity.shipParts.length > 0) {
-            const rotation = entity.rotation + (entity.rotationOffset || 0);
-            const cos = Math.cos(rotation);
-            const sin = Math.sin(rotation);
-            let minWorldY = Infinity;
-            let minWorldX = Infinity;
-            let maxWorldX = -Infinity;
-
-            for (const partData of entity.shipParts) {
-                const def = PartsLibrary[partData.partId];
-                if (!def) continue;
-
-                const isRotated = ((partData.rotation || 0) % 2 !== 0);
-                const width = isRotated ? def.height : def.width;
-                const height = isRotated ? def.width : def.height;
-                const corners = [
-                    { x: partData.x, y: partData.y },
-                    { x: partData.x + width, y: partData.y },
-                    { x: partData.x, y: partData.y + height },
-                    { x: partData.x + width, y: partData.y + height }
-                ];
-
-                for (const corner of corners) {
-                    const localX = corner.x * TILE_SIZE;
-                    const localY = corner.y * TILE_SIZE;
-                    const worldX = entity.x + (localX * cos - localY * sin);
-                    const worldY = entity.y + (localX * sin + localY * cos);
-                    minWorldY = Math.min(minWorldY, worldY);
-                    minWorldX = Math.min(minWorldX, worldX);
-                    maxWorldX = Math.max(maxWorldX, worldX);
-                }
-            }
-
-            if (Number.isFinite(minWorldY)) {
-                topY = minWorldY;
-                barCenterX = (minWorldX + maxWorldX) / 2;
-            }
-        }
-
-        const barW = Math.min(160, Math.max(40, entity.maxHp / 2));
-        const barH = 8;
-        const hpPct = Math.max(0, entity.hp / entity.maxHp);
-        const barY = topY - 25;
-
-        const ctx = renderer.ctx;
-        ctx.save();
-
-        // Terminal Border
-        ctx.strokeStyle = '#00ffff';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(barCenterX - barW / 2 - 2, barY - 2, barW + 4, barH + 4);
-
-        ctx.fillStyle = 'rgba(0, 20, 30, 0.8)';
-        ctx.fillRect(barCenterX - barW / 2, barY, barW, barH);
-
-        if (hpPct > 0) {
-            const fillW = barW * hpPct;
-            ctx.fillStyle = '#ff3333';
-            ctx.fillRect(barCenterX - barW / 2, barY, fillW, barH);
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
-            ctx.fillRect(barCenterX - barW / 2, barY, fillW, barH / 2);
-        }
-
-        // Segments
-        const segmentCount = Math.floor(barW / 20);
-        if (segmentCount > 1) {
-            ctx.strokeStyle = 'rgba(0, 255, 255, 0.2)';
-            ctx.lineWidth = 1;
-            for (let i = 1; i < segmentCount; i++) {
-                const sx = (barCenterX - barW / 2) + (barW / segmentCount) * i;
-                ctx.beginPath();
-                ctx.moveTo(sx, barY - 2);
-                ctx.lineTo(sx, barY + barH + 2);
-                ctx.stroke();
-            }
-        }
-
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
-        ctx.font = UI_FONTS.tiny;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillText(`${Math.ceil(entity.hp)} /${Math.ceil(entity.maxHp)}`, barCenterX, barY + barH / 2 + 1);
-
-        ctx.restore();
     }
 
     static drawLootCrate(renderer, crate) {
@@ -684,11 +504,6 @@ export class EntityRenderer {
             item.partDef.sprite.draw(ctx, 0, 0, 0);
         }
 
-        ctx.fillStyle = '#ffd700';
-        ctx.font = UI_FONTS.small;
-        ctx.textAlign = 'center';
-        ctx.fillText(`${item.data.price}g`, 0, item.radius + 18);
-
         ctx.restore();
     }
 
@@ -780,15 +595,6 @@ export class EntityRenderer {
         if (dummy.sprite) {
             dummy.sprite.draw(renderer.ctx, dummy.x, dummy.y, dummy.rotation);
         }
-
-        renderer.ctx.fillStyle = '#fff';
-        renderer.ctx.font = UI_FONTS.small;
-        renderer.ctx.textAlign = 'center';
-        renderer.ctx.fillText('training dummy', dummy.x, dummy.y - (dummy.radius + 30));
-
-        renderer.ctx.fillStyle = '#0f0';
-        renderer.ctx.font = UI_FONTS.title;
-        renderer.ctx.fillText(`${dummy.currentDps} dps`, dummy.x, dummy.y - (dummy.radius + 5));
-        renderer.ctx.textAlign = 'start';
     }
+
 }

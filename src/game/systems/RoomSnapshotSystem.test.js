@@ -51,6 +51,18 @@ test('room snapshots preserve flags, debris, wreck parts, shops, and chests', ()
     source.treasureChests[0].opened = true;
     source.vaultChests = [new VaultChest(2600, 800, 'gold', 100, random)];
     source.vaultChests[0].wasPaid = true;
+    source.vaultState = {
+        version: 1,
+        phase: 'containment',
+        contractId: 'gilded',
+        payerId: 'guest_1',
+        playerCount: 2,
+        elapsed: 7.5,
+        nextSurge: 2,
+        spawnSerial: 7,
+        rewardPartIds: ['dart', 'laser'],
+        rewardSpawned: false
+    };
 
     const snapshots = snapshotRooms({
         rooms: [source],
@@ -84,6 +96,7 @@ test('room snapshots preserve flags, debris, wreck parts, shops, and chests', ()
     assert.equal(target.shopItems[0].purchased, true);
     assert.equal(target.treasureChests[0].opened, true);
     assert.equal(target.vaultChests[0].wasPaid, true);
+    assert.deepEqual(target.vaultState, source.vaultState);
 });
 
 test('unvisited shops and chest rooms remain ungenerated after continue', () => {

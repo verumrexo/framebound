@@ -8,6 +8,11 @@ import {
     drawUiBar,
     drawUiPanel
 } from '../ui/UiTheme.js';
+import {
+    VAULT_CONTAINMENT_DURATION,
+    VAULT_CONTRACTS,
+    VaultPhase
+} from '../../shared/vault/VaultDefinitions.js';
 
 export class HudRenderer {
     constructor(game, {
@@ -40,7 +45,7 @@ export class HudRenderer {
         }
 
         this.updateItemTooltip();
-        game.effects.drawNotifications();
+        this.drawNotifications();
 
         if (game.levelUpManager.active) {
             game.levelUpManager.draw(game.renderer);
@@ -123,6 +128,7 @@ export class HudRenderer {
             this.drawCockpitHud(speed);
         }
         this.drawSalvageSweepStatus();
+        this.drawVaultStatus();
 
         const frameTime = this.now();
         game.frameCount++;
@@ -144,6 +150,65 @@ export class HudRenderer {
         ctx.restore();
 
         this.drawMinigunIndicator();
+    }
+
+    drawVaultStatus() {
+        const state = this.game.currentRoom?.vaultState;
+        if (!state || state.phase === VaultPhase.OFFER) return;
+
+        const ctx = this.game.renderer.ctx;
+        const width = 330;
+        const x = (this.game.renderer.width - width) / 2;
+        const y = 62;
+        const definition = VAULT_CONTRACTS[state.contractId];
+        const color = definition?.color || UI_COLORS.cyan;
+        ctx.save();
+        drawUiPanel(ctx, x, y, width, 56, color);
+        ctx.font = UI_FONTS.tiny;
+        ctx.textAlign = 'left';
+        ctx.fillStyle = color;
+        ctx.fillText(`cursed vault // ${definition?.shortLabel || 'unknown'}`, x + 14, y + 20);
+        ctx.textAlign = 'right';
+        ctx.fillStyle = UI_COLORS.muted;
+
+        if (state.phase === VaultPhase.CONTAINMENT) {
+            const remaining = Math.max(0, VAULT_CONTAINMENT_DURATION - state.elapsed);
+            ctx.fillText(`hold ${remaining.toFixed(1)}s`, x + width - 14, y + 20);
+            drawUiBar(
+                ctx,
+                x + 14,
+                y + 33,
+                width - 28,
+                7,
+                state.elapsed / VAULT_CONTAINMENT_DURATION,
+                color
+            );
+        } else if (state.phase === VaultPhase.REWARD) {
+            ctx.fillStyle = UI_COLORS.greenBright;
+            ctx.fillText('cache ready // return to reliquary', x + width - 14, y + 20);
+        } else {
+            ctx.fillText('contract complete', x + width - 14, y + 20);
+        }
+        ctx.restore();
+    }
+
+    drawNotifications() {
+        const { game } = this;
+        if (game.notifications.length === 0) return;
+        const ctx = game.renderer.ctx;
+        ctx.save();
+        ctx.textAlign = 'center';
+        ctx.font = UI_FONTS.small;
+        let y = game.renderer.height - 100;
+        for (const notification of game.notifications) {
+            ctx.globalAlpha = Math.min(1, notification.life * 2);
+            ctx.fillStyle = notification.color;
+            ctx.shadowBlur = 4;
+            ctx.shadowColor = 'black';
+            ctx.fillText(notification.text, game.renderer.width / 2, y);
+            y -= 30;
+        }
+        ctx.restore();
     }
 
     drawCockpitHud(speed) {

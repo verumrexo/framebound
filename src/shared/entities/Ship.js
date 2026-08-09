@@ -23,6 +23,7 @@ export class Ship {
             rocketBayCount: 0,
             droneCount: 0,
             boosterCount: 0,
+            boosterPartId: null,
             turnSpeed: 0
         };
 
@@ -362,7 +363,8 @@ export class Ship {
             rocketBayCount: 0,
             droneCount: 0,
             turnSpeed: 0,
-            boosterCount: 0
+            boosterCount: 0,
+            boosterPartId: null
         };
 
         for (const part of this.getUniqueParts()) {
@@ -383,7 +385,10 @@ export class Ship {
                 if (def.stats.weaponGroup === 'velocity') this.stats.velocityCount++;
             }
             if (def.type === PartType.ROCKET_BAY) this.stats.rocketBayCount++;
-            if (def.type === PartType.BOOSTER) this.stats.boosterCount++;
+            if (def.type === PartType.BOOSTER) {
+                this.stats.boosterCount++;
+                this.stats.boosterPartId ||= def.id;
+            }
             if (def.type === PartType.DRONE) this.stats.droneCount++;
         }
 

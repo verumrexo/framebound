@@ -4,6 +4,7 @@ import {
     PartType,
     TILE_SIZE
 } from '../../shared/parts/PartDefinitions.js';
+import { partSoundEventKey } from '../audio/SoundEventRegistry.js';
 
 const ENEMY_DRONE_LIMIT = 12;
 
@@ -92,7 +93,15 @@ export class DroneSystem {
                 drone.ownerPlayerId = player.id;
                 game.drones.push(drone);
                 game.showNotification('drone deployed', '#00ffff');
-                game.audio.play('reload', { volume: 0.5, pitch: 2.0 });
+                if (game.audio.playEvent) {
+                    game.audio.playEvent(
+                        partSoundEventKey(def.id, 'deploy'),
+                        'reload',
+                        { volume: 0.5, pitch: 2.0 }
+                    );
+                } else {
+                    game.audio.play('reload', { volume: 0.5, pitch: 2.0 });
+                }
                 part.lastDroneSpawn = now;
 
                 const playerDroneCount = game.drones.filter(candidate =>

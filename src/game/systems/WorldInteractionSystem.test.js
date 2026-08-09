@@ -26,7 +26,16 @@ function createHarness({
     const room = {
         cleared: false,
         shopUsed: false,
-        startAmbush: game => ambushCalls.push(game)
+        vaultState: { phase: 'offer' },
+        startAmbush: (game, contractId, payerId) => {
+            room.vaultState = {
+                phase: 'containment',
+                contractId,
+                payerId
+            };
+            ambushCalls.push([game, contractId, payerId]);
+            return true;
+        }
     };
     const game = {
         audio: {
@@ -249,49 +258,62 @@ test('treasure chests keep their random non-core part reward', () => {
     assert.deepEqual(harness.audioCalls, [['hit', { volume: 0.6 }]]);
 });
 
-test('gold vault payment is deducted once and starts the ambush', () => {
-    const harness = createHarness({ gold: 80 });
+test('gilded vault deducts shared gold once and starts one contract', () => {
+    const harness = createHarness({ gold: 200 });
     const chest = {
         opened: false,
         ambushActive: false,
         locked: false,
         wasPaid: false,
+        contractId: 'gilded',
         costType: 'gold',
-        costAmount: 50
+        costAmount: 0
     };
 
     harness.system.tryActivateVaultChest(chest);
     harness.system.tryActivateVaultChest(chest);
 
-    assert.equal(harness.game.gold, 30);
+    assert.equal(harness.game.gold, 75);
     assert.equal(chest.wasPaid, true);
-    assert.deepEqual(harness.ambushCalls, [harness.game]);
-});
-
-test('hp vault keeps the strict survival requirement', () => {
-    const harness = createHarness({ hp: 50 });
-    const chest = {
-        opened: false,
-        ambushActive: false,
-        locked: false,
-        wasPaid: false,
-        costType: 'hp',
-        costAmount: 50
-    };
-
-    harness.system.tryActivateVaultChest(chest);
-
-    assert.equal(harness.game.playerShip.hp, 50);
-    assert.equal(chest.wasPaid, false);
-    assert.deepEqual(harness.notifications, [[
-        'Not enough Health!',
-        '#ff0000'
+    assert.deepEqual(harness.ambushCalls, [[
+        harness.game,
+        'gilded',
+        'host'
     ]]);
 });
 
-test('cleared paid vaults drop three rewards once', () => {
+test('blood vault sacrifice can never kill its payer', () => {
+    const harness = createHarness({ hp: 28 });
+    const chest = {
+        opened: false,
+        ambushActive: false,
+        locked: false,
+        wasPaid: false,
+        contractId: 'blood',
+        costType: 'hp',
+        costAmount: 0
+    };
+
+    harness.system.tryActivateVaultChest(chest);
+
+    assert.equal(harness.game.playerShip.hp, 28);
+    assert.equal(chest.wasPaid, false);
+    assert.deepEqual(harness.notifications, [[
+        'insufficient frame integrity',
+        '#ff4f70'
+    ]]);
+});
+
+test('vault cache drops its stored unique rewards for the payer once', () => {
     const harness = createHarness({ random: () => 0 });
     harness.room.cleared = true;
+    harness.room.vaultState = {
+        phase: 'reward',
+        contractId: 'gilded',
+        payerId: 'guest_1',
+        rewardPartIds: ['gun', 'rocket'],
+        rewardSpawned: false
+    };
     const chest = {
         x: 500,
         y: 700,
@@ -299,6 +321,7 @@ test('cleared paid vaults drop three rewards once', () => {
         ambushActive: false,
         locked: false,
         wasPaid: true,
+        contractId: 'gilded',
         costType: 'gold',
         costAmount: 50
     };
@@ -307,15 +330,23 @@ test('cleared paid vaults drop three rewards once', () => {
     harness.system.openVaultChest(chest);
 
     assert.equal(chest.opened, true);
-    assert.equal(harness.game.itemPickups.length, 3);
-    assert.ok(harness.game.itemPickups.every(
-        pickup => pickup.partId === 'gun'
-            && pickup.x === 470
-            && pickup.y === 670
-    ));
+    assert.equal(harness.game.itemPickups.length, 2);
+    assert.deepEqual(
+        harness.game.itemPickups.map(pickup => [
+            pickup.partId,
+            Math.round(pickup.x),
+            Math.round(pickup.y),
+            pickup.ownerId
+        ]),
+        [
+            ['gun', 555, 700, 'guest_1'],
+            ['rocket', 445, 700, 'guest_1']
+        ]
+    );
+    assert.equal(harness.room.vaultState.phase, 'completed');
     assert.deepEqual(harness.explosions, [[500, 700, 80, 0.8]]);
     assert.deepEqual(harness.audioCalls, [[
-        'hit',
+        'vault_claim',
         { volume: 0.8, pitch: 0.5 }
     ]]);
 });

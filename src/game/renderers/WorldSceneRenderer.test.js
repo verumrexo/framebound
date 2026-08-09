@@ -41,7 +41,6 @@ function createHarness() {
         'drawShip',
         'drawShopItem',
         'drawTreasureChest',
-        'drawVaultChest',
         'drawDrone'
     ]) {
         entityRenderer[method] = (passedRenderer, entity, ...args) =>
@@ -125,7 +124,7 @@ function createHarness() {
         drones: [named('drone')],
         playerShip: { name: 'player', hp: 42, isDead: false },
         gold: 10,
-        effects: { drawWorld: () => calls.push(['effects']) }
+        explosions: []
     };
     const scene = new WorldSceneRenderer(game, {
         entityRenderer,
@@ -157,21 +156,16 @@ test('world scene preserves entity, interaction, projectile, player, and effect 
         'remote-custom',
         'drawShip',
         'drawShopItem',
-        'shop-tooltip',
         'drawTreasureChest',
-        'treasure-tooltip',
-        'drawVaultChest',
-        'vault-tooltip',
         'projectile',
         'drawDrone',
         'debug',
         'drawShip',
-        'effects',
         'camera-end'
     ]);
     assert.deepEqual(calls.find(call => call[0] === 'grid'), ['grid', 0.02]);
-    assert.deepEqual(calls.find(call => call[0] === 'shop-tooltip'), ['shop-tooltip', true]);
-    assert.deepEqual(calls.find(call => call[0] === 'vault-tooltip'), ['vault-tooltip', 42, 10]);
+    assert.equal(calls.some(call => call[0] === 'shop-tooltip'), false);
+    assert.equal(calls.some(call => call[0] === 'vault-tooltip'), false);
 });
 
 test('player turret target keeps mouse conversion', () => {
@@ -183,7 +177,7 @@ test('player turret target keeps mouse conversion', () => {
     );
 });
 
-test('room outline, current fill, and tutorial text keep their original palette and geometry', () => {
+test('room geometry remains in the world pass while tutorial text moves to hud overlays', () => {
     const { game, calls, scene } = createHarness();
     const room = {
         x: 100,
@@ -206,8 +200,32 @@ test('room outline, current fill, and tutorial text keep their original palette 
     assert.deepEqual(calls.find(call => call[0] === 'fill-room'), [
         'fill-room', 'rgba(255, 0, 0, 0.15)', 100, 200, 800, 600
     ]);
-    assert.deepEqual(
-        calls.filter(call => call[0] === 'text').map(call => call[1]),
-        ['wasd: move', 'l-click: shoot', 'e: interact', 'tab: hangar', 'm: map']
-    );
+    assert.deepEqual(calls.filter(call => call[0] === 'text'), []);
+});
+
+test('visited vault rooms use the dedicated world renderer', () => {
+    const { game, calls, scene } = createHarness();
+    const room = {
+        x: 0,
+        y: 0,
+        width: 2000,
+        height: 2000,
+        type: 'vault',
+        visited: true,
+        locked: false,
+        cleared: true
+    };
+    game.rooms = [room];
+    game.currentRoom = room;
+    scene.vaultRenderer = {
+        draw: (...args) => calls.push(['vault-room', ...args])
+    };
+
+    scene.draw();
+
+    const call = calls.find(entry => entry[0] === 'vault-room');
+    assert.equal(call[1], game.renderer);
+    assert.equal(call[2], room);
+    assert.equal(call[3], true);
+    assert.equal(calls.some(entry => entry[0] === 'drawVaultChest'), false);
 });

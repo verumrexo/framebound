@@ -1,6 +1,7 @@
 export class Input {
-    constructor(canvas) {
+    constructor(canvas, { viewport = canvas?.__frameboundViewport } = {}) {
         this.canvas = canvas;
+        this.viewport = viewport;
         this.keys = new Set();
         this.keysPressed = new Set(); // Track newly pressed keys this frame
         this.mouse = {
@@ -22,12 +23,19 @@ export class Input {
         window.addEventListener('blur', () => this.resetActiveState());
 
         window.addEventListener('mousemove', (e) => {
-            // regardless of any padding/margin/offset in the DOM.
             const rect = this.canvas.getBoundingClientRect();
-            const scaleX = this.canvas.width / rect.width;
-            const scaleY = this.canvas.height / rect.height;
-            this.mouse.x = (e.clientX - rect.left) * scaleX;
-            this.mouse.y = (e.clientY - rect.top) * scaleY;
+            // Physical buffers can be DPR-sized while gameplay remains in
+            // logical coordinates. Never leak that ratio into aiming.
+            if (this.viewport) {
+                const point = this.viewport.clientToLogical(e.clientX, e.clientY, rect);
+                this.mouse.x = point.x;
+                this.mouse.y = point.y;
+            } else {
+                const scaleX = this.canvas.width / rect.width;
+                const scaleY = this.canvas.height / rect.height;
+                this.mouse.x = (e.clientX - rect.left) * scaleX;
+                this.mouse.y = (e.clientY - rect.top) * scaleY;
+            }
         });
 
         window.addEventListener('mousedown', (e) => {

@@ -13,6 +13,12 @@ import { Shipwreck } from '../../shared/entities/Shipwreck.js';
 import { TreasureChest } from '../../shared/entities/TreasureChest.js';
 import { VaultChest } from '../../shared/entities/VaultChest.js';
 import { XPOrb } from '../../shared/entities/XPOrb.js';
+import {
+    createVaultState,
+    isVaultContractId,
+    isVaultPhase,
+    VaultPhase
+} from '../../shared/vault/VaultDefinitions.js';
 
 const MAX_ROOMS = 512;
 const MAX_ENTITIES = 1024;
@@ -63,6 +69,7 @@ export function snapshotRooms(game) {
             waveCount: finiteOr(room.waveCount, 0),
             maxWaves: finiteOr(room.maxWaves, 0),
             waveWaiting: Boolean(room.waveWaiting),
+            vaultState: snapshotVaultState(room.vaultState),
             asteroids: source('asteroids').map(snapshotAsteroid),
             lootCrates: source('lootCrates').map(snapshotLootCrate),
             shipwrecks: source('shipwrecks').map(snapshotShipwreck),
@@ -109,7 +116,8 @@ export function snapshotActiveWorld(game) {
         treasureChests: (game.treasureChests || []).map(
             snapshotTreasureChest
         ),
-        vaultChests: (game.vaultChests || []).map(snapshotVaultChest)
+        vaultChests: (game.vaultChests || []).map(snapshotVaultChest),
+        vaultState: snapshotVaultState(game.currentRoom?.vaultState)
     };
 }
 
@@ -142,6 +150,10 @@ export function restoreRoomSnapshots(game, snapshots) {
             state.treasureChests?.map(restoreTreasureChest) ?? null;
         room.vaultChests =
             state.vaultChests?.map(restoreVaultChest) ?? null;
+        room.vaultState = restoreVaultState(
+            state.vaultState,
+            room.vaultChests
+        );
     }
 }
 
@@ -164,6 +176,10 @@ export function restoreActiveWorld(game, state) {
     game.vaultChests = (state.vaultChests || []).map(restoreVaultChest);
     if (game.currentRoom) {
         game.currentRoom.enemies = game.enemies;
+        game.currentRoom.vaultState = restoreVaultState(
+            state.vaultState,
+            game.vaultChests
+        );
     }
 }
 
@@ -193,7 +209,7 @@ export function isValidSnapshotData(roomSnapshots, activeWorld) {
         validEntityArray(
             activeWorld.vaultChests || [],
             validVaultChestSnapshot
-        );
+        ) && validOptionalVaultState(activeWorld.vaultState);
 }
 
 function snapshotEnemy(enemy) {
@@ -505,14 +521,58 @@ function snapshotVaultChest(entity) {
         y: entity.y,
         costType: entity.costType,
         costAmount: entity.costAmount,
+        contractId: entity.contractId,
         opened: Boolean(entity.opened),
         locked: Boolean(entity.locked),
         ambushActive: Boolean(entity.ambushActive),
         wasPaid: Boolean(entity.wasPaid),
+        sealed: Boolean(entity.sealed),
         life: finiteOr(entity.life, 0),
         bobOffset: finiteOr(entity.bobOffset, 0),
         rotation: finiteOr(entity.rotation, 0)
     };
+}
+
+function snapshotVaultState(state) {
+    if (!state) return null;
+    return {
+        version: finiteOr(state.version, 1),
+        phase: state.phase,
+        contractId: state.contractId,
+        payerId: state.payerId,
+        playerCount: finiteOr(state.playerCount, 1),
+        elapsed: finiteOr(state.elapsed, 0),
+        nextSurge: finiteOr(state.nextSurge, 0),
+        spawnSerial: finiteOr(state.spawnSerial, 0),
+        rewardPartIds: [...(state.rewardPartIds || [])],
+        rewardSpawned: Boolean(state.rewardSpawned)
+    };
+}
+
+function restoreVaultState(data, chests) {
+    if (data) return { ...createVaultState(), ...data };
+    if (!chests?.length) return null;
+
+    const state = createVaultState();
+    const paid = chests.find(chest => chest.wasPaid);
+    const opened = chests.find(chest => chest.opened);
+    if (!paid && !opened) return state;
+
+    const chosen = opened || paid;
+    state.contractId = chosen.contractId;
+    state.payerId = 'host';
+    if (opened) {
+        state.phase = VaultPhase.COMPLETED;
+        state.rewardSpawned = true;
+    } else if (chosen.ambushActive) {
+        state.phase = VaultPhase.CONTAINMENT;
+    } else {
+        state.phase = VaultPhase.REWARD;
+    }
+    for (const chest of chests) {
+        chest.sealed = chest !== chosen;
+    }
+    return state;
 }
 
 function restoreVaultChest(data) {
@@ -569,7 +629,8 @@ function validRoomSnapshot(value) {
             value.treasureChests,
             validTreasureChestSnapshot
         ) &&
-        validOptionalEntityArray(value.vaultChests, validVaultChestSnapshot);
+        validOptionalEntityArray(value.vaultChests, validVaultChestSnapshot) &&
+        validOptionalVaultState(value.vaultState);
 }
 
 function validEntityArray(values, validator) {
@@ -703,9 +764,37 @@ function validVaultChestSnapshot(value) {
     return validTreasureChestSnapshot(value) &&
         typeof value.costType === 'string' &&
         Number.isFinite(value.costAmount) &&
+        (
+            value.contractId === undefined ||
+            isVaultContractId(value.contractId)
+        ) &&
         ['locked', 'ambushActive', 'wasPaid'].every(key =>
             typeof value[key] === 'boolean'
+        ) && (
+            value.sealed === undefined || typeof value.sealed === 'boolean'
         );
+}
+
+function validOptionalVaultState(value) {
+    if (value === undefined || value === null) return true;
+    return isObject(value) &&
+        Number.isInteger(value.version) &&
+        value.version >= 1 &&
+        isVaultPhase(value.phase) &&
+        (
+            value.contractId === null ||
+            isVaultContractId(value.contractId)
+        ) &&
+        (value.payerId === null || typeof value.payerId === 'string') &&
+        Number.isInteger(value.playerCount) &&
+        value.playerCount >= 1 && value.playerCount <= 4 &&
+        Number.isFinite(value.elapsed) && value.elapsed >= 0 &&
+        Number.isInteger(value.nextSurge) && value.nextSurge >= 0 &&
+        Number.isInteger(value.spawnSerial) && value.spawnSerial >= 0 &&
+        Array.isArray(value.rewardPartIds) &&
+        value.rewardPartIds.length <= 32 &&
+        value.rewardPartIds.every(id => typeof id === 'string') &&
+        typeof value.rewardSpawned === 'boolean';
 }
 
 function isObject(value) {

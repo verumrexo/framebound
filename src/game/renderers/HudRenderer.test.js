@@ -84,7 +84,7 @@ function createHarness(overrides = {}) {
         fullscreenMap: { draw: () => calls.push(['map']) },
         camera: { x: 0, y: 0, zoom: 1 },
         itemPickups: [],
-        effects: { drawNotifications: () => calls.push(['notifications']) },
+        notifications: [{ text: 'notice', color: '#00ffff', life: 1 }],
         levelUpManager: {
             active: false,
             draw: () => calls.push(['level-up'])
@@ -123,11 +123,13 @@ test('normal hud preserves bars, minimap anchoring, frame accounting, and final 
             'spd // 5',
             'tab // hangar',
             'fps 60',
-            '1.1.0 // beta // seed: 17'
+        '1.1.0 // beta // seed: 17',
+        'notice'
         ]
     );
     assert.ok(calls.find(call => call[0] === 'minimap'));
-    assert.deepEqual(calls.slice(-2).map(call => call[0]), ['notifications', 'cursor']);
+    assert.equal(calls.at(-1)[0], 'cursor');
+    assert.ok(calls.some(call => call[0] === 'text' && call[1] === 'notice'));
 });
 
 test('eye candy adds cockpit telemetry without replacing the required hud', () => {
@@ -203,6 +205,24 @@ test('salvage sweep prompt remains visible without eye candy', () => {
     ));
 });
 
+test('vault containment status stays on the native hud', () => {
+    const { calls, hud } = createHarness({
+        currentRoom: {
+            vaultState: {
+                phase: 'containment',
+                contractId: 'blood',
+                elapsed: 7.25
+            }
+        }
+    });
+
+    hud.draw();
+
+    const text = calls.filter(call => call[0] === 'text').map(call => call[1]);
+    assert.ok(text.includes('cursed vault // blood'));
+    assert.ok(text.includes('hold 10.8s'));
+});
+
 test('hangar, ship builder, and game-over modes keep their original precedence', () => {
     const hangar = createHarness();
     hangar.game.hangar.active = true;
@@ -274,7 +294,7 @@ test('name entry stays above notifications and level-up, presents again, then dr
     hud.draw();
 
     assert.ok(calls.find(call => call[0] === 'text' && call[1] === 'abc__'));
-    const notificationIndex = calls.findIndex(call => call[0] === 'notifications');
+    const notificationIndex = calls.findIndex(call => call[0] === 'text' && call[1] === 'notice');
     const levelIndex = calls.findIndex(call => call[0] === 'level-up');
     const presentIndex = calls.findIndex(call => call[0] === 'present');
     const cursorIndex = calls.findIndex(call => call[0] === 'cursor');

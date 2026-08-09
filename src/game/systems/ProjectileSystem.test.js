@@ -120,7 +120,7 @@ test('network enemy projectile spawning keeps owner, fields, sound mapping, and 
         [10, 20, 0.5, 'railgun', 900, 'enemy', 12, null, random]
     );
     assert.deepEqual(sounds, [
-        ['shoot_rail_shot', { volume: 0.6 }],
+        ['rail_shot', { volume: 0.6 }],
         ['shoot_lsr', { volume: 0.6 }],
         ['shoot_lps', { volume: 0.6 }]
     ]);

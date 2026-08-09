@@ -1,6 +1,7 @@
 import { Sprite } from "../../engine/Sprite.js";
 import { Projectile } from "./Projectile.js";
 import { resolveDroneBlueprint } from '../combat/DroneBlueprints.js';
+import { partSoundEventKey } from '../audio/SoundEventKeys.js';
 
 export class Drone {
     constructor(
@@ -307,7 +308,15 @@ export class Drone {
         }
         game.projectiles.push(p);
 
-        game.audio.play('shoot_dart', { volume: 0.3, pitch: 1.5 });
+        if (this.owner === 'player' && p.sourcePartId && game.audio.playEvent) {
+            game.audio.playEvent(
+                partSoundEventKey(p.sourcePartId, 'attack'),
+                'shoot_dart',
+                { volume: 0.3, pitch: 1.5 }
+            );
+        } else {
+            game.audio.play('shoot_dart', { volume: 0.3, pitch: 1.5 });
+        }
     }
 
 }

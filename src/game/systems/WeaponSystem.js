@@ -5,22 +5,17 @@ import {
     getFamilyFireRateMultiplier
 } from '../../shared/combat/WeaponFamilies.js';
 import { dispatchPlayerShot } from './PlayerShotDispatcher.js';
+import {
+    getPartFireDefault,
+    partSoundEventKey
+} from '../audio/SoundEventRegistry.js';
 
-const WEAPON_SOUNDS = {
-    gun_basic: 'shoot_dart',
-    scattr: 'shoot_scattr',
-    lps: 'shoot_lps',
-    ggbm: 'shoot_ggbm',
-    rocketle: 'shoot_rocketle',
-    minigun: 'shoot_minigun',
-    custom_1767999386292: 'shoot_lsr',
-    custom_1768036702131: 'shoot_rocket_he',
-    custom_1768397007593: 'rail_shot',
-    custom_1768857172136: 'shoot_sniper',
-    custom_1769204337665: 'shoot_dart',
-    custom_1769336961268: 'shoot_lsr',
-    railgun: 'rail_shot'
-};
+function playPartEvent(audio, partId, slot, fallbackName, options) {
+    if (typeof audio.playEvent === 'function') {
+        return audio.playEvent(partSoundEventKey(partId, slot), fallbackName, options);
+    }
+    return audio.play(fallbackName, options);
+}
 
 export class WeaponSystem {
     constructor(game, {
@@ -136,14 +131,16 @@ export class WeaponSystem {
 
                         if (!chargedWeapon && def.stats.chargeTime && !partRef.chargeLeft) {
                             partRef.chargeLeft = def.stats.chargeTime;
-                            if (def.stats.projectileType === 'saber') {
-                                partRef.chargeSound = game.audio.play('rail_charge', {
-                                    volume: 0.3,
-                                    pitch: 1.5
-                                });
-                            } else {
-                                partRef.chargeSound = game.audio.play('rail_charge', { volume: 0.5 });
-                            }
+                            const chargeOptions = def.stats.projectileType === 'saber'
+                                ? { volume: 0.3, pitch: 1.5 }
+                                : { volume: 0.5 };
+                            partRef.chargeSound = playPartEvent(
+                                game.audio,
+                                def.id,
+                                'charge',
+                                'rail_charge',
+                                chargeOptions
+                            );
                             break;
                         }
 
@@ -152,12 +149,26 @@ export class WeaponSystem {
                             partRef.chargeReady = false;
 
                             if (partRef.chargeSound) {
-                                try { partRef.chargeSound.stop(); } catch (e) { }
+                                try {
+                                    if (partRef.chargeSound.source?.stop) {
+                                        partRef.chargeSound.source.stop();
+                                    } else {
+                                        partRef.chargeSound.stop?.();
+                                    }
+                                } catch (error) {
+                                    console.warn('[Audio] Failed to stop weapon charge:', error);
+                                }
                                 partRef.chargeSound = null;
                             }
 
                             const pitch = def.stats.projectileType === 'saber' ? 1.5 : 1.0;
-                            game.audio.play('rail', { volume: 0.7, pitch });
+                            playPartEvent(
+                                game.audio,
+                                def.id,
+                                'release',
+                                'rail',
+                                { volume: 0.7, pitch }
+                            );
                         }
 
                         const { fireX, fireY, angle } = this.getInitialShotOrigin(
@@ -416,7 +427,7 @@ export class WeaponSystem {
             }
         }
 
-        const sound = WEAPON_SOUNDS[def.id] || 'hit';
+        const sound = getPartFireDefault(def.id);
         let pitch = def.stats.soundPitch || 1.0;
         if (def.id === 'custom_1769336961268') pitch = 0.5;
 
@@ -426,11 +437,12 @@ export class WeaponSystem {
         }
 
         if (shouldPlayShoot) {
-            game.audio.play(sound, {
+            const options = {
                 volume: def.stats.soundVolume ?? 0.6,
                 pitch,
                 randomizePitch: 0.15
-            });
+            };
+            playPartEvent(game.audio, def.id, 'fire', sound, options);
         }
     }
 }

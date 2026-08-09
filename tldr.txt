@@ -1,0 +1,40 @@
+framebound — what is going on
+
+done:
+- original gameplay and visuals restored
+- game.js split into proper systems
+- saves, room revisits, debris, parts, and boss portals fixed
+- p2p co-op works locally with short join codes
+- macos app works
+- arsenal v1.2 is finished
+- ballistic, laser, missile, and drone foundations work
+- new hud, damage tracking, utility bars, and salvage sweep work
+- hard raster uses the approved 3x physical world, native ui overlays, and whole rotating ships
+- cursed vaults are rebuilt with exclusive gilded/blood contracts, containment combat, exact saves, and payer-owned rewards
+
+parked for later:
+- two-device multiplayer testing
+- windows gameplay testing
+- public signing and notarization
+- final supabase security proof
+- long-run balance tuning
+
+next milestones:
+
+1. signal forge — core done
+jfxr is inside devtools with live preview, click-to-bind parts/events, saved
+sounds, restart persistence, desktop mirroring, and one-click pack promotion.
+remaining: utility-specific slots, delayed impact bindings, and final sound design.
+
+2. cursed vaults — done locally
+mechanical reliquary room, exclusive contracts, shared-gold or survivable blood
+payment, timed containment, co-op scaling, exact snapshots, and private rewards.
+
+also waiting:
+- new parts
+- new drone types
+- more enemies
+- everything still listed in task2.md
+
+next move:
+playtest cursed-vault balance, finish signal forge sound design, or start new parts.

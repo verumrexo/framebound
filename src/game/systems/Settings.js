@@ -10,9 +10,6 @@ export class Settings {
             masterVolume: 0.8,
             musicVolume: 0.4,
             sfxVolume: 0.6,
-            antiAliasing: false,
-            cssPixelation: true,
-            resolutionScale: 1.0,
             cursorShape: '4-lines', // 'dot', 'circle', '3-lines', '4-lines'
             cursorThickness: 2,
             cursorLength: 15,
@@ -179,15 +176,10 @@ export class Settings {
 
     render(parentOverlay, backCallback) {
         const audio = this.game.audio;
-        const renderer = this.game.renderer;
-
         // Sync current states with audio engine on open
         this.sliderStates.master.target = this.sliderStates.master.current = Math.round(audio.masterGain.gain.value * 100);
         this.sliderStates.music.target = this.sliderStates.music.current = Math.round(audio.musicGain.gain.value * 100);
         this.sliderStates.sfx.target = this.sliderStates.sfx.current = Math.round(audio.sfxGain.gain.value * 100);
-
-        const antiAliasing = renderer.smoothingEnabled;
-        const cssPixelation = renderer.pixelatedCSS;
 
         // Ensure defaults if not present
         if (!this.game.cursorSettings) {
@@ -214,18 +206,6 @@ export class Settings {
                     ${this.createFloatySlider('master', 'master volume', this.sliderStates.master.current)}
                     ${this.createFloatySlider('music', 'music stream', this.sliderStates.music.current)}
                     ${this.createFloatySlider('sfx', 'action feedback', this.sliderStates.sfx.current)}
-
-                    <div class="setting-group-label">visual matrix</div>
-
-                    <div class="checkbox-row">
-                        <span>bi-linear filter</span>
-                        <input type="checkbox" id="chk-aliasing" class="setting-checkbox" ${antiAliasing ? 'checked' : ''}>
-                    </div>
-
-                    <div class="checkbox-row">
-                        <span>pixelated css injection</span>
-                        <input type="checkbox" id="chk-css" class="setting-checkbox" ${cssPixelation ? 'checked' : ''}>
-                    </div>
 
                     <div class="setting-group-label">targeting computer</div>
 
@@ -288,8 +268,6 @@ export class Settings {
         this.setupTimeout = setTimeout(() => {
             this.setupTimeout = null;
             const audio = this.game.audio;
-            const renderer = this.game.renderer;
-
             ['master', 'music', 'sfx', 'cursorThickness', 'cursorLength', 'cursorGap'].forEach(key => {
                 const input = document.getElementById(`rng-${key}`);
                 if (input) {
@@ -309,15 +287,11 @@ export class Settings {
                 }
             });
 
-            const chkAliasing = document.getElementById('chk-aliasing');
-            const chkCss = document.getElementById('chk-css');
             const selShape = document.getElementById('sel-cursorShape');
             const clrColor = document.getElementById('clr-cursorColor');
             const chkOutline = document.getElementById('chk-cursorOutline');
             const btnBack = document.getElementById('btn-settings-back');
 
-            if (chkAliasing) chkAliasing.onchange = (e) => renderer.setSmoothing(e.target.checked);
-            if (chkCss) chkCss.onchange = (e) => renderer.setPixelation(e.target.checked);
             if (selShape) selShape.onchange = (e) => { this.game.cursorSettings.shape = e.target.value; this.saveCursorSettings(); };
             if (clrColor) clrColor.onchange = (e) => { this.game.cursorSettings.color = e.target.value; this.saveCursorSettings(); };
             if (chkOutline) chkOutline.onchange = (e) => { this.game.cursorSettings.outline = e.target.checked; this.saveCursorSettings(); };

@@ -73,7 +73,7 @@ export class FrameRuntimeSystem {
             movementAxes
         );
 
-        game.roomRuntime.update();
+        game.roomRuntime.update(dt);
         game.salvageSweep?.update?.(dt);
 
         // Core Spin (1 rotation per second)

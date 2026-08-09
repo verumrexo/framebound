@@ -5,15 +5,19 @@ import { SaveManager } from './game/systems/SaveManager.js'
 async function boot() {
   await SaveManager.hydrateDesktopBackup();
 
-  document.querySelector('#app').innerHTML = `
-    <canvas id="gameCanvas"></canvas>
-  `
-
-  const canvas = document.querySelector('#gameCanvas');
   const query = new URLSearchParams(window.location.search);
   const showVisualGallery = query.has('visual-gallery');
   const runPeerSmoke = query.has('peer-link-smoke');
   const peerSessionRole = query.get('peer-session-smoke');
+
+  document.querySelector('#app').innerHTML = `
+    <div class="render-stack">
+      <canvas id="gameCanvas" data-render-surface="world"></canvas>
+      ${showVisualGallery ? '' : '<canvas id="hudCanvas" data-render-surface="hud"></canvas>'}
+    </div>
+  `
+
+  const canvas = document.querySelector('#gameCanvas');
 
   if (peerSessionRole) {
     import('./game/dev/PeerSessionSmoke.js').then(({

@@ -55,3 +55,40 @@ test('a complete click between frames survives for exactly one update', () => {
         globalThis.window = originalWindow;
     }
 });
+
+test('pointer mapping uses logical viewport coordinates instead of DPR buffer pixels', () => {
+    const originalWindow = globalThis.window;
+    const windowHandlers = new Map();
+    const canvas = {
+        width: 2400,
+        height: 1350,
+        getBoundingClientRect: () => ({ left: 100, top: 40, width: 1200, height: 675 })
+    };
+    globalThis.window = {
+        addEventListener(type, handler) {
+            windowHandlers.set(type, handler);
+        }
+    };
+
+    try {
+        const input = new Input(canvas, {
+            viewport: {
+                clientToLogical: (x, y, rect) => ({
+                    x: (x - rect.left) / 2,
+                    y: (y - rect.top) / 2
+                })
+            }
+        });
+        windowHandlers.get('mousemove')({ clientX: 700, clientY: 340 });
+        assert.deepEqual(input.getMousePos(), {
+            x: 300,
+            y: 150,
+            isDown: false,
+            isRightDown: false,
+            wasPressed: false,
+            wasRightPressed: false
+        });
+    } finally {
+        globalThis.window = originalWindow;
+    }
+});

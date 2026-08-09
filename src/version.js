@@ -11,6 +11,14 @@ export const CHANGELOG = [
         date: new Date().toISOString().split('T')[0],
         items: [
             'overhaul: rebuilt weapon families, level-up evolution, modular enemies, and long-run balance as one connected system.',
+            'rendering: the world now uses an approved 3x hard-raster webgl2 compositor while the hud, menus, minimap, and cockpit telemetry stay at native resolution.',
+            'fix: enemy health bars, damage numbers, tutorial text, shop prices, and interaction cards now use the native overlay instead of leaking through the world shader.',
+            'fix: hangar and ship-builder panels now stay above the native hud canvas instead of being covered by their own ship and grid layer.',
+            'rendering: connected ship parts are assembled before continuous rotation, eliminating diagonal seams without quantizing hull or turret angles.',
+            'fix: resizing, high-density displays, fractional scaling, camera presentation, and pointer mapping now share one authoritative viewport instead of stretching the launch frame.',
+            'fix: 3x camera motion stays continuous instead of rounding to the source grid and lurching while the ship moves.',
+            'stability: webgl context loss falls back to a nearest-neighbor world surface and restores the compositor without mutating or deleting the run.',
+            'cleanup: removed the obsolete smoothing, css pixelation, and resolution-scale toggles that no longer represented the real renderer.',
             'level-ups: choices now react to installed weapons, so missing weapon families cannot waste a card slot.',
             'ballistic: added real fire-rate and damage scaling plus rounds that pierce extra targets.',
             'laser: added real fire-rate and damage scaling plus energy arcs that chain through nearby targets.',
@@ -34,7 +42,15 @@ export const CHANGELOG = [
             'save: destruction fragments and salvage-sweep progress now survive room revisits, continue, and host-authoritative snapshots.',
             'ui: ground-part names, hangar telemetry, shops, treasure caches, and vault prompts now use the current lowercase cockpit language and font stack.',
             'fix: the hangar tooltip closes with the hangar instead of getting stranded over gameplay.',
-            'fix: the weapon bus now lists newly installed weapon parts instead of silently truncating the list to three.'
+            'fix: the weapon bus now lists newly installed weapon parts instead of silently truncating the list to three.',
+            'devtools: completed signal forge with searchable sound coverage, one-click preview, explicit missing/default/custom states, saved-sound editing, and direct part or event assignment.',
+            'audio: added per-part fire, charge, release, impact, detonation, drone, shield, and booster sound slots without changing packaged fallbacks.',
+            'fix: enemy rail projectiles now request the existing rail-shot sound instead of a missing alias.',
+            'vaults: rebuilt cursed vaults as mechanical reliquary rooms with distinct gilded and blood contracts, containment pylons, spawn gates, sealing, and stable reward states.',
+            'vaults: selecting one contract permanently seals the other; gilded spends linearly scaled shared gold while blood takes a survivable 28% of the payer frame integrity.',
+            'vaults: replaced wall-clock waves with an 18-second simulation-time containment assault that stores co-op pressure, payer ownership, and one unique reward roll before combat starts.',
+            'save: cursed-vault payment, phase time, spawned ids, sealed contract, payer, player count, and unclaimed cache now survive continue, reconnect, and room snapshots without rerolling.',
+            'audio: added forge-ready semantic vault sounds for reveal, both payments, sealing, surges, unlock, and cache claim.'
         ]
     },
     {

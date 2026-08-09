@@ -6,9 +6,9 @@ import { LootCrate } from '../../shared/entities/LootCrate.js';
 import { Shipwreck } from '../../shared/entities/Shipwreck.js';
 import { ShopItem } from '../../shared/entities/ShopItem.js';
 import { TreasureChest } from '../../shared/entities/TreasureChest.js';
-import { VaultChest } from '../../shared/entities/VaultChest.js';
 import { PartsLibrary } from '../../shared/parts/Part.js';
 import { RoomType } from './RoomType.js';
+import { VaultEncounterSystem } from '../vault/VaultEncounterSystem.js';
 
 export class Room {
     constructor(gridX, gridY, widthUnits, heightUnits, randomGen = null) {
@@ -39,6 +39,8 @@ export class Room {
         this.sweepUsed = false;
         this.sweepChargeRemaining = null;
         this.waveTimer = null;
+        this.vaultState = null;
+        this.vaultEncounter = new VaultEncounterSystem(this);
 
         // Shop room properties
         this.shopItems = null; // Will be generated on first visit
@@ -81,7 +83,7 @@ export class Room {
                 return;
             }
 
-            // Vault rooms: spawn vault chests (Gold/HP options)
+            // Vault rooms: spawn the two exclusive contract terminals.
             if (this.type === RoomType.VAULT) {
                 this.spawnVaultChests(game);
                 this.cleared = true; // Initially cleared until chest is triggered
@@ -206,137 +208,23 @@ export class Room {
     }
 
     spawnVaultChests(game) {
-        if (this.vaultChests) return;
-
-        const floor = game.floor || 1;
-        // Cost Scaling: 1.5x per floor
-        // Floor 1: 100
-        // Floor 2: 150
-        // Floor 3: 225
-        const costMultiplier = Math.pow(1.5, floor - 1);
-
-        const goldCost = Math.floor(100 * costMultiplier);
-        const hpCost = Math.floor(50 * costMultiplier);
-
-        const centerX = this.x + this.width / 2;
-        const centerY = this.y + this.height / 2;
-        const spacing = 200;
-
-        this.vaultChests = [];
-        game.vaultChests = this.vaultChests;
-
-        const goldChest = new VaultChest(
-            centerX - spacing / 2,
-            centerY,
-            'gold',
-            goldCost,
-            this.random
-        );
-        this.vaultChests.push(goldChest);
-
-        const hpChest = new VaultChest(
-            centerX + spacing / 2,
-            centerY,
-            'hp',
-            hpCost,
-            this.random
-        );
-        this.vaultChests.push(hpChest);
+        return this.vaultEncounter.initialize(game);
     }
 
-    startAmbush(game) {
-        if (this.ambushStarted) return;
-        this.ambushStarted = true;
-        this.locked = true;
-        this.cleared = false;
-        this.waveCount = 0;
-        this.maxWaves = 3;
-        this.spawnWave(game);
-
-        // Lock chests
-        if (this.vaultChests) {
-            this.vaultChests.forEach(c => {
-                c.ambushActive = true;
-                c.locked = true;
-            });
-        }
-
-        game.showNotification("AMBUSH TRIGGERED! SURVIVE!", '#ff0000');
+    startAmbush(game, contractId, payerId) {
+        return this.vaultEncounter.start(game, contractId, payerId);
     }
 
-    spawnWave(game) {
-        this.waveWaiting = false;
-        this.waveCount++;
-        game.showNotification(`WAVE ${this.waveCount}/${this.maxWaves}`, '#ff8800');
-
-        const floor = game.floor || 1;
-
-        // Spawn 3-5 enemies around the player
-        const count = 3 + this.waveCount; // Harder each wave
-        for (let i = 0; i < count; i++) {
-            const angle = this.random() * Math.PI * 2;
-            const dist = 400 + this.random() * 200;
-            const ex = game.x + Math.cos(angle) * dist;
-            const ey = game.y + Math.sin(angle) * dist;
-
-            // Constrain to room
-            const roomX = Math.max(this.x + 50, Math.min(this.x + this.width - 50, ex));
-            const roomY = Math.max(this.y + 50, Math.min(this.y + this.height - 50, ey));
-
-            const type = selectEnemyType(floor, this.random(), {
-                vault: true,
-                large: true
-            });
-
-            // Deterministic ID for ambush: rX_rY_ambush_W_I
-            const enemyId = `e_${this.gridX}_${this.gridY}_amb_${this.waveCount}_${i}`;
-            const enemy = new Enemy(roomX, roomY, type, floor, this.random, enemyId);
-            // Buff enemies in vault
-            enemy.maxHp *= 1.5;
-            enemy.hp = enemy.maxHp;
-
-            this.enemies.push(enemy);
-            game.enemies.push(enemy);
-        }
+    updateVaultEncounter(game, dt = 0) {
+        this.vaultEncounter.update(game, dt);
     }
 
-    checkAmbushStatus(game) {
-        if (!this.ambushStarted || this.waveWaiting) return;
-
-        // Check if current wave is cleared
-        this.enemies = this.enemies.filter(e => !e.isDead);
-
-        if (this.enemies.length === 0) {
-            if (this.waveCount < this.maxWaves) {
-                this.waveWaiting = true;
-                this.waveTimer = setTimeout(() => {
-                    this.waveTimer = null;
-                    this.spawnWave(game);
-                }, 1000);
-            } else {
-                // Ambush Cleared!
-                this.ambushStarted = false;
-                this.cleared = true;
-                this.locked = false;
-                game.showNotification("VAULT UNLOCKED! CLAIM YOUR REWARD!", '#00ff00');
-
-                // Unlock chests
-                if (this.vaultChests) {
-                    this.vaultChests.forEach(c => {
-                        c.ambushActive = false;
-                        c.locked = false;
-                    });
-                }
-            }
-        }
+    checkAmbushStatus(game, dt = 0) {
+        this.updateVaultEncounter(game, dt);
     }
 
     cancelPendingEvents() {
-        if (this.waveTimer !== null) {
-            clearTimeout(this.waveTimer);
-            this.waveTimer = null;
-        }
-        this.waveWaiting = false;
+        this.vaultEncounter.cancel();
     }
 
     spawnAsteroids(game) {
@@ -461,9 +349,7 @@ export class Room {
                     }
                 }
 
-                if (this.type === RoomType.VAULT) {
-                    this.checkAmbushStatus(game);
-                } else {
+                if (this.type !== RoomType.VAULT) {
                     // Check if all room enemies are dead
                     const aliveCount = this.enemies.filter(e => !e.isDead).length;
                     if (aliveCount === 0) {

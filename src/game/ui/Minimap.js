@@ -297,7 +297,8 @@ export class Minimap {
             const pos = worldToMap(chest.x, chest.y);
             if (pos.x >= this.x && pos.x <= this.x + this.size &&
                 pos.y >= this.y && pos.y <= this.y + this.size) {
-                ctx.fillStyle = (chest.costType === 'hp') ? '#ff4444' : '#ffd700';
+                ctx.fillStyle = chest.sealed ? '#667080' :
+                    ((chest.costType === 'hp') ? '#ff4f70' : '#ffd75a');
                 ctx.fillRect(pos.x - 2, pos.y - 2, 4, 4);
             }
         }
