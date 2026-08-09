@@ -34,6 +34,7 @@ export class FrameRuntimeSystem {
         const levelBonus = 1 + (game.level - 1) * 0.01;
 
         if (game.peerNetwork?.isGuest) {
+            game.salvageSweep?.updateGuest?.(dt);
             game.worldInteractions.updateGuest?.(dt);
             game.playerControls.updateDash(dt);
             const guestMovementAxes =
@@ -72,7 +73,8 @@ export class FrameRuntimeSystem {
             movementAxes
         );
 
-        game.roomRuntime.update();
+        game.roomRuntime.update(dt);
+        game.salvageSweep?.update?.(dt);
 
         // Core Spin (1 rotation per second)
         game.coreSpinAngle += Math.PI * 2 * dt;

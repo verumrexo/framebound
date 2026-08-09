@@ -39,19 +39,7 @@ export class PauseMenuController {
 
         this.game.pauseOverlay = document.createElement('div');
         this.game.pauseOverlay.id = 'pause-menu';
-        this.game.pauseOverlay.style.cssText = `
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0, 0, 0, 0.85);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 10000;
-            font-family: 'Press Start 2P', cursive;
-            color: white;
-            transition: opacity 0.3s;
-        `;
+        this.game.pauseOverlay.className = 'pause-menu-overlay';
 
         document.body.appendChild(this.game.pauseOverlay);
         this.renderContent();
@@ -74,38 +62,18 @@ export class PauseMenuController {
 
         const guestWaiting = this.game.peerNetwork?.isGuest;
         this.game.pauseOverlay.innerHTML = `
-            <h2 style="color: #00ffff; margin-bottom: 50px; font-size: 32px; text-shadow: 0 0 10px #00ffff; text-transform: lowercase;">${guestWaiting ? 'host paused' : 'paused'}</h2>
-            
-            <div style="display: flex; flex-direction: column; gap: 20px; width: 300px;">
+            <main class="pause-panel">
+                <div class="ui-kicker">simulation state // suspended</div>
+                <h2 class="pause-title">${guestWaiting ? 'host paused' : 'paused'}</h2>
+                <div class="pause-subtitle">combat telemetry remains available</div>
+                <div class="pause-actions">
                 ${guestWaiting
-                    ? '<button class="pause-btn" disabled>waiting for host</button>'
-                    : '<button id="btn-resume" class="pause-btn">resume</button>'}
-                <button id="btn-pause-settings" class="pause-btn">settings</button>
-                <button id="btn-main-menu" class="pause-btn" style="margin-top: 20px; border-color: rgba(255,0,0,0.3);">main menu</button>
-            </div>
-
-            <style>
-                .pause-btn {
-                    padding: 15px;
-                    font-size: 14px;
-                    background: rgba(0, 40, 60, 0.6);
-                    border: 1px solid rgba(0, 255, 255, 0.2);
-                    color: #00ffff;
-                    cursor: pointer;
-                    font-family: 'Press Start 2P', cursive;
-                    text-transform: lowercase;
-                    transition: all 0.2s;
-                }
-                .pause-btn:hover {
-                    background: rgba(0, 255, 255, 0.2);
-                    border-color: #00ffff;
-                    color: white;
-                }
-                #btn-main-menu:hover {
-                    border-color: #ff3333;
-                    background: rgba(255, 0, 0, 0.1);
-                }
-            </style>
+                    ? '<button class="pause-btn" data-index="--" disabled>waiting for host</button>'
+                    : '<button id="btn-resume" class="pause-btn" data-index="01">resume</button>'}
+                    <button id="btn-pause-settings" class="pause-btn" data-index="02">settings</button>
+                    <button id="btn-main-menu" class="pause-btn menu-btn-danger" data-index="03">main menu</button>
+                </div>
+            </main>
         `;
 
         setTimeout(() => {

@@ -1,10 +1,58 @@
 // single source of truth for version info
 // update this file when making changes to the game
 
-export const VERSION = '1.1.0 (beta)';
-export const VERSION_NAME = 'system: authority';
+export const VERSION = '1.2.0 (beta)';
+export const VERSION_NAME = 'arsenal: apotheosis';
 
 export const CHANGELOG = [
+    {
+        ver: '1.2.0 (beta)',
+        name: 'arsenal: apotheosis',
+        date: new Date().toISOString().split('T')[0],
+        items: [
+            'overhaul: rebuilt weapon families, level-up evolution, modular enemies, and long-run balance as one connected system.',
+            'rendering: the world now uses an approved 3x hard-raster webgl2 compositor while the hud, menus, minimap, and cockpit telemetry stay at native resolution.',
+            'fix: enemy health bars, damage numbers, tutorial text, shop prices, and interaction cards now use the native overlay instead of leaking through the world shader.',
+            'fix: hangar and ship-builder panels now stay above the native hud canvas instead of being covered by their own ship and grid layer.',
+            'rendering: connected ship parts are assembled before continuous rotation, eliminating diagonal seams without quantizing hull or turret angles.',
+            'fix: resizing, high-density displays, fractional scaling, camera presentation, and pointer mapping now share one authoritative viewport instead of stretching the launch frame.',
+            'fix: 3x camera motion stays continuous instead of rounding to the source grid and lurching while the ship moves.',
+            'stability: webgl context loss falls back to a nearest-neighbor world surface and restores the compositor without mutating or deleting the run.',
+            'cleanup: removed the obsolete smoothing, css pixelation, and resolution-scale toggles that no longer represented the real renderer.',
+            'level-ups: choices now react to installed weapons, so missing weapon families cannot waste a card slot.',
+            'ballistic: added real fire-rate and damage scaling plus rounds that pierce extra targets.',
+            'laser: added real fire-rate and damage scaling plus energy arcs that chain through nearby targets.',
+            'missile: added reload, damage, speed, and blast-radius evolution across every launcher.',
+            'fix: ballistic and laser fire-rate upgrades now affect actual weapon cooldowns instead of only appearing in the hangar.',
+            'fix: every missile variant now explodes on impact instead of several warheads only exploding when their fuse expired.',
+            'fix: clicks completed between render frames are buffered for one update instead of disappearing.',
+            'balance: replaced exponential enemy hp and damage growth with a long-run curve that stays dangerous without turning every hull into a spreadsheet wall.',
+            'enemies: added the interceptor flanker, repair tender, and bulwark to floor-scaled room rosters.',
+            'enemies: repair tenders restore damaged allies and advertise the repair link with an in-world pulse.',
+            'architecture: enemy bodies and tuning now live in editable part blueprints, separate from behavior and spawn rules.',
+            'online: each player receives upgrade choices based on their own ship while xp remains shared.',
+            'save: old runs automatically gain the new arsenal stats without losing their ship, upgrades, or room state.',
+            'starters: new runs now roll one balanced ballistic, laser, or missile package instead of always receiving two darts and one rocketle.',
+            'balance: rocketle damage is reduced and lps damage is raised so all three starter packages land near the same theoretical damage budget.',
+            'fix: needlepoint now pierces rocks and crates, and its uncommon roll is stronger than its common roll.',
+            'hud: weapon, utility, and exact per-part damage telemetry now live in separate cockpit panels; utility telemetry only appears when a matching module is installed.',
+            'drones: swarm hive is now a real drone-family part with data-driven blueprints and upgrade hooks for future drone types.',
+            'salvage: cleared rooms charge a one-use clockwise laser sweep that destroys remaining boxes and rocks after five seconds.',
+            'visuals: destroyed boxes and rocks now leave stable physical fragments instead of rerolling glitter noise every frame.',
+            'save: destruction fragments and salvage-sweep progress now survive room revisits, continue, and host-authoritative snapshots.',
+            'ui: ground-part names, hangar telemetry, shops, treasure caches, and vault prompts now use the current lowercase cockpit language and font stack.',
+            'fix: the hangar tooltip closes with the hangar instead of getting stranded over gameplay.',
+            'fix: the weapon bus now lists newly installed weapon parts instead of silently truncating the list to three.',
+            'devtools: completed signal forge with searchable sound coverage, one-click preview, explicit missing/default/custom states, saved-sound editing, and direct part or event assignment.',
+            'audio: added per-part fire, charge, release, impact, detonation, drone, shield, and booster sound slots without changing packaged fallbacks.',
+            'fix: enemy rail projectiles now request the existing rail-shot sound instead of a missing alias.',
+            'vaults: rebuilt cursed vaults as mechanical reliquary rooms with distinct gilded and blood contracts, containment pylons, spawn gates, sealing, and stable reward states.',
+            'vaults: selecting one contract permanently seals the other; gilded spends linearly scaled shared gold while blood takes a survivable 28% of the payer frame integrity.',
+            'vaults: replaced wall-clock waves with an 18-second simulation-time containment assault that stores co-op pressure, payer ownership, and one unique reward roll before combat starts.',
+            'save: cursed-vault payment, phase time, spawned ids, sealed contract, payer, player count, and unclaimed cache now survive continue, reconnect, and room snapshots without rerolling.',
+            'audio: added forge-ready semantic vault sounds for reveal, both payments, sealing, surges, unlock, and cache claim.'
+        ]
+    },
     {
         ver: '1.1.0 (beta)',
         name: 'system: authority',
@@ -15,9 +63,12 @@ export const CHANGELOG = [
             'desktop: build checkpoints now reject malformed macos bundles and fake or missing windows installers before ci upload.',
             'desktop: native shell warnings now fail the build instead of hiding in release logs.',
             'refactor: split game.js into focused systems while preserving the original update and draw order.',
+            'ui: added silkscreen and pixelify sans, expanded the original neon spectrum, and made cockpit telemetry optional with the eye candy setting.',
+            'fix: constrained the framebound logo to its menu panel at every supported window size.',
             'visuals: restored distinct projectile families, including green basic shots and long red rockets.',
             'save: room debris, loose rewards, cleared rooms, boss portals, ship parts, and run progress now survive continue and revisits correctly.',
             'fix: main menu return, hangar inventory, booster dash, cleared-room speed, and stale run-state bugs.',
+            'fix: resizing the desktop window now resizes the gameplay canvas instead of stretching the launch resolution.',
             'fix: returning to the main menu now marks the old run stopped so gameplay shortcuts cannot reopen hidden overlays.',
             'fix: offline and host run saves are cleared as soon as the final ship dies, closing the old force-quit continue exploit.',
             'fix: returning to the main menu can no longer lose a race with the old menu fade.',
@@ -46,7 +97,8 @@ export const CHANGELOG = [
             'fix: custom seed and developer keypads now work under the packaged app security policy.',
             'stability: enemy rendering no longer consumes weapon rng, so attack spread cannot change with host framerate.',
             'stability: loot scatter and cluster-child timing now use injectable gameplay rng boundaries for reproducible tests.',
-            'ui: repaired the oversized main menu and made patch notes responsive, focusable, and reliably scrollable.'
+            'ui: repaired the oversized main menu and made patch notes responsive, focusable, and reliably scrollable.',
+            'ui: rebuilt menus, settings, online play, combat telemetry, hangar, map, upgrades, and failure screens around one restrained industrial frame interface.'
         ]
     },
     {

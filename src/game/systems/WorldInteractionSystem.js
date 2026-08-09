@@ -1,5 +1,8 @@
 import { ItemPickup } from '../../shared/entities/ItemPickup.js';
 import { PartsLibrary } from '../../shared/parts/Part.js';
+import { VaultPhase } from '../../shared/vault/VaultDefinitions.js';
+import { commitVaultContract } from '../vault/VaultEconomy.js';
+import { claimVaultReward } from '../vault/VaultRewardSystem.js';
 
 const MAX_REMOTE_INTERACTION_DISTANCE = 1200;
 
@@ -251,75 +254,54 @@ export class WorldInteractionSystem {
     }
 
     tryActivateVaultChest(chest, player = null) {
-        if (!chest || chest.opened || chest.ambushActive) return;
+        if (!chest || chest.opened || chest.ambushActive || chest.sealed) {
+            return false;
+        }
 
         const game = this.game;
         const buyer = player || {
             id: 'host',
             ship: game.playerShip
         };
-        if (game.currentRoom?.cleared && !chest.locked && chest.wasPaid) {
-            this.openVaultChest(chest);
-            return;
+        chest.contractId ||= chest.costType === 'hp' ? 'blood' : 'gilded';
+        const state = game.currentRoom?.vaultState;
+        if (
+            state?.phase === VaultPhase.REWARD &&
+            state.contractId === chest.contractId
+        ) {
+            return this.openVaultChest(chest, buyer);
         }
 
-        if (chest.locked || chest.wasPaid) return;
-
-        if (chest.costType === 'gold') {
-            if (game.gold >= chest.costAmount) {
-                game.gold -= chest.costAmount;
-                this.triggerVaultAmbush(chest);
-            } else {
-                if (buyer.id === 'host') {
-                    game.showNotification('Not enough Gold!', '#ff0000');
-                }
-            }
-        } else if (chest.costType === 'hp') {
-            if (buyer.ship.hp > chest.costAmount) {
-                buyer.ship.hp -= chest.costAmount;
-                this.triggerVaultAmbush(chest);
-            } else {
-                if (buyer.id === 'host') {
-                    game.showNotification('Not enough Health!', '#ff0000');
-                }
-            }
+        if (
+            chest.locked ||
+            chest.wasPaid ||
+            (state && state.phase !== VaultPhase.OFFER)
+        ) {
+            return false;
         }
-        return chest.wasPaid || chest.opened;
+
+        const result = commitVaultContract(chest, game, buyer);
+        if (!result.ok) {
+            if (buyer.id === 'host') {
+                const resource = result.offer?.costType === 'hp' ?
+                    'frame integrity' : 'shared gold';
+                game.showNotification(`insufficient ${resource}`, '#ff4f70');
+            }
+            return false;
+        }
+        return true;
     }
 
-    triggerVaultAmbush(chest) {
-        if (!chest) return;
+    openVaultChest(chest, buyer = null) {
+        if (!chest || chest.opened) return false;
 
-        chest.wasPaid = true;
-        this.game.currentRoom?.startAmbush(this.game);
-    }
-
-    openVaultChest(chest) {
-        if (!chest || chest.opened) return;
-
-        const game = this.game;
-        chest.opened = true;
-        game.showNotification('VAULT LOOT ACQUIRED!', '#00ff00');
-        game.audio.play('hit', { volume: 0.8, pitch: 0.5 });
-        game.spawnExplosion(chest.x, chest.y, 80, 0.8);
-
-        const possibleParts = Object.keys(this.partsLibrary)
-            .filter(id => id !== 'core');
-
-        for (let i = 0; i < 3; i++) {
-            if (possibleParts.length === 0) break;
-
-            const partId = possibleParts[
-                Math.floor(this.random() * possibleParts.length)
-            ];
-            const x = chest.x + (this.random() - 0.5) * 60;
-            const y = chest.y + (this.random() - 0.5) * 60;
-            game.itemPickups.push(new this.ItemPickupClass(
-                x,
-                y,
-                partId,
-                this.random
-            ));
-        }
+        return claimVaultReward({
+            room: this.game.currentRoom,
+            chest,
+            game: this.game,
+            buyer,
+            ItemPickupClass: this.ItemPickupClass,
+            random: this.random
+        });
     }
 }

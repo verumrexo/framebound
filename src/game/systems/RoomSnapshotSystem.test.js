@@ -33,9 +33,11 @@ test('room snapshots preserve flags, debris, wreck parts, shops, and chests', ()
     source.cleared = true;
     source.shopUsed = true;
     source.asteroids = [new Asteroid(2100, 300, 'large', 'crystal_blue', random)];
-    source.asteroids[0].hp = 17;
-    source.lootCrates = [new LootCrate(2200, 400, '1x2', random)];
-    source.lootCrates[0].hp = 9;
+    source.asteroids[0].takeDamage(source.asteroids[0].hp + 1);
+    source.asteroids[0].update(0.1);
+    source.lootCrates = [new LootCrate(2200, 400, '1x2', () => 0.99)];
+    source.lootCrates[0].takeDamage(source.lootCrates[0].hp + 1);
+    source.lootCrates[0].update(0.1);
     source.shipwrecks = [new Shipwreck(2300, 500, 1, random)];
     source.shopItems = [new ShopItem(2400, 600, {
         type: 'part',
@@ -49,6 +51,18 @@ test('room snapshots preserve flags, debris, wreck parts, shops, and chests', ()
     source.treasureChests[0].opened = true;
     source.vaultChests = [new VaultChest(2600, 800, 'gold', 100, random)];
     source.vaultChests[0].wasPaid = true;
+    source.vaultState = {
+        version: 1,
+        phase: 'containment',
+        contractId: 'gilded',
+        payerId: 'guest_1',
+        playerCount: 2,
+        elapsed: 7.5,
+        nextSurge: 2,
+        spawnSerial: 7,
+        rewardPartIds: ['dart', 'laser'],
+        rewardSpawned: false
+    };
 
     const snapshots = snapshotRooms({
         rooms: [source],
@@ -66,12 +80,23 @@ test('room snapshots preserve flags, debris, wreck parts, shops, and chests', ()
     assert.equal(target.visited, true);
     assert.equal(target.cleared, true);
     assert.equal(target.shopUsed, true);
-    assert.equal(target.asteroids[0].hp, 17);
-    assert.equal(target.lootCrates[0].hp, 9);
+    assert.equal(target.asteroids[0].isBroken, true);
+    assert.equal(target.lootCrates[0].isOpened, true);
+    assert.equal(target.lootCrates[0].variant, 2);
+    assert.equal(target.lootCrates[0].lightColor, '#44ff44');
+    assert.deepEqual(
+        target.asteroids[0].breakFragments,
+        source.asteroids[0].breakFragments
+    );
+    assert.deepEqual(
+        target.lootCrates[0].breakFragments,
+        source.lootCrates[0].breakFragments
+    );
     assert.equal(target.shipwrecks[0].ship.getUniqueParts().size > 0, true);
     assert.equal(target.shopItems[0].purchased, true);
     assert.equal(target.treasureChests[0].opened, true);
     assert.equal(target.vaultChests[0].wasPaid, true);
+    assert.deepEqual(target.vaultState, source.vaultState);
 });
 
 test('unvisited shops and chest rooms remain ungenerated after continue', () => {

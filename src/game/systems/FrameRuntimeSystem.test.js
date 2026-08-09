@@ -85,7 +85,7 @@ test('frame runtime preserves the complete active-frame order and derived values
         ['sample-movement'],
         ['interactions', 0.25],
         ['movement', 0.25, { x: 12, y: 34 }, { x: 0.5, y: -0.25 }],
-        ['room'],
+        ['room', 0.25],
         ['weapons', 0.25, {
             isMouseDown: true,
             worldMouseX: 700,

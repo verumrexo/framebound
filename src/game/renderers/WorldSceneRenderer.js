@@ -1,15 +1,19 @@
 import { EntityRenderer } from './EntityRenderer.js';
 import { drawProjectile } from './ProjectileRenderer.js';
 import { drawDebugHitboxes } from './DebugHitboxRenderer.js';
+import { VaultRenderer } from './VaultRenderer.js';
+import { RoomType } from '../environment/RoomType.js';
 
 export class WorldSceneRenderer {
     constructor(game, {
         entityRenderer = EntityRenderer,
+        vaultRenderer = VaultRenderer,
         drawProjectileFn = drawProjectile,
         drawDebugHitboxesFn = drawDebugHitboxes
     } = {}) {
         this.game = game;
         this.entityRenderer = entityRenderer;
+        this.vaultRenderer = vaultRenderer;
         this.drawProjectile = drawProjectileFn;
         this.drawDebugHitboxes = drawDebugHitboxesFn;
     }
@@ -25,6 +29,13 @@ export class WorldSceneRenderer {
             if (game.rooms) {
                 for (const room of game.rooms) {
                     this.drawRoom(room);
+                    if (room.type === RoomType.VAULT && room.visited) {
+                        this.vaultRenderer.draw(
+                            renderer,
+                            room,
+                            game.eyeCandy !== false
+                        );
+                    }
                 }
             }
 
@@ -70,39 +81,18 @@ export class WorldSceneRenderer {
                     this.entityRenderer.drawShopItem(renderer, item);
                 }
             });
-            if (game.hoveredShopItem && !game.hoveredShopItem.purchased) {
-                game.hoveredShopItem.drawTooltip(
-                    renderer,
-                    game.gold >= game.hoveredShopItem.data.price
-                );
-            }
 
             game.treasureChests.forEach(chest => {
                 if (!chest.opened) {
                     this.entityRenderer.drawTreasureChest(renderer, chest);
                 }
             });
-            if (game.hoveredTreasureChest && !game.hoveredTreasureChest.opened) {
-                game.hoveredTreasureChest.drawTooltip(renderer, true);
-            }
-
-            if (game.vaultChests) {
-                game.vaultChests.forEach(chest => {
-                    this.entityRenderer.drawVaultChest(renderer, chest);
-                });
-            }
-            if (game.hoveredVaultChest && !game.hoveredVaultChest.opened) {
-                game.hoveredVaultChest.drawTooltip(
-                    renderer,
-                    game.playerShip.hp,
-                    game.gold
-                );
-            }
 
             game.projectiles.forEach(projectile =>
                 this.drawProjectile(renderer, projectile));
             game.drones.forEach(drone =>
                 this.entityRenderer.drawDrone(renderer, drone));
+            game.salvageSweep?.draw?.(renderer);
 
             this.drawDebugHitboxes(game, shipCos, shipSin);
 
@@ -115,7 +105,13 @@ export class WorldSceneRenderer {
                 );
             }
 
-            game.effects.drawWorld();
+            for (const explosion of game.explosions) {
+                const alpha = explosion.life / explosion.maxLife;
+                renderer.ctx.save();
+                renderer.ctx.globalAlpha = alpha * 0.5;
+                renderer.drawCircle(explosion.x, explosion.y, explosion.radius * (1.2 - alpha), '#ffaa44');
+                renderer.ctx.restore();
+            }
         });
     }
 
@@ -140,19 +136,5 @@ export class WorldSceneRenderer {
             ctx.fillRect(room.x, room.y, room.width, room.height);
         }
 
-        if (game.floor === 1 && room.gridX === 0 && room.gridY === 0) {
-            ctx.save();
-            ctx.textAlign = 'center';
-            ctx.font = "bold 24px 'Press Start 2P'";
-            ctx.fillStyle = 'rgba(0, 255, 255, 0.4)';
-            const centerX = room.x + room.width / 2;
-            const centerY = room.y + room.height / 2;
-            ctx.fillText('wasd: move', centerX - 100, centerY - 150);
-            ctx.fillText('l-click: shoot', centerX - 100, centerY - 80);
-            ctx.fillText('e: interact', centerX - 100, centerY - 10);
-            ctx.fillText('tab: hangar', centerX - 100, centerY + 60);
-            ctx.fillText('m: map', centerX - 100, centerY + 130);
-            ctx.restore();
-        }
     }
 }

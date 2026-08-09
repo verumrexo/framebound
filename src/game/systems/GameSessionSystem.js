@@ -1,7 +1,9 @@
 import { Ship } from '../../shared/entities/Ship.js';
 import { Portal } from '../../shared/entities/Portal.js';
 import { Biomes } from '../environment/Biomes.js';
+import { normalizePermanentStats } from '../../shared/combat/WeaponFamilies.js';
 import { RoomType } from '../environment/RoomType.js';
+import { applyRandomStarterLoadout } from '../../shared/combat/StarterLoadouts.js';
 import { SaveManager } from './SaveManager.js';
 import {
     restoreActiveWorld,
@@ -45,13 +47,17 @@ export class GameSessionSystem {
         ShipClass = Ship,
         PortalClass = Portal,
         saveManager = SaveManager,
-        random = Math.random
+        random = Math.random,
+        starterLoadout = null
     } = {}) {
         this.game = game;
         this.ShipClass = ShipClass;
         this.PortalClass = PortalClass;
         this.saveManager = saveManager;
         this.random = random;
+        this.starterLoadout = starterLoadout || (
+            ShipClass === Ship ? applyRandomStarterLoadout : null
+        );
     }
 
     startOffline(seed, isLoad = false) {
@@ -109,6 +115,8 @@ export class GameSessionSystem {
         for (const key of RUN_SCOPED_COLLECTIONS) {
             game[key] = [];
         }
+        game.combatTelemetry?.reset?.();
+        game.salvageSweep?.reset?.();
 
         game.running = false;
         game.playerShip = null;
@@ -204,6 +212,7 @@ export class GameSessionSystem {
         if (game.playerShip) return;
         console.log('[Game] Creating Local Player Ship');
         game.playerShip = new this.ShipClass();
+        this.starterLoadout?.(game.playerShip, this.random);
 
         if (data) {
             if (data.x !== undefined) game.x = data.x;
@@ -371,10 +380,9 @@ export class GameSessionSystem {
     stageSavedShip(savedShip) {
         const staged = new this.ShipClass();
         staged.parts.clear();
-        staged.permanentStats = {
-            ...staged.permanentStats,
-            ...(savedShip.permanentStats || {})
-        };
+        staged.permanentStats = normalizePermanentStats(
+            savedShip.permanentStats
+        );
 
         const coreIndex = savedShip.parts.findIndex(part =>
             part.partId === 'core' && part.x === 0 && part.y === 0

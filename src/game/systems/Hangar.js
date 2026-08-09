@@ -1,5 +1,9 @@
 import { Assets } from '../../Assets.js';
 import { PartsLibrary, TILE_SIZE } from '../../shared/parts/Part.js';
+import {
+    WEAPON_FAMILIES,
+    getFamilyFireRateMultiplier
+} from '../../shared/combat/WeaponFamilies.js';
 
 export class Hangar {
     constructor(game) {
@@ -16,35 +20,22 @@ export class Hangar {
 
         // Create UI
         this.ui = document.createElement('div');
-        this.ui.style.position = 'absolute';
-        this.ui.style.top = '10px';
-        this.ui.style.left = '10px';
-        this.ui.style.right = '10px';
+        this.ui.id = 'hangar-ui';
         this.ui.style.display = 'none';
-        this.ui.style.color = 'white';
-        this.ui.style.fontFamily = "'Press Start 2P', monospace";
-        this.ui.style.fontSize = "16px";
-        this.ui.style.pointerEvents = 'none'; // Allow clicking through the gap
         this.ui.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                <!-- Left Side: Stats -->
-                <div id="stats-panel" style="background: rgba(0,0,0,0.8); padding: 15px; border: 1px solid rgba(0,255,0,0.2); min-width: 220px; pointer-events: auto;">
-                    <div style="color: #0f0; font-size: 22px; margin-bottom: 10px; text-transform: uppercase; border-bottom: 1px solid #0f0;">vessel status</div>
-                    <div id="stat-content" style="display: flex; flex-direction: column; gap: 6px;"></div>
-                </div>
+            <div class="workshop-layout">
+                <section id="stats-panel" class="workshop-panel workshop-stats">
+                    <div class="ui-kicker">active frame // draft telemetry</div>
+                    <div class="workshop-title">vessel status</div>
+                    <div id="stat-content"></div>
+                </section>
 
-                <!-- Right Side: Inventory -->
-                <div style="background: rgba(0,0,0,0.8); padding: 15px; border: 1px solid #0f0; min-width: 400px; max-width: 550px; pointer-events: auto; display: flex; flex-direction: column; max-height: calc(100vh - 40px);">
-                    <div style="color:white; font-family:'Press Start 2P', monospace; margin-bottom:15px; font-size: 20px; border-bottom: 1px solid #0f0; padding-bottom: 5px;">ship configuration</div>
-                    <div id="part-list" style="display:grid; grid-template-columns: repeat(auto-fill, 64px); grid-auto-rows: 64px; gap:8px; margin-bottom: 15px; overflow-y: auto; padding-right: 5px; scrollbar-width: thin; scrollbar-color: #0f0 #222;">
-                        <style>
-                            #part-list::-webkit-scrollbar { width: 6px; }
-                            #part-list::-webkit-scrollbar-track { background: #111; }
-                            #part-list::-webkit-scrollbar-thumb { background: #0f0; border-radius: 3px; }
-                        </style>
-                    </div>
+                <section class="workshop-panel workshop-inventory">
+                    <div class="ui-kicker">assembly inventory // available units</div>
+                    <div class="workshop-title">ship configuration</div>
+                    <div id="part-list" class="workshop-list"></div>
                     <div id="utility-btns"></div>
-                </div>
+                </section>
             </div>
         `;
         document.body.appendChild(this.ui);
@@ -63,20 +54,7 @@ export class Hangar {
         // Tooltip
         this.tooltip = document.createElement('div');
         this.tooltip.id = 'hangar-tooltip';
-        this.tooltip.style.cssText = `
-            position: fixed;
-            background: rgba(0,0,0,0.95);
-            border: 1px solid #0f0;
-            padding: 12px;
-            color: white;
-            font-family: 'Press Start 2P', monospace;
-            pointer-events: none;
-            display: none;
-            z-index: 9999;
-            min-width: 180px;
-            box-shadow: 0 0 15px rgba(0,255,0,0.2);
-            text-transform: lowercase;
-        `;
+        this.tooltip.className = 'workshop-tooltip';
         document.body.appendChild(this.tooltip);
 
         window.addEventListener('mousemove', (e) => {
@@ -87,11 +65,10 @@ export class Hangar {
 
         // Instructions
         const instructionsDiv = document.createElement('div');
-        instructionsDiv.style.cssText = 'font-size: 16px; color: #aaa; margin-top:10px;';
+        instructionsDiv.className = 'workshop-instructions';
         instructionsDiv.innerHTML = `
-            left click: place<br>
-            right click: remove<br>
-            tab: save & close
+            lmb // place &nbsp;&nbsp; rmb // remove<br>
+            r // rotate &nbsp;&nbsp; tab // save and close
         `;
         this.ui.appendChild(instructionsDiv);
 
@@ -114,34 +91,22 @@ export class Hangar {
             for (let i = 0; i < displayCount; i++) {
                 const isGhost = (count === 0);
                 const itemWrapper = document.createElement('div');
-                itemWrapper.className = 'inventory-item';
+                itemWrapper.className = [
+                    'inventory-item',
+                    this.selectedPartId === key ? 'is-selected' : '',
+                    isGhost ? 'is-empty' : ''
+                ].filter(Boolean).join(' ');
                 const spanW = def.width || 1;
                 const spanH = def.height || 1;
-                itemWrapper.style.cssText = `
-                    grid-column: span ${spanW};
-                    grid-row: span ${spanH};
-                    width: ${64 * spanW}px;
-                    height: ${64 * spanH}px;
-                    cursor: pointer;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    position: relative;
-                    opacity: ${isGhost ? '0.3' : '1.0'};
-                `;
+                itemWrapper.style.gridColumn = `span ${spanW}`;
+                itemWrapper.style.gridRow = `span ${spanH}`;
+                itemWrapper.style.width = `${64 * spanW}px`;
+                itemWrapper.style.height = `${64 * spanH}px`;
 
                 // Selection marker
                 if (this.selectedPartId === key) {
                     const marker = document.createElement('div');
-                    marker.style.cssText = `
-                        position: absolute;
-                        top: 4px;
-                        left: 4px;
-                        width: 4px;
-                        height: 4px;
-                        background: #0f0;
-                        box-shadow: 0 0 5px #0f0;
-                    `;
+                    marker.className = 'inventory-selection-marker';
                     itemWrapper.appendChild(marker);
                 }
 
@@ -191,35 +156,41 @@ export class Hangar {
     }
 
     static updateTooltip(tooltipEl, def) {
-        let statsHtml = '';
+        const stats = [];
         if (def.stats) {
-            if (def.stats.hp) statsHtml += `<div style="color:#ff4444">integrity: +${def.stats.hp}</div>`;
-            if (def.stats.mass) statsHtml += `<div style="color:#888">mass: ${def.stats.mass}t</div>`;
-            if (def.stats.damage) statsHtml += `<div style="color:#ffaa44">damage: ${def.stats.damage}</div>`;
-            if (def.stats.cooldown) statsHtml += `<div style="color:#aaa">cooldown: ${def.stats.cooldown}s</div>`;
-            if (def.stats.chargeTime) statsHtml += `<div style="color:#aaa">charge: ${def.stats.chargeTime}s</div>`;
-            if (def.stats.regen) statsHtml += `<div style="color:#44ff44">regen: +${def.stats.regen}/s</div>`;
-            if (def.stats.thrust || def.type === 'thruster') statsHtml += `<div style="color:#00ffff">thrust: +${def.width * def.height}</div>`;
-            if (def.type === 'accelerant') statsHtml += `<div style="color:#ffaa44">laser fire rate: +5%</div>`;
-            if (def.type === 'rocket_bay') statsHtml += `<div style="color:#ffaa44">rocket payload: +1</div>`;
-            if (def.type === 'booster') statsHtml += `<div style="color:#00ffff">enables dash system</div>`;
+            if (def.stats.hp) stats.push(['integrity', `+${def.stats.hp}`, '#ff4d5a']);
+            if (def.stats.mass) stats.push(['mass', `${def.stats.mass}t`, '#bde9df']);
+            if (def.stats.damage) stats.push(['damage', def.stats.damage, '#ff8a3d']);
+            if (def.stats.cooldown) stats.push(['cooldown', `${def.stats.cooldown}s`, '#ffc857']);
+            if (def.stats.chargeTime) stats.push(['charge', `${def.stats.chargeTime}s`, '#ffc857']);
+            if (def.stats.regen) stats.push(['regen', `+${def.stats.regen}/s`, '#74ff6a']);
+            if (def.stats.thrust || def.type === 'thruster') stats.push(['thrust', `+${def.width * def.height}`, '#55ffc2']);
+            if (def.type === 'accelerant') stats.push(['laser fire rate', '+5%', '#ff8a3d']);
+            if (def.type === 'rocket_bay') stats.push(['rocket payload', '+1', '#ff8a3d']);
+            if (def.type === 'booster') stats.push(['system', 'dash enabled', '#55ffc2']);
         }
 
         let rarityColor = '#0f0'; // Common
         if (def && def.rarity === 'rare') rarityColor = '#0088ff';
         if (def && def.rarity === 'epic') rarityColor = '#aa00ff';
         if (def && def.rarity === 'legendary') rarityColor = '#ffaa00';
+        const familyColor = WEAPON_FAMILIES[def.stats?.weaponGroup]?.color || rarityColor;
+        tooltipEl.style.setProperty('--tooltip-accent', familyColor);
 
         tooltipEl.innerHTML = `
-            <div style="font-size: 16px; color: ${rarityColor}; margin-bottom: 5px; border-bottom: 1px solid rgba(0,255,0,0.3); text-transform: uppercase;">
-                ${def.name}
+            <div class="workshop-tooltip-kicker">part telemetry // ${def.rarity || 'common'}</div>
+            <div class="workshop-tooltip-name" style="color:${familyColor}">
+                ${String(def.name).toLowerCase()}
             </div>
-            <div style="font-size: 8px; color: ${rarityColor}; margin-bottom: 8px; font-weight: bold;">
-                [${def.rarity || 'common'}]
+            <div class="workshop-tooltip-meta">
+                <span style="color:${rarityColor}">${def.rarity || 'common'}</span>
+                <span>${def.type}${def.stats.weaponGroup ? ` // ${def.stats.weaponGroup}` : ''}</span>
+                <span>${def.width}x${def.height}</span>
             </div>
-            <div style="font-size: 8px; color: #888; margin-bottom: 8px;">class: ${def.type} ${def.stats.weaponGroup ? `[${def.stats.weaponGroup}]` : ''} (${def.width}x${def.height})</div>
-            <div style="display: flex; flex-direction: column; gap: 2px;">
-                ${statsHtml}
+            <div class="workshop-tooltip-stats">
+                ${stats.map(([label, value, color]) => `
+                    <span>${label}</span><strong style="color:${color}">${value}</strong>
+                `).join('')}
             </div>
         `;
     }
@@ -233,10 +204,19 @@ export class Hangar {
         const levelBonus = 1 + (this.game.level - 1) * 0.01;
 
         // Fire Rate Bonuses
-        const velocityFR = Math.round((levelBonus + (perm.velocityRateAdd || 0) - 1) * 100);
+        const velocityFR = Math.round((
+            levelBonus * getFamilyFireRateMultiplier(this.draftShip, 'velocity') - 1
+        ) * 100);
 
         const accelerantBonus = (1 + (stats.accelerantCount || 0) * 0.05);
-        const laserFR = Math.round(((levelBonus * (accelerantBonus + (perm.laserRateAdd || 0))) - 1) * 100);
+        const laserFR = Math.round((
+            levelBonus *
+            accelerantBonus *
+            getFamilyFireRateMultiplier(this.draftShip, 'laser') - 1
+        ) * 100);
+        const rocketFR = Math.round((
+            levelBonus * getFamilyFireRateMultiplier(this.draftShip, 'rocket') - 1
+        ) * 100);
 
         // Turn Speed Calc (Matching PlayerControlSystem)
         const baseTurnRate = 5.0;
@@ -249,9 +229,10 @@ export class Hangar {
             { label: 'integrity', value: `${stats.totalHp} hp`, color: '#ff4444' },
             { label: 'mass / turn', value: `${stats.totalMass.toFixed(1)}t / ${turnSpeedVal.toFixed(1)}`, color: '#aaa' },
             { label: 'regen', value: `${((stats.regen || 0) * levelBonus).toFixed(1)} /s`, color: '#44ff44' },
-            { label: 'max speed', value: `${Math.floor(800 * (1 + (stats.thrust * 0.05)) * levelBonus * (perm.speedMul || 1.0))} km/h`, color: '#00ffff' },
+            { label: 'max speed', value: `${Math.floor(800 * (1 + (stats.thrust * 0.05)) * levelBonus * (perm.speedMul || 1.0))} km/h`, color: '#89a889' },
             { label: 'velocity rate', value: `+${velocityFR}%`, color: '#ffaa44' },
             { label: 'laser rate', value: `+${laserFR}%`, color: '#ffaa44' },
+            { label: 'missile rate', value: `+${rocketFR}%`, color: '#ffaa44' },
             { label: 'missile speed', value: `+${missileSpeedBonus}%`, color: '#ffaa44' }
         ];
 
@@ -259,33 +240,41 @@ export class Hangar {
             rows.push({ label: 'extra rockets', value: `+${stats.rocketBayCount}`, color: '#ffaa44' });
         }
 
-        statPanel.innerHTML = rows.map(r => `
-            <div style="display: flex; justify-content: space-between; border-bottom: 1px dotted rgba(255,255,255,0.1); padding: 2px 0;">
-                <span style="color: #888;">${r.label}:</span>
-                <span style="color: ${r.color}; text-align: right;">${r.value}</span>
+        statPanel.innerHTML = `
+            <div class="workshop-stat-group">
+                <div class="workshop-stat-heading">frame performance</div>
+                ${rows.slice(0, 4).map(statRow).join('')}
             </div>
-        `).join('');
+            <div class="workshop-stat-group">
+                <div class="workshop-stat-heading">combat routing</div>
+                ${rows.slice(4).map(statRow).join('')}
+            </div>
+        `;
 
         // Permanent Upgrades List
         const upgradeRows = [];
 
-        if (perm.hpMul > 1.0) upgradeRows.push({ label: 'hull Integrity', value: `+${Math.round((perm.hpMul - 1) * 100)}%` });
+        if (perm.hpMul > 1.0) upgradeRows.push({ label: 'hull integrity', value: `+${Math.round((perm.hpMul - 1) * 100)}%` });
         if (perm.regenAdd > 0) upgradeRows.push({ label: 'hull regen', value: `+${perm.regenAdd}/s` });
-        if (perm.velocityRateAdd > 0) upgradeRows.push({ label: 'velocity Rate', value: `+${Math.round(perm.velocityRateAdd * 100)}%` });
+        if (perm.velocityRateAdd > 0) upgradeRows.push({ label: 'velocity rate', value: `+${Math.round(perm.velocityRateAdd * 100)}%` });
+        if (perm.velocityDamageMul > 1) upgradeRows.push({ label: 'ballistic damage', value: `+${Math.round((perm.velocityDamageMul - 1) * 100)}%` });
+        if (perm.velocityPierce > 0) upgradeRows.push({ label: 'ballistic pierce', value: `+${perm.velocityPierce}` });
         if (perm.laserRateAdd > 0) upgradeRows.push({ label: 'laser rate', value: `+${Math.round(perm.laserRateAdd * 100)}%` });
+        if (perm.laserDamageMul > 1) upgradeRows.push({ label: 'laser damage', value: `+${Math.round((perm.laserDamageMul - 1) * 100)}%` });
+        if (perm.laserChain > 0) upgradeRows.push({ label: 'laser chain', value: `+${perm.laserChain}` });
+        if (perm.rocketRateAdd > 0) upgradeRows.push({ label: 'missile rate', value: `+${Math.round(perm.rocketRateAdd * 100)}%` });
+        if (perm.rocketDamageMul > 1) upgradeRows.push({ label: 'missile damage', value: `+${Math.round((perm.rocketDamageMul - 1) * 100)}%` });
+        if (perm.rocketBlastMul > 1) upgradeRows.push({ label: 'blast radius', value: `+${Math.round((perm.rocketBlastMul - 1) * 100)}%` });
         if (perm.speedMul > 1.0) upgradeRows.push({ label: 'flight speed', value: `+${Math.round((perm.speedMul - 1) * 100)}%` });
         if (perm.turnMul > 1.0) upgradeRows.push({ label: 'turn speed', value: `+${Math.round((perm.turnMul - 1) * 100)}%` });
         if (perm.missileSpeedMul > 1.0) upgradeRows.push({ label: 'missile speed', value: `+${Math.round((perm.missileSpeedMul - 1) * 100)}%` });
 
         if (upgradeRows.length > 0) {
             statPanel.innerHTML += `
-                <div style="margin-top: 15px; margin-bottom: 5px; color: #00ff00; border-bottom: 1px solid #00ff00;">augmentations</div>
-                ${upgradeRows.map(r => `
-                    <div style="display: flex; justify-content: space-between; padding: 2px 0;">
-                        <span style="color: #aaa;">${r.label}:</span>
-                        <span style="color: #00ff00; text-align: right;">${r.value}</span>
-                    </div>
-                `).join('')}
+                <div class="workshop-stat-group workshop-augments">
+                    <div class="workshop-stat-heading">augmentations</div>
+                    ${upgradeRows.map(r => statRow({ ...r, color: '#74ff6a' })).join('')}
+                </div>
             `;
         }
     }
@@ -293,6 +282,7 @@ export class Hangar {
     toggle() {
         this.active = !this.active;
         this.ui.style.display = this.active ? 'block' : 'none';
+        this.tooltip.style.display = 'none';
 
         if (this.active) {
             // OPENING: Pause game and Clone Ship
@@ -541,9 +531,14 @@ export class Hangar {
 
         renderer.ctx.restore();
 
-        // UI Overlay for "DRAFT MODE"
-        renderer.ctx.fillStyle = "yellow";
-        renderer.ctx.font = "16px 'Press Start 2P'";
-        renderer.ctx.fillText("hangar mode - editing draft", 20, renderer.height - 20);
     }
+}
+
+function statRow(row) {
+    return `
+        <div class="workshop-stat-row">
+            <span>${row.label}</span>
+            <strong style="color:${row.color}">${row.value}</strong>
+        </div>
+    `;
 }

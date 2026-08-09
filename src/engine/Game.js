@@ -48,7 +48,11 @@ import { FullscreenMapInputSystem } from '../game/systems/FullscreenMapInputSyst
 import { GameplayOverlaySystem } from '../game/systems/GameplayOverlaySystem.js';
 import { FrameRuntimeSystem } from '../game/systems/FrameRuntimeSystem.js';
 import { FramePresentationSystem } from '../game/renderers/FramePresentationSystem.js';
+import { WorldOverlayRenderer } from '../game/renderers/WorldOverlayRenderer.js';
 import { PeerNetworkManager } from './PeerNetworkManager.js';
+import { CombatTelemetry } from '../game/systems/CombatTelemetry.js';
+import { SalvageSweepSystem } from '../game/systems/SalvageSweepSystem.js';
+import { SignalForgeRuntime } from '../game/audio/SignalForgeRuntime.js';
 
 export class Game {
     constructor(canvas) {
@@ -69,14 +73,15 @@ export class Game {
         };
 
         this.renderer = new Renderer(canvas);
-        this.renderer.setSmoothing(false); // Default to clean pixel art
         this.worldScene = new WorldSceneRenderer(this);
         this.hud = new HudRenderer(this);
         this.input = new Input(canvas);
         this.camera = new Camera(this.renderer.width, this.renderer.height);
         this.audio = new AudioManager();
+        this.signalForge = new SignalForgeRuntime(this.audio);
         this.mainMenu = new MainMenu(this);
-        this.loadingPromise = loadGameSounds(this.audio);
+        this.loadingPromise = loadGameSounds(this.audio)
+            .then(() => this.signalForge.initialize());
         this.projectiles = [];
         this.explosions = [];
         this.notifications = [];
@@ -169,6 +174,8 @@ export class Game {
         this.peerNetwork = new PeerNetworkManager(this);
 
         this.damageNumbers = [];
+        this.combatTelemetry = new CombatTelemetry();
+        this.salvageSweep = new SalvageSweepSystem(this);
         this.showDamageNumbers = true;
         this.damageNumberMode = 'singular';
 
@@ -181,6 +188,7 @@ export class Game {
         this.gameplayOverlays = new GameplayOverlaySystem(this);
         this.frameRuntime = new FrameRuntimeSystem(this);
         this.framePresentation = new FramePresentationSystem(this);
+        this.worldOverlays = new WorldOverlayRenderer(this);
 
         this.loop = new GameLoop(
             (dt) => this.update(dt),
@@ -236,8 +244,8 @@ export class Game {
         return this.roomTransitions.teleportToRoom(room);
     }
 
-    spawnDamageNumber(x, y, amount, isPlayer = false) {
-        this.effects.spawnDamageNumber(x, y, amount, isPlayer);
+    spawnDamageNumber(x, y, amount, isPlayer = false, source = null) {
+        this.effects.spawnDamageNumber(x, y, amount, isPlayer, source);
     }
 
     autoSave() {

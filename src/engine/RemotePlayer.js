@@ -111,11 +111,6 @@ export class RemotePlayer {
     }
 
     draw(renderer) {
-        // Draw Health Bar (Simplified for Remote)
-        if (this.hp < this.maxHp) {
-            EntityRenderer.drawHealthBar(renderer, this);
-        }
-
         // Draw Ship
         // Calculate aim target (forward) since we don't sync aim yet
         const aimDist = 2000;

@@ -32,6 +32,23 @@ test('ship placement rejects non-finite geometry without corrupting its grid', (
     assert.equal(ship.addPart(0, 0, 'core', 0), true);
 });
 
+test('existing 2x4 parts keep exact attachment and rotated footprint rules', () => {
+    for (const [rotation, expectedCells] of [
+        [0, ['1,-1', '1,0', '1,1', '1,2', '2,-1', '2,0', '2,1', '2,2']],
+        [1, ['1,-1', '1,0', '2,-1', '2,0', '3,-1', '3,0', '4,-1', '4,0']]
+    ]) {
+        const ship = new Ship();
+        ship.parts.clear();
+        assert.equal(ship.addPart(0, 0, 'core', 0), true);
+        assert.equal(ship.canPlaceAt(1, -1, 'custom_1769974460678', rotation), true);
+        assert.equal(ship.addPart(1, -1, 'custom_1769974460678', rotation), true);
+
+        const occupied = [...ship.parts.keys()].filter(key => key !== '0,0').sort();
+        assert.deepEqual(occupied, expectedCells.sort());
+        assert.equal(ship.getUniqueParts().size, 2);
+    }
+});
+
 test('booster and accelerant parts contribute their actual module stats', () => {
     const ship = new Ship();
 

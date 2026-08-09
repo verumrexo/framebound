@@ -120,10 +120,132 @@ test('network enemy projectile spawning keeps owner, fields, sound mapping, and 
         [10, 20, 0.5, 'railgun', 900, 'enemy', 12, null, random]
     );
     assert.deepEqual(sounds, [
-        ['shoot_rail_shot', { volume: 0.6 }],
+        ['rail_shot', { volume: 0.6 }],
         ['shoot_lsr', { volume: 0.6 }],
         ['shoot_lps', { volume: 0.6 }]
     ]);
+});
+
+test('ballistic pierce crosses extra targets before being consumed', () => {
+    const damage = [];
+    const enemy = id => ({
+        id,
+        isDead: false,
+        x: 0,
+        y: 0,
+        radius: 10,
+        checkShieldHit: () => ({ hit: false }),
+        checkPartHit: () => ({ hit: true }),
+        takeDamage: amount => damage.push([id, amount])
+    });
+    const projectile = {
+        owner: 'player',
+        type: 'bullet',
+        x: 0,
+        y: 0,
+        radius: 4,
+        damage: 10,
+        remainingPierces: 1,
+        isBeam: false,
+        isDead: false,
+        update() {}
+    };
+    const { game, system } = createGame([projectile], {
+        enemies: [enemy('first'), enemy('second')]
+    });
+
+    system.update(0.016);
+
+    assert.deepEqual(damage, [['first', 10], ['second', 10]]);
+    assert.deepEqual(game.projectiles, []);
+});
+
+test('ballistic pierce crosses rocks and crates instead of dying on debris', () => {
+    const hits = [];
+    const asteroid = {
+        x: 0,
+        y: 0,
+        radius: 12,
+        isDead: false,
+        isBroken: false,
+        takeDamage: amount => {
+            hits.push(['asteroid', amount]);
+            return false;
+        }
+    };
+    const crate = {
+        x: 0,
+        y: 0,
+        radius: 12,
+        isOpened: false,
+        rotSpeed: 0,
+        takeDamage: amount => {
+            hits.push(['crate', amount]);
+            return false;
+        }
+    };
+    const projectile = {
+        owner: 'player',
+        type: 'bullet',
+        x: 0,
+        y: 0,
+        radius: 4,
+        damage: 10,
+        remainingPierces: 1,
+        isBeam: false,
+        isDead: false,
+        update() {}
+    };
+    const { game, system } = createGame([projectile], {
+        asteroids: [asteroid],
+        lootCrates: [crate]
+    });
+
+    system.update(0.016);
+
+    assert.deepEqual(hits, [
+        ['asteroid', 10],
+        ['crate', 10]
+    ]);
+    assert.deepEqual(game.projectiles, []);
+    assert.equal(projectile.hitTargets.has(asteroid), true);
+    assert.equal(projectile.hitTargets.has(crate), true);
+});
+
+test('laser chain and missile blast radius upgrades produce combat effects', () => {
+    const damage = [];
+    const explosions = [];
+    const targets = [0, 100].map((x, index) => ({
+        id: `enemy_${index}`,
+        isDead: false,
+        x,
+        y: 0,
+        radius: 10,
+        checkShieldHit: () => ({ hit: false }),
+        checkPartHit: px => ({ hit: px === 0 }),
+        takeDamage: amount => damage.push([index, amount])
+    }));
+    const laser = {
+        owner: 'player',
+        type: 'laser',
+        x: 0,
+        y: 0,
+        radius: 2,
+        damage: 20,
+        chainCount: 1,
+        isBeam: false,
+        isDead: false,
+        update() {}
+    };
+    const { system } = createGame([laser], {
+        enemies: targets,
+        spawnExplosion: (...args) => explosions.push(args)
+    });
+
+    system.update(0.016);
+
+    assert.deepEqual(damage, [[0, 20], [1, 11]]);
+    assert.ok(explosions.some(([, , radius]) => radius === 8));
 });
 
 test('loaded shield audio suppresses the generic hit fallback', () => {

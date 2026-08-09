@@ -33,7 +33,8 @@ test('hangar reset removes infinite dev inventory and hides stale ui', () => {
 
 test('ship builder reset discards its draft and hides stale ui', () => {
     const turretToggle = {
-        textContent: '✓ turret editor',
+        textContent: 'turret mode // active',
+        className: 'builder-action is-selected',
         style: { background: 'green' }
     };
     const builder = Object.create(ShipBuilder.prototype);
@@ -65,6 +66,6 @@ test('ship builder reset discards its draft and hides stale ui', () => {
     assert.equal(builder.turretEditorMode, false);
     assert.equal(builder.lastPlacedGrid, null);
     assert.equal(builder.ghostGrid, null);
-    assert.equal(turretToggle.textContent, '🔧 turret editor');
-    assert.match(turretToggle.style.background, /ff9944/);
+    assert.equal(turretToggle.textContent, 'turret mode // off');
+    assert.equal(turretToggle.className, 'builder-action');
 });

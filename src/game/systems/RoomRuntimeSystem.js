@@ -8,11 +8,11 @@ export class RoomRuntimeSystem {
         this.transitions = transitions;
     }
 
-    update() {
+    update(dt = 0) {
         const game = this.game;
 
         if (game.currentRoom) {
-            game.currentRoom.checkAmbushStatus(game);
+            game.currentRoom.checkAmbushStatus(game, dt);
         }
 
         this.transitions.update();

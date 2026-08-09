@@ -252,6 +252,11 @@ export class PeerNetworkManager {
         });
     }
 
+    sendSalvageSweep() {
+        if (!this.isGuest || !this.client?.connected) return false;
+        return this.sendOrQueueAction('sweep', {});
+    }
+
     sendShipEdit(parts) {
         if (
             !this.isGuest ||
@@ -279,7 +284,7 @@ export class PeerNetworkManager {
     beginSharedLevelUp() {
         if (!this.isHost || !this.simulation) return false;
         return this.simulation.beginPeerLevelUps?.(
-            () => this.game.levelUpManager.generateChoices()
+            ship => this.game.levelUpManager.generateChoices(null, ship)
         ) || false;
     }
 

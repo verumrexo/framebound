@@ -1,4 +1,18 @@
 
+import {
+    UI_COLORS,
+    UI_FONTS,
+    drawUiPanel
+} from '../ui/UiTheme.js';
+import { PartsLibrary } from '../../shared/parts/Part.js';
+import {
+    PERMANENT_STAT_KEYS,
+    getInstalledWeaponFamilies,
+    normalizePermanentStats
+} from '../../shared/combat/WeaponFamilies.js';
+
+const UNIVERSAL_UPGRADES = Object.freeze(['hull', 'regen', 'mobility']);
+
 export class LevelUpManager {
     constructor(game) {
         this.game = game;
@@ -36,20 +50,58 @@ export class LevelUpManager {
                 desc: 'increases hull regeneration per second'
             },
             {
-                id: 'velocity',
+                id: 'velocity_rate',
+                family: 'velocity',
                 name: ['oiled gears', 'autoloader', 'chain feed', 'hyper-cycling', 'bullet hell', 'lead storm'],
-                stat: 'velocityRate',
+                stat: 'velocityRateAdd',
                 type: 'add',
-                values: [0.05, 0.10, 0.15, 0.25, 0.40, 1.00],
+                values: [0.06, 0.10, 0.16, 0.24, 0.38, 0.70],
                 desc: 'increases fire rate for ballistic weapons'
             },
             {
-                id: 'laser',
-                name: ['polished lens', 'high-yield cap', 'flux agitator', 'resonance chamber', 'beam span', 'solar flare'],
-                stat: 'laserRate',
+                id: 'velocity_damage',
+                family: 'velocity',
+                name: ['dense rounds', 'tungsten feed', 'depleted core', 'mass driver', 'planet cracker', 'terminal velocity'],
+                stat: 'velocityDamageMul',
                 type: 'add',
-                values: [0.05, 0.10, 0.15, 0.25, 0.40, 1.00],
+                values: [0.08, 0.14, 0.22, 0.34, 0.55, 1.00],
+                desc: 'increases ballistic impact damage'
+            },
+            {
+                id: 'velocity_pierce',
+                family: 'velocity',
+                name: ['needlepoint', 'hardpoint', 'overpenetrator', 'linebreaker', 'rail doctrine', 'no safe angle'],
+                stat: 'velocityPierce',
+                type: 'integer',
+                values: [1, 2, 2, 3, 3, 4],
+                desc: 'ballistic rounds pass through extra targets'
+            },
+            {
+                id: 'laser_rate',
+                family: 'laser',
+                name: ['polished lens', 'high-yield cap', 'flux agitator', 'resonance chamber', 'beam span', 'solar flare'],
+                stat: 'laserRateAdd',
+                type: 'add',
+                values: [0.06, 0.10, 0.16, 0.24, 0.38, 0.70],
                 desc: 'increases fire rate for energy weapons'
+            },
+            {
+                id: 'laser_damage',
+                family: 'laser',
+                name: ['hot lens', 'overvoltage', 'plasma focus', 'corona chamber', 'star furnace', 'white horizon'],
+                stat: 'laserDamageMul',
+                type: 'add',
+                values: [0.08, 0.14, 0.22, 0.34, 0.55, 1.00],
+                desc: 'increases laser and beam damage'
+            },
+            {
+                id: 'laser_chain',
+                family: 'laser',
+                name: ['static arc', 'forked current', 'tesla relay', 'storm lattice', 'living lightning', 'god circuit'],
+                stat: 'laserChain',
+                type: 'integer',
+                values: [1, 1, 1, 2, 2, 3],
+                desc: 'energy hits arc into extra nearby targets'
             },
             {
                 id: 'mobility',
@@ -60,12 +112,67 @@ export class LevelUpManager {
                 desc: 'increases max speed and turn rate'
             },
             {
-                id: 'rocket',
-                name: ['solid fuel', 'liquid injection', 'ion thruster', 'plasma wake', 'grav-assist', 'void drive'],
-                stat: 'missileSpeed',
+                id: 'rocket_rate',
+                family: 'rocket',
+                name: ['quick rack', 'hot reload', 'rotary magazine', 'silo logic', 'launch storm', 'endless salvo'],
+                stat: 'rocketRateAdd',
                 type: 'add',
-                values: [0.10, 0.20, 0.35, 0.50, 1.00, 2.00],
+                values: [0.06, 0.10, 0.16, 0.24, 0.38, 0.70],
+                desc: 'increases fire rate for missile weapons'
+            },
+            {
+                id: 'rocket_damage',
+                family: 'rocket',
+                name: ['packed charge', 'shaped warhead', 'thermobaric mix', 'siege payload', 'sun eater', 'apocalypse tube'],
+                stat: 'rocketDamageMul',
+                type: 'add',
+                values: [0.08, 0.14, 0.22, 0.34, 0.55, 1.00],
+                desc: 'increases missile impact and blast damage'
+            },
+            {
+                id: 'rocket_speed',
+                family: 'rocket',
+                name: ['solid fuel', 'liquid injection', 'ion thruster', 'plasma wake', 'grav-assist', 'void drive'],
+                stat: 'missileSpeedMul',
+                type: 'add',
+                values: [0.10, 0.18, 0.28, 0.42, 0.70, 1.20],
                 desc: 'increases travel speed of all missiles'
+            },
+            {
+                id: 'rocket_blast',
+                family: 'rocket',
+                name: ['fragment jacket', 'pressure bloom', 'wide fuse', 'orbital yield', 'city killer', 'false vacuum'],
+                stat: 'rocketBlastMul',
+                type: 'add',
+                values: [0.08, 0.14, 0.22, 0.34, 0.55, 1.00],
+                desc: 'increases missile blast radius'
+            },
+            {
+                id: 'drone_rate',
+                family: 'drone',
+                name: ['tight loop', 'fast cradle', 'hot launch', 'swarm clock', 'instant hive', 'everywhere at once'],
+                stat: 'droneRateAdd',
+                type: 'add',
+                values: [0.08, 0.14, 0.22, 0.34, 0.55, 1.00],
+                desc: 'reduces drone deployment time'
+            },
+            {
+                id: 'drone_damage',
+                family: 'drone',
+                name: ['sharp logic', 'hunter code', 'kill routine', 'predator mesh', 'red queen', 'machine hunger'],
+                stat: 'droneDamageMul',
+                type: 'add',
+                values: [0.08, 0.14, 0.22, 0.34, 0.55, 1.00],
+                desc: 'increases damage dealt by deployed drones'
+            },
+            {
+                id: 'drone_capacity',
+                family: 'drone',
+                name: ['spare berth', 'double rack', 'nest expansion', 'cloud bay', 'legion protocol', 'grey tide'],
+                stat: 'droneCapacityAdd',
+                type: 'integer',
+                values: [1, 2, 3, 4, 6, 8],
+                desc: 'increases the active drone limit'
             }
         ];
 
@@ -82,10 +189,9 @@ export class LevelUpManager {
         this.game.peerNetwork?.beginSharedLevelUp?.();
     }
 
-    generateChoices(forceRarity = null) {
+    generateChoices(forceRarity = null, ship = this.game.playerShip) {
         const choices = [];
-        // Generate 3 unique upgrade categories
-        const availableUpgrades = [...this.upgrades];
+        const availableUpgrades = this.getAvailableUpgrades(ship);
         for (let i = 0; i < 3; i++) {
             if (availableUpgrades.length === 0) break;
             const typeIndex = Math.floor(Math.random() * availableUpgrades.length);
@@ -93,6 +199,14 @@ export class LevelUpManager {
             choices.push(this.generateChoiceForType(type, forceRarity));
         }
         return choices;
+    }
+
+    getAvailableUpgrades(ship = this.game.playerShip) {
+        const installed = getInstalledWeaponFamilies(ship, PartsLibrary);
+        return this.upgrades.filter(upgrade =>
+            UNIVERSAL_UPGRADES.includes(upgrade.id) ||
+            installed[upgrade.family] > 0
+        );
     }
 
     generateChoiceForType(type, forceRarity = null) {
@@ -222,23 +336,27 @@ export class LevelUpManager {
         const ctx = renderer.ctx;
 
         // Overlay
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.85)';
+        ctx.fillStyle = 'rgba(3, 4, 3, 0.88)';
         ctx.fillRect(0, 0, renderer.width, renderer.height);
 
         // Header
-        ctx.fillStyle = '#fff';
-        ctx.font = "bold 24px 'Press Start 2P'";
+        ctx.fillStyle = UI_COLORS.green;
+        ctx.font = UI_FONTS.small;
         ctx.textAlign = 'center';
-        ctx.fillText("system upgrade ready", renderer.width / 2, 100);
+        ctx.fillText('frame enhancement // authorization required', renderer.width / 2, 74);
 
-        ctx.font = "12px 'Press Start 2P'";
-        ctx.fillStyle = '#aaa';
+        ctx.font = UI_FONTS.large;
+        ctx.fillStyle = UI_COLORS.bright;
+        ctx.fillText('select enhancement', renderer.width / 2, 118);
+
+        ctx.font = UI_FONTS.small;
+        ctx.fillStyle = UI_COLORS.muted;
         ctx.fillText(
             this.selectionPending
                 ? "waiting for crew"
-                : "select an enhancement",
+                : "one selection will be installed immediately",
             renderer.width / 2,
-            130
+            144
         );
 
         if (this.selectionPending || this.choices.length < 3) return;
@@ -257,18 +375,14 @@ export class LevelUpManager {
             const y = startY;
             const isHover = (i === this.hoveredIndex);
 
-            // Card BG
-            ctx.fillStyle = '#111';
-            ctx.fillRect(x, y, cw, ch);
-
-            // Border (Rarity Color)
-            ctx.strokeStyle = choice.rarity.color;
-            ctx.lineWidth = isHover ? 4 : 2;
+            drawUiPanel(ctx, x, y, cw, ch, choice.rarity.color);
+            ctx.strokeStyle = isHover ? choice.rarity.color : UI_COLORS.line;
+            ctx.lineWidth = isHover ? 2 : 1;
             ctx.strokeRect(x, y, cw, ch);
 
             if (isHover) {
                 ctx.fillStyle = choice.rarity.color;
-                ctx.globalAlpha = 0.1;
+                ctx.globalAlpha = 0.08;
                 ctx.fillRect(x, y, cw, ch);
                 ctx.globalAlpha = 1.0;
             }
@@ -278,29 +392,32 @@ export class LevelUpManager {
 
             // Rarity Label
             ctx.fillStyle = choice.rarity.color;
-            ctx.font = "10px 'Press Start 2P'";
+            ctx.font = UI_FONTS.tiny;
             ctx.textAlign = 'center';
-            ctx.fillText(choice.rarity.name, cx, y + 30);
+            ctx.fillText(`${String(i + 1).padStart(2, '0')} // ${choice.rarity.name}`, cx, y + 30);
 
             // Upgrade Name
-            ctx.fillStyle = '#fff';
-            // Wrap text if needed? Basic Implementation first
-            ctx.font = "12px 'Press Start 2P'";
+            ctx.fillStyle = UI_COLORS.bright;
+            ctx.font = UI_FONTS.label;
             this.wrapText(ctx, choice.name, cx, y + 70, cw - 20, 16);
 
             // Stat Value
-            ctx.font = "24px 'Press Start 2P'";
+            ctx.font = UI_FONTS.title;
             let valStr = "";
             let prefix = "+";
             if (choice.mode === 'multiply') valStr = `${Math.round(choice.value * 100)}%`;
             else if (choice.stat === 'regen') valStr = `${choice.value}/s`;
+            else if (choice.mode === 'integer') {
+                valStr = `${choice.value} target${choice.value === 1 ? '' : 's'}`;
+                prefix = '+';
+            }
             else valStr = `${Math.round(choice.value * 100)}%`; // Default percent
 
             ctx.fillText(prefix + valStr, cx, y + 140);
 
             // Description
-            ctx.fillStyle = '#888';
-            ctx.font = "8px 'Press Start 2P'";
+            ctx.fillStyle = UI_COLORS.muted;
+            ctx.font = UI_FONTS.tiny;
             this.wrapText(ctx, choice.desc, cx, y + 200, cw - 20, 12);
         }
     }
@@ -332,23 +449,18 @@ export class LevelUpManager {
 }
 
 export function applyUpgradeToShip(ship, upgrade) {
-    const stats = ship.permanentStats;
+    const stats = normalizePermanentStats(ship.permanentStats);
+    ship.permanentStats = stats;
 
     if (upgrade.stat === 'maxHp') {
         stats.hpMul = (stats.hpMul || 1.0) + upgrade.value;
     } else if (upgrade.stat === 'regen') {
         stats.regenAdd = (stats.regenAdd || 0) + upgrade.value;
-    } else if (upgrade.stat === 'velocityRate') {
-        stats.velocityRateAdd =
-            (stats.velocityRateAdd || 0) + upgrade.value;
-    } else if (upgrade.stat === 'laserRate') {
-        stats.laserRateAdd = (stats.laserRateAdd || 0) + upgrade.value;
     } else if (upgrade.stat === 'mobility') {
         stats.speedMul = (stats.speedMul || 1.0) + upgrade.value;
         stats.turnMul = (stats.turnMul || 1.0) + upgrade.value;
-    } else if (upgrade.stat === 'missileSpeed') {
-        stats.missileSpeedMul =
-            (stats.missileSpeedMul || 1.0) + upgrade.value;
+    } else if (PERMANENT_STAT_KEYS.includes(upgrade.stat)) {
+        stats[upgrade.stat] += upgrade.value;
     } else {
         return false;
     }

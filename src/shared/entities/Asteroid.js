@@ -7,6 +7,8 @@ export class Asteroid {
         this.type = type; // rock, crystal_blue, crystal_gold
         this.isDead = false;
         this.isBroken = false;
+        this.breakAge = 0;
+        this.breakFragments = [];
 
         // Stats based on size
         let radiusBase = 40;
@@ -45,6 +47,7 @@ export class Asteroid {
         if (this.hp <= 0) {
             this.hp = 0;
             this.isBroken = true;
+            this.createBreakFragments();
             // Add some spin on break
             this.rotSpeed += (this.random() - 0.5) * 5;
             return true; // Just broke
@@ -58,6 +61,47 @@ export class Asteroid {
         this.x += this.vx * dt;
         this.y += this.vy * dt;
         this.rotation += this.rotSpeed * dt;
+        if (this.isBroken && this.breakFragments.length > 0) {
+            this.breakAge += dt;
+            for (const fragment of this.breakFragments) {
+                fragment.x += fragment.vx * dt;
+                fragment.y += fragment.vy * dt;
+                fragment.rotation += fragment.rotSpeed * dt;
+                fragment.vx *= 0.9;
+                fragment.vy *= 0.9;
+                fragment.rotSpeed *= 0.88;
+            }
+        }
+    }
+
+    createBreakFragments() {
+        if (this.breakFragments.length > 0 || this.vertices.length === 0) return;
+        const groupSize = Math.max(1, Math.ceil(this.vertices.length / 5));
+        for (let index = 0; index < this.vertices.length; index += groupSize) {
+            const points = [];
+            for (let offset = 0; offset <= groupSize; offset++) {
+                points.push({
+                    ...this.vertices[(index + offset) % this.vertices.length]
+                });
+            }
+            const center = points.reduce(
+                (sum, point) => ({ x: sum.x + point.x, y: sum.y + point.y }),
+                { x: 0, y: 0 }
+            );
+            center.x /= points.length;
+            center.y /= points.length;
+            const angle = Math.atan2(center.y, center.x);
+            const speed = 12 + this.random() * 24;
+            this.breakFragments.push({
+                points,
+                x: 0,
+                y: 0,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                rotation: 0,
+                rotSpeed: (this.random() - 0.5) * 2.5
+            });
+        }
     }
 
 }

@@ -256,3 +256,26 @@ test('velocity shots still apply visual recoil', () => {
 
     assert.equal(part.recoil, 5);
 });
+
+test('family upgrades affect actual cooldown, damage, and projectile mechanics', () => {
+    const part = { partId: 'gun_basic', x: 0, y: 0, rotation: 0 };
+    const { game } = makeGame(part);
+    game.playerShip.permanentStats = {
+        velocityRateAdd: 0.25,
+        velocityDamageMul: 1.4,
+        velocityPierce: 2
+    };
+    const system = new WeaponSystem(game, {
+        ProjectileClass: ProjectileStub,
+        random: () => 0.5
+    });
+    const def = PartsLibrary.gun_basic;
+
+    system.update(0.016, updateState());
+    assert.equal(part.cooldown, def.stats.cooldown / 1.25);
+
+    system.spawnProjectile(def, 0, 0, 0, part);
+    const projectile = game.projectiles[0];
+    assert.equal(projectile.args[6], def.stats.damage * 1.4);
+    assert.equal(projectile.remainingPierces, 2);
+});

@@ -14,6 +14,7 @@ export const PartType = {
     ACCELERANT: 'accelerant',
     ROCKET_BAY: 'rocket_bay',
     BOOSTER: 'booster',
+    DRONE: 'drone',
     CORE: 'core',
     SHIELD: 'shield'
 };
@@ -30,7 +31,12 @@ export const PartType = {
  * @property {number} [cooldown]
  * @property {number} [projectileSpeed]
  * @property {string} [projectileType]
- * @property {'velocity' | 'laser' | 'rocket' | 'utility'} [weaponGroup]
+ * @property {'velocity' | 'laser' | 'rocket' | 'drone' | 'utility'} [weaponGroup]
+ * @property {number} [droneSpawnCooldown]
+ * @property {number} [droneCapacity]
+ * @property {number} [droneDamage]
+ * @property {number} [droneAttackCooldown]
+ * @property {string} [droneType]
  * @property {number} [lifetime]
  * @property {number} [range]
  * @property {number} [spread]

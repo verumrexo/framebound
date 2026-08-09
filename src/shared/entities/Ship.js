@@ -1,5 +1,6 @@
 import { PartsLibrary, PartType, TILE_SIZE } from '../parts/Part.js';
 import { Collision } from '../CollisionSystem.js';
+import { createPermanentStats } from '../combat/WeaponFamilies.js';
 
 export class Ship {
     constructor() {
@@ -20,20 +21,14 @@ export class Ship {
             rocketCount: 0,
             velocityCount: 0,
             rocketBayCount: 0,
+            droneCount: 0,
             boosterCount: 0,
+            boosterPartId: null,
             turnSpeed: 0
         };
 
         // Permanent Upgrades (Level Up System)
-        this.permanentStats = {
-            hpMul: 1.0,
-            regenAdd: 0.0,
-            velocityRateAdd: 0.0,
-            laserRateAdd: 0.0,
-            speedMul: 1.0,
-            turnMul: 1.0,
-            missileSpeedMul: 1.0
-        };
+        this.permanentStats = createPermanentStats();
 
         this.hp = 0;
         this.maxHp = 0;
@@ -366,8 +361,10 @@ export class Ship {
             rocketCount: 0,
             velocityCount: 0,
             rocketBayCount: 0,
+            droneCount: 0,
             turnSpeed: 0,
-            boosterCount: 0
+            boosterCount: 0,
+            boosterPartId: null
         };
 
         for (const part of this.getUniqueParts()) {
@@ -388,7 +385,11 @@ export class Ship {
                 if (def.stats.weaponGroup === 'velocity') this.stats.velocityCount++;
             }
             if (def.type === PartType.ROCKET_BAY) this.stats.rocketBayCount++;
-            if (def.type === PartType.BOOSTER) this.stats.boosterCount++;
+            if (def.type === PartType.BOOSTER) {
+                this.stats.boosterCount++;
+                this.stats.boosterPartId ||= def.id;
+            }
+            if (def.type === PartType.DRONE) this.stats.droneCount++;
         }
 
         // Apply Permanent Upgrades

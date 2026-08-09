@@ -5,7 +5,7 @@
 
   [![web build](https://github.com/verumrexo/framebound/actions/workflows/deploy.yml/badge.svg)](https://github.com/verumrexo/framebound/actions/workflows/deploy.yml)
   [![desktop builds](https://github.com/verumrexo/framebound/actions/workflows/desktop.yml/badge.svg)](https://github.com/verumrexo/framebound/actions/workflows/desktop.yml)
-  [![version](https://img.shields.io/badge/version-1.1.0--beta-78ff96)](./package.json)
+  [![version](https://img.shields.io/badge/version-1.2.0--beta-78ff96)](./package.json)
 
   [play the browser preview](https://verumrexo.github.io/framebound/) ·
   [roadmap](./ROADMAP.md) ·

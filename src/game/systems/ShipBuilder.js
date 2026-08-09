@@ -2,6 +2,7 @@ import { Assets } from '../../Assets.js';
 import { PartsLibrary, TILE_SIZE } from '../../shared/parts/Part.js';
 import { Ship } from '../../shared/entities/Ship.js';
 import { Hangar } from './Hangar.js';
+import { UI_FONTS } from '../ui/UiTheme.js';
 
 export class ShipBuilder {
     constructor(game) {
@@ -21,40 +22,29 @@ export class ShipBuilder {
         // Create UI
         this.ui = document.createElement('div');
         this.ui.id = 'ship-builder-ui';
-        this.ui.style.cssText = `
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            right: 10px;
-            display: none;
-            color: white;
-            font-family: 'Press Start 2P', monospace;
-            font-size: 16px;
-            pointer-events: none;
-        `;
+        this.ui.style.display = 'none';
         this.ui.innerHTML = `
-            <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                <!-- Left Side: Controls - BOTTOM LEFT -->
-                <div id="builder-controls" style="position: absolute; bottom: 20px; left: 20px; background: rgba(20,20,40,0.95); padding: 12px; border: 2px solid #6699ff; min-width: 110px; pointer-events: auto; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); z-index: 10;">
-                    <div style="color: #6699ff; font-size: 12px; margin-bottom: 8px; text-transform: uppercase; border-bottom: 2px solid #6699ff; padding-bottom: 6px;">⚙ builder</div>
-                    <button id="builder-import" style="width: 100%; padding: 8px; background: linear-gradient(135deg, #ff9944, #dd7722); color: white; border: none; cursor: pointer; font-family: 'Press Start 2P', monospace; font-size: 9px; margin-bottom: 6px; border-radius: 4px; transition: transform 0.1s;">📥 import</button>
-                    <button id="builder-export" style="width: 100%; padding: 8px; background: linear-gradient(135deg, #4a9eff, #3377cc); color: white; border: none; cursor: pointer; font-family: 'Press Start 2P', monospace; font-size: 9px; margin-bottom: 6px; border-radius: 4px; transition: transform 0.1s;">📋 export</button>
-                    <button id="builder-clear" style="width: 100%; padding: 8px; background: linear-gradient(135deg, #ff6666, #cc4444); color: white; border: none; cursor: pointer; font-family: 'Press Start 2P', monospace; font-size: 9px; margin-bottom: 6px; border-radius: 4px; transition: transform 0.1s;">🗑 clear</button>
-                    <button id="builder-turret-toggle" style="width: 100%; padding: 8px; background: linear-gradient(135deg, #ff9944, #dd7722); color: white; border: none; cursor: pointer; font-family: 'Press Start 2P', monospace; font-size: 9px; border-radius: 4px; transition: transform 0.1s;">🔧 turret</button>
-                    <div style="color: #8899bb; font-size: 7px; margin-top: 10px; line-height: 1.4; border-top: 1px solid rgba(102, 153, 255, 0.3); padding-top: 8px;">
-                        R: rotate<br>
-                        LC: place<br>
-                        RC: remove<br>
-                        M: close
+            <div class="workshop-layout">
+                <section id="builder-controls" class="workshop-panel builder-controls">
+                    <div class="ui-kicker">development frame tools</div>
+                    <div class="workshop-title">builder</div>
+                    <button id="builder-import" class="builder-action">import</button>
+                    <button id="builder-export" class="builder-action">export</button>
+                    <button id="builder-clear" class="builder-action">clear</button>
+                    <button id="builder-turret-toggle" class="builder-action">turret mode</button>
+                    <div class="ui-note">
+                        r // rotate<br>
+                        lmb // place<br>
+                        rmb // remove<br>
+                        m // close
                     </div>
-                </div>
+                </section>
 
-                <!-- Right Side: Inventory -->
-                <div style="background: rgba(20,20,40,0.95); padding: 12px; border: 2px solid #6699ff; width: 40%; max-width: 220px; min-width: 140px; pointer-events: auto; display: flex; flex-direction: column; max-height: calc(100vh - 40px); margin-left: auto; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
-                    <div style="color: #6699ff; margin-bottom: 12px; font-size: 16px; border-bottom: 2px solid #6699ff; padding-bottom: 8px;">parts library</div>
-                    <div id="builder-part-list" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(50px, 1fr)); gap: 6px; overflow-y: auto; padding: 4px;">
-                    </div>
-                </div>
+                <section class="workshop-panel workshop-inventory">
+                    <div class="ui-kicker">unlimited development inventory</div>
+                    <div class="workshop-title">parts library</div>
+                    <div id="builder-part-list" class="workshop-list"></div>
+                </section>
             </div>
         `;
         document.body.appendChild(this.ui);
@@ -70,18 +60,7 @@ export class ShipBuilder {
         this.ui.addEventListener('contextmenu', (e) => e.stopPropagation());
         // Tooltip (reuse Hangar's style)
         this.tooltip = document.createElement('div');
-        this.tooltip.style.cssText = `
-            position: fixed;
-            background: rgba(0,0,0,0.95);
-            border: 1px solid #f44;
-            padding: 12px;
-            color: white;
-            font-family: 'Press Start 2P', monospace;
-            pointer-events: none;
-            display: none;
-            z-index: 9999;
-            min-width: 180px;
-        `;
+        this.tooltip.className = 'workshop-tooltip';
         document.body.appendChild(this.tooltip);
 
         window.addEventListener('mousemove', (e) => {
@@ -157,11 +136,11 @@ export class ShipBuilder {
         if (!turretToggle) return;
 
         turretToggle.textContent = this.turretEditorMode
-            ? '✓ turret editor'
-            : '🔧 turret editor';
-        turretToggle.style.background = this.turretEditorMode
-            ? 'linear-gradient(135deg, #44ff66, #22cc44)'
-            : 'linear-gradient(135deg, #ff9944, #dd7722)';
+            ? 'turret mode // active'
+            : 'turret mode // off';
+        turretToggle.className = this.turretEditorMode
+            ? 'builder-action is-selected'
+            : 'builder-action';
     }
 
     placeAtGhost() {
@@ -292,22 +271,14 @@ export class ShipBuilder {
             const itemWrapper = document.createElement('div');
             const spanW = def.width || 1;
             const spanH = def.height || 1;
-            itemWrapper.style.cssText = `
-                grid-column: span ${spanW};
-                grid-column: span ${spanW};
-                grid-row: span ${spanH};
-                width: ${spanW * 50}px;
-                height: ${spanH * 50}px;
-                cursor: pointer;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                position: relative;
-                border: ${this.selectedPartId === key ? '3px solid #6699ff' : '1px solid #555'};
-                background: ${this.selectedPartId === key ? 'rgba(102, 153, 255, 0.2)' : 'rgba(40, 40, 60, 0.5)'};
-                border-radius: 4px;
-                transition: all 0.15s ease;
-            `;
+            itemWrapper.className = [
+                'builder-inventory-item',
+                this.selectedPartId === key ? 'is-selected' : ''
+            ].filter(Boolean).join(' ');
+            itemWrapper.style.gridColumn = `span ${spanW}`;
+            itemWrapper.style.gridRow = `span ${spanH}`;
+            itemWrapper.style.width = `${spanW * 64}px`;
+            itemWrapper.style.height = `${spanH * 64}px`;
 
             const canvas = document.createElement('canvas');
             const sprite = def.baseSprite || def.sprite;
@@ -326,19 +297,6 @@ export class ShipBuilder {
                 e.stopPropagation();
                 this.selectedPartId = key;
                 this.updateUI();
-            };
-
-            itemWrapper.onmouseover = () => {
-                if (this.selectedPartId !== key) {
-                    itemWrapper.style.background = 'rgba(80, 80, 120, 0.5)';
-                    itemWrapper.style.borderColor = '#7799dd';
-                }
-            };
-            itemWrapper.onmouseout = () => {
-                if (this.selectedPartId !== key) {
-                    itemWrapper.style.background = 'rgba(40, 40, 60, 0.5)';
-                    itemWrapper.style.borderColor = '#555';
-                }
             };
 
             itemWrapper.onmouseenter = () => {
@@ -429,8 +387,8 @@ export class ShipBuilder {
             if (label) {
                 renderer.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
                 renderer.ctx.fillRect(-CELL_STRIDE * 5, -CELL_STRIDE * 6 - 40, CELL_STRIDE * 10, 35);
-                renderer.ctx.fillStyle = '#6699ff';
-                renderer.ctx.font = "bold 10px 'Press Start 2P'";
+                renderer.ctx.fillStyle = '#89a889';
+                renderer.ctx.font = UI_FONTS.label;
                 renderer.ctx.textAlign = 'center';
                 renderer.ctx.fillText(label, 0, -CELL_STRIDE * 6 - 15);
             }
@@ -464,8 +422,8 @@ export class ShipBuilder {
 
         // Draw grid(s)
         if (this.turretEditorMode) {
-            drawGrid(gridOffset, 'BASE HULL');
-            drawGrid(secondGridOffset, 'TURRET');
+            drawGrid(gridOffset, 'base hull');
+            drawGrid(secondGridOffset, 'turret');
         } else {
             drawGrid(0, null);
 
@@ -507,9 +465,9 @@ export class ShipBuilder {
 
             // Draw label with background
             renderer.ctx.fillStyle = '#ffaa00';
-            renderer.ctx.font = "bold 12px 'Press Start 2P'";
+            renderer.ctx.font = UI_FONTS.label;
             renderer.ctx.textAlign = 'left';
-            renderer.ctx.fillText('FRONT', arrowX + arrowSize + 20, arrowY + 5);
+            renderer.ctx.fillText('front', arrowX + arrowSize + 20, arrowY + 5);
         }
 
         // Draw Ship Parts
@@ -612,9 +570,5 @@ export class ShipBuilder {
 
         renderer.ctx.restore();
 
-        // Title
-        renderer.ctx.fillStyle = "#6699ff";
-        renderer.ctx.font = "bold 16px 'Press Start 2P'";
-        renderer.ctx.fillText("⚙ ship builder - part designer ⚙", 20, renderer.height - 20);
     }
 }

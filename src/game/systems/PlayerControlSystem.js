@@ -1,3 +1,5 @@
+import { partSoundEventKey } from '../audio/SoundEventRegistry.js';
+
 export class PlayerControlSystem {
     constructor(game) {
         this.game = game;
@@ -18,7 +20,16 @@ export class PlayerControlSystem {
             game.dashActiveTimer = game.dashDuration;
             game.dashCooldown = actualMaxCooldown;
             game.showNotification('dash system pulse', '#00ffff');
-            game.audio.play('dash', { volume: 0.7 });
+            const boosterPartId = game.playerShip.stats.boosterPartId;
+            if (boosterPartId && game.audio.playEvent) {
+                game.audio.playEvent(
+                    partSoundEventKey(boosterPartId, 'dash'),
+                    'dash',
+                    { volume: 0.7 }
+                );
+            } else {
+                game.audio.play('dash', { volume: 0.7 });
+            }
         }
 
         if (game.dashActiveTimer > 0) {

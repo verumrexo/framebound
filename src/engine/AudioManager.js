@@ -1,6 +1,10 @@
 export class AudioManager {
     constructor() {
         this.sounds = new Map();
+        this.defaultSounds = new Map();
+        this.eventBindings = new Map();
+        this.missingSoundWarnings = new Set();
+        this.previewVoices = new Set();
         this.context = new (window.AudioContext || window.webkitAudioContext)();
 
         // Master Gain
@@ -17,6 +21,17 @@ export class AudioManager {
         this.sfxGain = this.context.createGain();
         this.sfxGain.connect(this.masterGain);
         this.sfxGain.gain.value = 1.0;
+
+        this.previewGain = this.context.createGain();
+        this.previewGain.gain.value = 0.7;
+        this.previewLimiter = this.context.createDynamicsCompressor();
+        this.previewLimiter.threshold.value = -6;
+        this.previewLimiter.knee.value = 0;
+        this.previewLimiter.ratio.value = 20;
+        this.previewLimiter.attack.value = 0.003;
+        this.previewLimiter.release.value = 0.12;
+        this.previewGain.connect(this.previewLimiter);
+        this.previewLimiter.connect(this.sfxGain);
 
         // Instancing control to prevent volume stacking
         this.recentPlays = new Map(); // name -> { count, lastTime }
@@ -59,12 +74,13 @@ export class AudioManager {
         }
     }
 
-    async load(name, url) {
+    async load(name, url, { preserveDefault = true } = {}) {
         try {
             const response = await fetch(url);
             const arrayBuffer = await response.arrayBuffer();
             const audioBuffer = await this.context.decodeAudioData(arrayBuffer);
             this.sounds.set(name, audioBuffer);
+            if (preserveDefault) this.defaultSounds.set(name, audioBuffer);
             console.log(`Sound loaded: ${name}`);
         } catch (error) {
             console.error(`Failed to load sound: ${name} from ${url}`, error);
@@ -72,11 +88,26 @@ export class AudioManager {
     }
 
     play(name, options = {}) {
+        return this.playResolved(`global:${name}`, name, options);
+    }
+
+    playEvent(eventKey, fallbackName, options = {}) {
+        return this.playResolved(eventKey, fallbackName, options);
+    }
+
+    playResolved(eventKey, fallbackName, options = {}) {
+        const name = this.eventBindings.get(eventKey) || fallbackName;
         const buffer = this.sounds.get(name);
-        if (!buffer) return null;
+        if (!buffer) {
+            if (!this.missingSoundWarnings.has(name)) {
+                this.missingSoundWarnings.add(name);
+                console.warn(`[Audio] Missing sound for ${eventKey}: ${name}`);
+            }
+            return null;
+        }
 
         const now = Date.now();
-        const recent = this.recentPlays.get(name) || { count: 0, lastTime: now };
+        const recent = this.recentPlays.get(eventKey) || { count: 0, lastTime: now };
         const elapsed = now - recent.lastTime;
         // Leaky bucket: decay the count MUCH faster (1 unit per 2ms)
         // This prevents the count from snowballing during high-rate fire
@@ -84,12 +115,12 @@ export class AudioManager {
         recent.count += 1;
 
         recent.lastTime = now;
-        this.recentPlays.set(name, recent);
+        this.recentPlays.set(eventKey, recent);
 
         let volumeMultiplier = 1.0;
 
         // Aggressive instance limiting for beam/charge sounds and spammy sounds
-        const isBeamSound = name === 'shoot_lsr' || name === 'rail' || name === 'rail_shot' || name === 'rail_charge';
+        const isBeamSound = fallbackName === 'shoot_lsr' || fallbackName === 'rail' || fallbackName === 'rail_shot' || fallbackName === 'rail_charge';
         if (isBeamSound || options.isSpammy) {
             if (recent.count > 1) {
                 // More sounds = quieter each instance
@@ -154,6 +185,84 @@ export class AudioManager {
 
         source.start(0);
         return { source, gainNode }; // Return both for control
+    }
+
+    replace(name, audioBuffer) {
+        if (!name || !audioBuffer) return false;
+        this.sounds.set(name, audioBuffer);
+        this.missingSoundWarnings.delete(name);
+        return true;
+    }
+
+    remove(name) {
+        if (this.defaultSounds.has(name)) return false;
+        return this.sounds.delete(name);
+    }
+
+    restoreDefault(name) {
+        const defaultBuffer = this.defaultSounds.get(name);
+        if (!defaultBuffer) return false;
+        this.sounds.set(name, defaultBuffer);
+        return true;
+    }
+
+    bindEvent(eventKey, soundName) {
+        if (!eventKey || !soundName || !this.sounds.has(soundName)) return false;
+        this.eventBindings.set(eventKey, soundName);
+        return true;
+    }
+
+    unbindEvent(eventKey) {
+        return this.eventBindings.delete(eventKey);
+    }
+
+    getEventBinding(eventKey) {
+        return this.eventBindings.get(eventKey) || null;
+    }
+
+    hasSound(name) {
+        return Boolean(name && this.sounds.has(name));
+    }
+
+    previewSound(name, options = {}) {
+        return this.preview(this.sounds.get(name), options);
+    }
+
+    async decodeAudioBytes(bytes) {
+        const arrayBuffer = bytes instanceof ArrayBuffer
+            ? bytes.slice(0)
+            : bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength);
+        return this.context.decodeAudioData(arrayBuffer);
+    }
+
+    preview(audioBuffer, { volume = 0.7, pitch = 1 } = {}) {
+        if (!audioBuffer) return null;
+        this.stopPreview();
+        if (this.context.state === 'suspended') this.context.resume();
+
+        const source = this.context.createBufferSource();
+        const gainNode = this.context.createGain();
+        source.buffer = audioBuffer;
+        source.playbackRate.value = Math.max(0.1, Math.min(4, pitch));
+        gainNode.gain.value = Math.max(0, Math.min(1, volume));
+        source.connect(gainNode);
+        gainNode.connect(this.previewGain);
+        const voice = { source, gainNode };
+        this.previewVoices.add(voice);
+        source.onended = () => this.previewVoices.delete(voice);
+        source.start(0);
+        return voice;
+    }
+
+    stopPreview() {
+        for (const voice of this.previewVoices) {
+            try {
+                voice.source.stop();
+            } catch {
+                // The voice already ended between collection and stop.
+            }
+        }
+        this.previewVoices.clear();
     }
 
     playMusic(name, volume = 0.8) {

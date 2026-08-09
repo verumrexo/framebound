@@ -127,7 +127,7 @@ test('online menu renders only the p2p host and join-code flow', (t) => {
     assert.doesNotMatch(menu.overlay.innerHTML, /<style/);
     assert.match(
         readFileSync(new URL('../../style.css', import.meta.url), 'utf8'),
-        /\.menu-btn\s*\{/
+        /\.menu-btn,\s*\.pause-btn/
     );
     assert.equal(MainMenu.prototype.renderLobbyBrowser, undefined);
 });

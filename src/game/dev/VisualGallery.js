@@ -1,5 +1,7 @@
 import { Assets } from '../../Assets.js';
+import { RemotePlayer } from '../../engine/RemotePlayer.js';
 import { Renderer } from '../../engine/Renderer.js';
+import { Viewport } from '../../engine/rendering/Viewport.js';
 import { Drone } from '../../shared/entities/Drone.js';
 import { Portal } from '../../shared/entities/Portal.js';
 import { Ship } from '../../shared/entities/Ship.js';
@@ -7,8 +9,72 @@ import { TrainingDummy } from '../../shared/entities/TrainingDummy.js';
 import { PartsLibrary } from '../../shared/parts/Part.js';
 import { EntityRenderer } from '../renderers/EntityRenderer.js';
 import { drawProjectile } from '../renderers/ProjectileRenderer.js';
+import { VaultRenderer } from '../renderers/VaultRenderer.js';
 
 const FIXED_TIME = 1_700_000_000_000;
+
+export const HARD_RASTER_HEADINGS_DEGREES = Object.freeze([
+    0, 22.5, 45, 67.5, 90
+]);
+
+export const HARD_RASTER_RENDERER_PATH =
+    'EntityRenderer.drawShip>ShipAssemblyRenderer.drawShipAssembly;' +
+    'EntityRenderer.drawEnemy>ShipAssemblyRenderer.drawShipAssembly';
+
+const HARD_RASTER_ENTITY_TYPES = Object.freeze([
+    'local-ship', 'remote-player', 'modular-enemy', 'boss'
+]);
+
+function degreesToRadians(degrees) {
+    return degrees * (Math.PI / 180);
+}
+
+/**
+ * A data-only proof contract so tests can check the exact rotation samples
+ * without having to mock a canvas, WebGL, or any sprites.
+ */
+export function createHardRasterProofScenes() {
+    return HARD_RASTER_ENTITY_TYPES.flatMap((entityType, entityIndex) =>
+        HARD_RASTER_HEADINGS_DEGREES.map((headingDegrees, headingIndex) => ({
+            id: `${entityType}-${headingDegrees}`,
+            entityType,
+            headingDegrees,
+            // Turrets deliberately do not follow the hull heading. These are
+            // global aim directions, which is the path the game uses in play.
+            turretAimDegrees: (157.5 + entityIndex * 45 + headingIndex * 22.5) % 360
+        }))
+    );
+}
+
+function isHardRasterProofRoute(search = globalThis.window?.location?.search || '') {
+    return new URLSearchParams(search).get('visual-gallery') === 'hard-raster';
+}
+
+export function getHardRasterProofScale(search = globalThis.window?.location?.search || '') {
+    const requestedScale = Number(new URLSearchParams(search).get('raster-scale'));
+    return [1, 2, 3].includes(requestedScale) ? requestedScale : 3;
+}
+
+function createSeededRandom(seed = 0x5eedc0de) {
+    let state = seed >>> 0;
+    return () => {
+        state = (state * 1664525 + 1013904223) >>> 0;
+        return state / 0x1_0000_0000;
+    };
+}
+
+function withDeterministicVisuals(draw) {
+    const originalNow = Date.now;
+    const originalRandom = Math.random;
+    Date.now = () => FIXED_TIME;
+    Math.random = createSeededRandom();
+    try {
+        return draw();
+    } finally {
+        Date.now = originalNow;
+        Math.random = originalRandom;
+    }
+}
 
 function drawLabel(ctx, label, x, y, width) {
     ctx.fillStyle = 'rgba(0, 15, 25, 0.9)';
@@ -40,6 +106,162 @@ function drawPanel(renderer, panel, index, columns, panelWidth, panelHeight) {
     ctx.restore();
 
     drawLabel(ctx, panel.label, x + 5, y + 5, panelWidth - 10);
+}
+
+function createHardRasterEnemy({ headingRadians, aimRadians, boss = false }) {
+    return {
+        x: 0,
+        y: 0,
+        rotation: headingRadians,
+        rotationOffset: 0,
+        aimAngle: aimRadians,
+        radius: boss ? 54 : 38,
+        hp: boss ? 750 : 75,
+        maxHp: boss ? 1000 : 100,
+        isDead: false,
+        isWarpingIn: false,
+        weaponCooldowns: [],
+        random: () => 0.5,
+        // Keep this compact enough to judge every 22.5-degree sample, while
+        // retaining a real modular hull plus independently aimed weapons.
+        shipParts: boss
+            ? [
+                { x: 0, y: 0, partId: 'core', rotation: 0 },
+                { x: -1, y: 0, partId: 'hull', rotation: 0 },
+                { x: 1, y: 0, partId: 'hull', rotation: 0 },
+                { x: -1, y: -1, partId: 'gun_basic', rotation: 1 },
+                { x: 1, y: -1, partId: 'rocketle', rotation: 1 }
+            ]
+            : [
+                { x: 0, y: 0, partId: 'core', rotation: 0 },
+                { x: -1, y: 0, partId: 'gun_basic', rotation: 0 },
+                { x: 1, y: 0, partId: 'rocketle', rotation: 0 },
+                { x: 0, y: 1, partId: 'custom_1767997495375', rotation: 0 }
+            ]
+    };
+}
+
+function createVaultProofRoom(phase, contractId = null) {
+    return {
+        x: -500,
+        y: -500,
+        width: 1000,
+        height: 1000,
+        vaultState: {
+            phase,
+            contractId,
+            elapsed: phase === 'containment' ? 9 : 0
+        },
+        vaultChests: [
+            {
+                x: -180,
+                y: 60,
+                contractId: 'gilded',
+                sealed: Boolean(contractId && contractId !== 'gilded'),
+                life: 2
+            },
+            {
+                x: 180,
+                y: 60,
+                contractId: 'blood',
+                sealed: Boolean(contractId && contractId !== 'blood'),
+                life: 2
+            }
+        ]
+    };
+}
+
+function drawHardRasterEntity(renderer, scene) {
+    const headingRadians = degreesToRadians(scene.headingDegrees);
+    const aimRadians = degreesToRadians(scene.turretAimDegrees);
+    const aimDistance = 1000;
+    const aimX = Math.cos(aimRadians) * aimDistance;
+    const aimY = Math.sin(aimRadians) * aimDistance;
+
+    if (scene.entityType === 'local-ship') {
+        const ship = new Ship();
+        ship.rotation = headingRadians;
+        EntityRenderer.drawShip(renderer, ship, aimX, aimY);
+        return;
+    }
+
+    if (scene.entityType === 'remote-player') {
+        const sourceShip = new Ship();
+        const remote = new RemotePlayer('hard-raster-proof');
+        remote.x = 0;
+        remote.y = 0;
+        remote.rotation = headingRadians;
+        remote.setShipData(Array.from(sourceShip.getUniqueParts(), part => ({ ...part })));
+        EntityRenderer.drawShip(renderer, remote, aimX, aimY);
+        return;
+    }
+
+    EntityRenderer.drawEnemy(renderer, createHardRasterEnemy({
+        headingRadians,
+        aimRadians,
+        boss: scene.entityType === 'boss'
+    }));
+}
+
+function drawHardRasterPanel(renderer, scene, index, columns, panelWidth, panelHeight) {
+    const column = index % columns;
+    const row = Math.floor(index / columns);
+    const x = column * panelWidth;
+    const y = row * panelHeight;
+    const ctx = renderer.ctx;
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x + 3, y + 3, panelWidth - 6, panelHeight - 6);
+    ctx.clip();
+    ctx.strokeStyle = 'rgba(0, 255, 255, 0.24)';
+    ctx.strokeRect(x + 3, y + 3, panelWidth - 6, panelHeight - 6);
+    ctx.translate(x + panelWidth / 2, y + panelHeight / 2 + 8);
+    drawHardRasterEntity(renderer, scene);
+    ctx.restore();
+
+    drawLabel(
+        ctx,
+        `${scene.entityType} ${scene.headingDegrees}\u00b0 / aim ${scene.turretAimDegrees}\u00b0`,
+        x + 3,
+        y + 3,
+        panelWidth - 6
+    );
+}
+
+function renderHardRasterProof(canvas) {
+    document.title = 'framebound hard raster proof';
+    const rasterScale = getHardRasterProofScale();
+    const renderer = new Renderer(canvas, {
+        viewport: new Viewport(canvas, { worldPixelScale: rasterScale })
+    });
+    renderer.clear('#03070c');
+
+    const scenes = createHardRasterProofScenes();
+    const columns = HARD_RASTER_HEADINGS_DEGREES.length;
+    const rows = HARD_RASTER_ENTITY_TYPES.length;
+    const panelWidth = renderer.width / columns;
+    const panelHeight = renderer.height / rows;
+
+    withDeterministicVisuals(() => {
+        scenes.forEach((scene, index) => drawHardRasterPanel(
+            renderer,
+            scene,
+            index,
+            columns,
+            panelWidth,
+            panelHeight
+        ));
+    });
+
+    renderer.present();
+    canvas.dataset.visualGalleryMode = 'hard-raster';
+    canvas.dataset.visualGalleryHeadings = JSON.stringify(HARD_RASTER_HEADINGS_DEGREES);
+    canvas.dataset.visualGalleryRendererPath = HARD_RASTER_RENDERER_PATH;
+    canvas.dataset.visualGalleryRasterScale = String(rasterScale);
+    canvas.dataset.visualGalleryProofComplete = 'true';
+    canvas.dataset.visualGalleryReady = 'true';
+    return scenes;
 }
 
 function createPanels() {
@@ -245,10 +467,10 @@ function createPanels() {
             draw: renderer => EntityRenderer.drawShipwreck(renderer, wreck)
         },
         {
-            label: 'treasure / vault',
+            label: 'treasure cache',
             draw: renderer => {
                 EntityRenderer.drawTreasureChest(renderer, {
-                    x: -55,
+                    x: 0,
                     y: 0,
                     life: 0,
                     bobOffset: 0,
@@ -256,19 +478,26 @@ function createPanels() {
                     opened: false,
                     sprite: Assets.TreasureChest
                 });
-                EntityRenderer.drawVaultChest(renderer, {
-                    x: 55,
-                    y: 0,
-                    life: 0,
-                    bobOffset: 0,
-                    rotation: 0.3,
-                    opened: false,
-                    ambushActive: true,
-                    costType: 'hp',
-                    sprite: Assets.TreasureChest
-                });
             }
         },
+        ...[
+            ['vault // offer', 'offer', null],
+            ['vault // containment', 'containment', 'blood'],
+            ['vault // reward', 'reward', 'gilded'],
+            ['vault // completed', 'completed', 'gilded']
+        ].map(([label, phase, contractId]) => ({
+            label,
+            draw: renderer => {
+                renderer.ctx.save();
+                renderer.ctx.scale(0.18, 0.18);
+                VaultRenderer.draw(
+                    renderer,
+                    createVaultProofRoom(phase, contractId),
+                    true
+                );
+                renderer.ctx.restore();
+            }
+        })),
         {
             label: 'shop heal / part',
             draw: renderer => {
@@ -308,9 +537,12 @@ function createPanels() {
 }
 
 export function renderVisualGallery(canvas) {
+    if (isHardRasterProofRoute()) {
+        return renderHardRasterProof(canvas);
+    }
+
     document.title = 'framebound visual parity gallery';
     const renderer = new Renderer(canvas);
-    renderer.setSmoothing(false);
     renderer.clear('#03070c');
 
     const columns = 4;
@@ -334,6 +566,9 @@ export function renderVisualGallery(canvas) {
         Date.now = originalNow;
     }
 
+    // Gallery panels are world pixels too; make the compositor boundary explicit
+    // before exporting the evidence image.
+    renderer.present();
     canvas.dataset.visualGalleryReady = 'true';
 
     const proofImage = document.createElement('img');

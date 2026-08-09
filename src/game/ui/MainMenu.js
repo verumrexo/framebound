@@ -19,19 +19,6 @@ export class MainMenu {
         this.overlay = document.createElement('div');
         this.overlay.id = 'main-menu';
         this.overlay.className = 'main-menu-overlay';
-        this.overlay.style.cssText = `
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0, 0, 0, 0.95);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            z-index: 100000;
-            font-family: 'Press Start 2P', cursive;
-            color: white;
-            transition: opacity 0.5s;
-        `;
 
         // Render Initial Menu
         this.renderMenu();
@@ -58,35 +45,46 @@ export class MainMenu {
         this.game.gameSettings?.stopUpdating();
 
         const hasSave = SaveManager.hasSave();
+        const firstUtilityIndex = hasSave ? 3 : 2;
+        const menuIndex = offset => String(firstUtilityIndex + offset).padStart(2, '0');
 
         // Build start button(s) based on save state
         let localButtons;
         if (hasSave) {
             localButtons = `
-                <button id="btn-continue" class="menu-btn start-btn">local: continue</button>
-                <button id="btn-new" class="menu-btn start-btn">local: new run</button>
+                <button id="btn-continue" class="menu-btn start-btn" data-index="01">continue sortie</button>
+                <button id="btn-new" class="menu-btn start-btn" data-index="02">new sortie</button>
             `;
         } else {
             localButtons = `
-                <button id="btn-start" class="menu-btn start-btn">local: new run</button>
+                <button id="btn-start" class="menu-btn start-btn" data-index="01">new sortie</button>
             `;
         }
 
         this.overlay.innerHTML = `
-            <div class="main-menu-screen">
-                <h1 class="main-menu-title">framebound:uplink</h1>
-                <p class="main-menu-version">${this.game.version} // ${this.game.versionName}</p>
-                <div id="loading-text" class="main-menu-loading">initializing systems...</div>
-
+            <main class="ui-shell main-menu-screen">
+                <section class="ui-brand-panel">
+                    <div>
+                        <div class="ui-kicker">independent frame operations</div>
+                        <h1 class="main-menu-title">framebound<span>uplink</span></h1>
+                        <p class="main-menu-version">build ${this.game.version} // ${this.game.versionName}</p>
+                        <div id="loading-text" class="main-menu-loading">initializing systems...</div>
+                    </div>
+                    <div class="ui-command-rail">
+                        combat frame authorization terminal<br>
+                        pilot link // nominal
+                    </div>
+                </section>
                 <div class="main-menu-actions">
+                    <div class="ui-section-code">sortie selection // 01</div>
                     ${localButtons}
-                    <button id="btn-online" class="menu-btn start-btn" style="border-color: #ffaa00; color: #ffddaa;">online play</button>
-                    <button id="btn-seed" class="menu-btn start-btn">inject custom seed</button>
-                    <button id="btn-settings" class="menu-btn">system settings</button>
-                    <button id="btn-leaderboard" class="menu-btn">global rankings</button>
-                    <button id="btn-changelog" class="menu-btn">patch notes</button>
+                    <button id="btn-online" class="menu-btn start-btn" data-index="${menuIndex(0)}">online play</button>
+                    <button id="btn-seed" class="menu-btn start-btn" data-index="${menuIndex(1)}">custom seed</button>
+                    <button id="btn-settings" class="menu-btn" data-index="${menuIndex(2)}">system settings</button>
+                    <button id="btn-leaderboard" class="menu-btn" data-index="${menuIndex(3)}">global rankings</button>
+                    <button id="btn-changelog" class="menu-btn" data-index="${menuIndex(4)}">patch notes</button>
                 </div>
-            </div>
+            </main>
         `;
 
         setTimeout(() => {
@@ -115,98 +113,48 @@ export class MainMenu {
         const signalingReady = Boolean(APP_CONFIG.signalingUrl);
 
         this.overlay.innerHTML = `
-            <h2 style="color: #ffaa00; margin-bottom: 24px; font-size: 24px;">
-                online play
-            </h2>
-            <div id="peer-status" style="
-                color: ${signalingReady ? '#888' : '#ff6666'};
-                font-size: 11px;
-                line-height: 1.8;
-                text-align: center;
-                min-height: 40px;
-                max-width: 620px;
-                margin-bottom: 24px;
-            ">${signalingReady
-                ? 'host a run or enter a six-character join code'
-                : 'online unavailable: signaling service is not configured in this build'
-            }</div>
+            <main class="ui-screen online-screen">
+                <header class="ui-screen-header">
+                    <div>
+                        <div class="ui-kicker">peer uplink // direct session</div>
+                        <h2 class="ui-screen-title">online play</h2>
+                    </div>
+                    <div id="peer-status" class="ui-status ${signalingReady ? '' : 'ui-status-error'}">${signalingReady
+                        ? 'host a run or enter a six-character join code'
+                        : 'online unavailable: signaling service is not configured in this build'
+                    }</div>
+                </header>
 
-            <div style="
-                display: grid;
-                grid-template-columns: 1fr 1fr;
-                gap: 24px;
-                width: 620px;
-                margin-bottom: 28px;
-            ">
-                <div style="
-                    border: 1px solid #665522;
-                    background: rgba(40, 25, 0, 0.45);
-                    padding: 24px;
-                    display: flex;
-                    flex-direction: column;
-                    gap: 18px;
-                ">
-                    <div style="color: #ffcc66; font-size: 13px;">host game</div>
-                    <div style="color: #777; font-size: 9px; line-height: 1.8;">
+                <div class="online-grid">
+                    <section class="ui-panel ui-panel-accent">
+                        <div class="ui-section-code">host protocol // 01</div>
+                        <div class="ui-panel-title">host game</div>
+                        <div class="ui-panel-copy">
                         your game runs the session. send the code to a friend.
-                    </div>
-                    <button id="btn-peer-host" class="menu-btn"
-                        ${signalingReady ? '' : 'disabled'}
-                        style="font-size: 11px;">create code</button>
-                    <div id="peer-host-code" style="
-                        color: #00ffff;
-                        font-size: 28px;
-                        letter-spacing: 8px;
-                        min-height: 34px;
-                        text-align: center;
-                    "></div>
-                </div>
+                        </div>
+                        <button id="btn-peer-host" class="menu-btn" data-index="a"
+                            ${signalingReady ? '' : 'disabled'}>create code</button>
+                        <div id="peer-host-code" class="peer-code"></div>
+                    </section>
 
-                <div style="
-                    border: 1px solid #225566;
-                    background: rgba(0, 25, 40, 0.45);
-                    padding: 24px;
-                    display: flex;
-                    flex-direction: column;
-                    gap: 18px;
-                ">
-                    <div style="color: #66ddff; font-size: 13px;">join game</div>
-                    <div style="color: #777; font-size: 9px; line-height: 1.8;">
+                    <section class="ui-panel">
+                        <div class="ui-section-code">guest protocol // 02</div>
+                        <div class="ui-panel-title">join game</div>
+                        <div class="ui-panel-copy">
                         enter the code from the host. no ip address bullshit.
-                    </div>
-                    <input id="input-peer-code" type="text" maxlength="6"
-                        ${signalingReady ? '' : 'disabled'}
-                        autocomplete="off" spellcheck="false" style="
-                            background: #001018;
-                            border: 1px solid #447788;
-                            color: white;
-                            padding: 14px;
-                            font-family: 'Press Start 2P';
-                            text-transform: uppercase;
-                            text-align: center;
-                            letter-spacing: 6px;
-                            font-size: 16px;
-                        ">
-                    <button id="btn-peer-join" class="menu-btn" disabled
-                        style="font-size: 11px;">join host</button>
+                        </div>
+                        <input id="input-peer-code" class="ui-text-input peer-code" type="text" maxlength="6"
+                            ${signalingReady ? '' : 'disabled'}
+                            autocomplete="off" spellcheck="false" aria-label="join code">
+                        <button id="btn-peer-join" class="menu-btn" data-index="b" disabled>join host</button>
+                    </section>
                 </div>
-            </div>
 
-            <div style="
-                color: #555;
-                font-size: 8px;
-                line-height: 1.8;
-                text-align: center;
-                width: 620px;
-                margin-bottom: 24px;
-            ">
-                gameplay travels directly between players. the tiny signaling
-                service only introduces the connection.
-            </div>
-
-            <button id="btn-peer-back" class="menu-btn" style="width: 200px;">
-                back
-            </button>
+                <footer class="online-footer">
+                    <div class="ui-note">gameplay travels directly between players. signaling only introduces the connection.</div>
+                    <button id="btn-peer-back" class="menu-btn" data-index="esc">back</button>
+                </footer>
+            </main>
         `;
 
         this.bindPeerCallbacks();
@@ -380,46 +328,22 @@ export class MainMenu {
 
         const renderInput = () => {
             this.overlay.innerHTML = `
-                <h2 style="color: #00ffff; margin-bottom: 40px; font-size: 24px; text-transform: lowercase;">manual seed injection</h2>
-                <div style="
-                    background: rgba(0, 10, 20, 0.9);
-                    border: 2px solid #00ffff;
-                    padding: 40px;
-                    display: flex;
-                    flex-direction: column;
-                    align-items: center;
-                    gap: 30px;
-                    box-shadow: 0 0 30px rgba(0, 255, 255, 0.2);
-                ">
-                    <div id="seed-display" style="
-                        background: #001111;
-                        border: 1px solid #00ffff;
-                        padding: 20px;
-                        width: 320px;
-                        text-align: center;
-                        font-size: 24px;
-                        color: #fff;
-                        min-height: 24px;
-                    ">${this.currentSeedInput || 'enter-seed'}</div>
+                <main class="ui-screen seed-panel">
+                    <header class="ui-screen-header">
+                        <div>
+                            <div class="ui-kicker">world generation override</div>
+                            <h2 class="ui-screen-title">custom seed</h2>
+                        </div>
+                    </header>
+                    <div id="seed-display" class="seed-display">${this.currentSeedInput || 'enter-seed'}</div>
 
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
+                    <div class="seed-keypad">
                         ${['1', '2', '3', '4', '5', '6', '7', '8', '9', 'c', '0', 'run'].map(key => `
-                            <button class="keypad-btn" data-seed-key="${key}" style="
-                                background: rgba(0, 55, 55, 0.5);
-                                border: 1px solid #00ffff;
-                                color: #00ffff;
-                                padding: 20px;
-                                font-family: 'Press Start 2P';
-                                font-size: 14px;
-                                cursor: pointer;
-                                width: 90px;
-                                text-align: center;
-                            ">${key}</button>
+                            <button class="keypad-btn" data-seed-key="${key}">${key}</button>
                         `).join('')}
                     </div>
-
-                    <button id="btn-seed-back" class="menu-btn" style="background: transparent; border: none; color: #666; font-size: 12px; margin-top: 10px;">[abort_injection]</button>
-                </div>
+                    <button id="btn-seed-back" class="menu-btn" data-index="esc">back</button>
+                </main>
             `;
 
             setTimeout(() => {
@@ -489,14 +413,14 @@ export class MainMenu {
         changes.forEach(c => {
             const versionLabel = `${c.ver}${c.name ? ' // ' + c.name : ''}`;
             html += `
-                <div style="margin-bottom: 30px;">
-                    <div style="display: flex; gap: 20px; justify-content: space-between; color: #00ffff; margin-bottom: 10px; border-bottom: 1px solid #333; align-items: baseline;">
-                        <span style="font-size: 14px; line-height: 1.5; flex: 1; min-width: 0;">${escapeHtml(versionLabel).toLowerCase()}</span>
-                        <span style="font-size: 10px; color: #666; flex-shrink: 0; white-space: nowrap;">${escapeHtml(c.date).toLowerCase()}</span>
+                <div class="changelog-entry">
+                    <div class="changelog-entry-header">
+                        <span class="changelog-version">${escapeHtml(versionLabel).toLowerCase()}</span>
+                        <span class="changelog-date">${escapeHtml(c.date).toLowerCase()}</span>
                     </div>
-                    <ul style="color: #aaa; list-style-type: square; padding-left: 20px; font-size: 12px; line-height: 1.4;">
+                    <ul class="changelog-items">
                         ${(c.changes || c.items || []).map(i => `
-                            <li style="margin-bottom: 5px;">${escapeHtml(i).toLowerCase()}</li>
+                            <li>${escapeHtml(i).toLowerCase()}</li>
                         `).join('')}
                     </ul>
                 </div>
@@ -524,54 +448,52 @@ export class MainMenu {
 
         // Show loading state
         this.overlay.innerHTML = `
-            <h2 style="color: #ffff00; margin-bottom: 40px; font-size: 32px; text-shadow: 0 0 10px #ffff00;">high scores</h2>
-            <p style="color: #888; font-size: 16px;">loading global leaderboard...</p>
+            <main class="ui-screen">
+                <header class="ui-screen-header">
+                    <h2 class="ui-screen-title">global rankings</h2>
+                </header>
+                <p class="ui-status">loading global leaderboard...</p>
+            </main>
         `;
 
         const scores = await HighScoreGateway.getHighScores();
 
         let html = `
-            <h2 style="color: #ffff00; margin-bottom: 40px; font-size: 32px; text-shadow: 0 0 10px #ffff00;">high scores</h2>
-            <div style="
-                width: 500px; 
-                text-align: left; 
-                margin-bottom: 40px;
-                background: rgba(0,0,0,0.5);
-                padding: 30px;
-                border: 2px solid #ffaa00;
-            ">
+            <main class="ui-screen">
+                <header class="ui-screen-header">
+                    <div>
+                        <div class="ui-kicker">sortie archive // global</div>
+                        <h2 class="ui-screen-title">global rankings</h2>
+                    </div>
+                </header>
+                <div class="leaderboard-list">
         `;
 
         if (scores.length === 0) {
-            html += `<p style="color: #888; text-align: center; font-size: 16px;">no scores yet. be the first!</p>`;
+            html += `<p class="ui-status">no scores yet. be the first.</p>`;
         } else {
-            html += `<div style="display: flex; flex-direction: column; gap: 15px;">`;
             scores.forEach((score, index) => {
                 const rank = index + 1;
-                const medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `${rank}.`;
-                const color = rank === 1 ? '#ffd700' : rank === 2 ? '#c0c0c0' : rank === 3 ? '#cd7f32' : '#00ffff';
+                const rankLabel = String(rank).padStart(2, '0');
+                const color = rank === 1 ? '#c99b55' : rank === 2 ? '#b6b7af' : rank === 3 ? '#9a7251' : '#777b74';
 
                 html += `
-                    <div style="
-                        display: flex; 
-                        justify-content: space-between; 
-                        align-items: center;
-                        padding: 10px;
-                        background: rgba(255,255,255,0.05);
-                        border-left: 3px solid ${color};
-                    ">
-                        <span style="color: ${color}; font-size: 16px; width: 50px;">${medal}</span>
-                        <span style="color: white; font-size: 16px; flex: 1;">${escapeHtml(score.name)}</span>
-                        <span style="color: #ffff00; font-size: 16px; font-weight: bold;">${escapeHtml(score.score)}</span>
+                    <div class="leaderboard-row" style="--rank-color: ${color}">
+                        <span class="leaderboard-rank">${rankLabel}</span>
+                        <span>${escapeHtml(score.name).toLowerCase()}</span>
+                        <span class="leaderboard-score">${escapeHtml(score.score)}</span>
                     </div>
                 `;
             });
-            html += `</div>`;
         }
 
         html += `
-            </div>
-            <button id="btn-back" class="menu-btn" style="background: transparent; color: white; border: 1px solid #fff; width: 200px;">back</button>
+                </div>
+                <footer class="ui-screen-footer">
+                    <div class="ui-note">ranking data // verified uplink</div>
+                    <button id="btn-back" class="menu-btn" data-index="esc">back</button>
+                </footer>
+            </main>
         `;
 
         this.overlay.innerHTML = html;

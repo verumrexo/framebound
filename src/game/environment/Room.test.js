@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 
 const { Room } = await import('./Room.js');
 const { RoomType } = await import('./RoomType.js');
+const { selectEnemyType } = await import('../../shared/enemies/EnemyRoster.js');
 
 test('room-clear checkpoint includes the clear score instead of losing it', () => {
     const calls = [];
@@ -37,6 +38,14 @@ test('room-clear checkpoint includes the clear score instead of losing it', () =
     ]);
 });
 
+test('floor rosters introduce new roles gradually', () => {
+    assert.equal(selectEnemyType(1, 0.1), 'striker');
+    assert.equal(selectEnemyType(2, 0.1), 'interceptor');
+    assert.equal(selectEnemyType(3, 0.05), 'bulwark');
+    assert.equal(selectEnemyType(4, 0.05), 'repair_tender');
+    assert.equal(selectEnemyType(5, 0.05, { vault: true }), 'hive_carrier');
+});
+
 test('shop entry creates its original four items synchronously and once', () => {
     const room = new Room(1, 0, 1, 1, () => 0.5);
     room.type = RoomType.SHOP;
@@ -57,7 +66,7 @@ test('shop entry creates its original four items synchronously and once', () => 
     assert.equal(game.shopItems.length, 4);
 });
 
-test('treasure and floor-scaled vault chests exist before room entry returns', () => {
+test('treasure and exclusive vault contracts exist before room entry returns', () => {
     const treasure = new Room(0, 1, 1, 1, () => 0.5);
     treasure.type = RoomType.TREASURE;
     const treasureGame = { treasureChests: [] };
@@ -81,48 +90,79 @@ test('treasure and floor-scaled vault chests exist before room entry returns', (
     assert.equal(vaultGame.vaultChests.length, 2);
     assert.deepEqual(
         vault.vaultChests.map(chest => [
+            chest.contractId,
             chest.costType,
-            chest.costAmount,
             chest.x,
             chest.y
         ]),
         [
-            ['gold', 225, 2900, 3000],
-            ['hp', 112, 3100, 3000]
+            ['gilded', 'gold', 2730, 3120],
+            ['blood', 'hp', 3270, 3120]
         ]
     );
+    assert.equal(vault.vaultState.phase, 'offer');
 });
 
-test('pending vault wave callbacks can be cancelled when their floor is replaced', (t) => {
-    const calls = [];
-    const timerHandle = { id: 'wave' };
-    t.mock.method(globalThis, 'setTimeout', (callback, delay) => {
-        calls.push(['schedule', callback, delay]);
-        return timerHandle;
-    });
-    t.mock.method(globalThis, 'clearTimeout', handle => {
-        calls.push(['cancel', handle]);
-    });
-
+test('vault containment advances through simulation time without callbacks', () => {
     const room = new Room(1, 1, 1, 1, () => 0.5);
-    room.ambushStarted = true;
-    room.waveWaiting = false;
-    room.waveCount = 1;
-    room.maxWaves = 3;
-    room.enemies = [];
+    room.type = RoomType.VAULT;
+    const notifications = [];
+    const game = {
+        floor: 1,
+        enemies: [],
+        vaultChests: [],
+        showNotification: (...args) => notifications.push(args)
+    };
+    room.onEnter(game);
 
-    room.checkAmbushStatus({});
+    assert.equal(room.startAmbush(game, 'gilded', 'host'), true);
+    assert.equal(room.vaultState.nextSurge, 1);
+    assert.equal(room.enemies.length, 3);
 
-    assert.equal(room.waveWaiting, true);
-    assert.equal(room.waveTimer, timerHandle);
-    assert.equal(calls[0][0], 'schedule');
-    assert.equal(calls[0][2], 1000);
+    room.checkAmbushStatus(game, 6);
+    assert.equal(room.vaultState.elapsed, 6);
+    assert.equal(room.vaultState.nextSurge, 2);
+    assert.equal(room.enemies.length, 7);
 
-    room.cancelPendingEvents();
-
-    assert.equal(room.waveWaiting, false);
+    room.enemies.forEach(enemy => { enemy.isDead = true; });
+    room.checkAmbushStatus(game, 12);
+    room.enemies.forEach(enemy => { enemy.isDead = true; });
+    room.checkAmbushStatus(game, 0);
+    assert.equal(room.vaultState.phase, 'reward');
+    assert.equal(room.locked, false);
     assert.equal(room.waveTimer, null);
-    assert.deepEqual(calls[1], ['cancel', timerHandle]);
+});
+
+test('choosing a vault contract seals its rival and stores one reward roll', () => {
+    let roll = 0;
+    const room = new Room(1, 1, 1, 1, () => (roll++ % 10) / 10);
+    room.type = RoomType.VAULT;
+    const game = {
+        floor: 2,
+        enemies: [],
+        vaultChests: [],
+        showNotification: () => {},
+        peerNetwork: {
+            simulation: {
+                getPickupPlayers: () => [{}, {}, {}]
+            }
+        }
+    };
+    room.onEnter(game);
+
+    assert.equal(room.startAmbush(game, 'blood', 'guest_2'), true);
+    const blood = room.vaultChests.find(chest => chest.contractId === 'blood');
+    const gilded = room.vaultChests.find(chest => chest.contractId === 'gilded');
+    assert.equal(blood.wasPaid, true);
+    assert.equal(blood.ambushActive, true);
+    assert.equal(gilded.sealed, true);
+    assert.equal(gilded.locked, true);
+    assert.equal(room.vaultState.payerId, 'guest_2');
+    assert.equal(room.vaultState.playerCount, 3);
+    assert.equal(room.enemies.length, 5);
+    assert.equal(room.vaultState.rewardPartIds.length, 3);
+    assert.equal(new Set(room.vaultState.rewardPartIds).size, 3);
+    assert.equal(room.startAmbush(game, 'gilded', 'host'), false);
 });
 
 test('rooms preserve debris and loose rewards while inactive and restore them on revisit', () => {

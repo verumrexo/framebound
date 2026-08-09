@@ -175,9 +175,9 @@ test('item drops prefer their base sprite and keep the original scale', () => {
     assert.equal(spriteCalls.length, 1);
 });
 
-test('training dummies keep their name and dps overlay', () => {
+test('training dummy labels are excluded from the world pass', () => {
     const { calls, renderer } = createRenderer();
-    EntityRenderer.drawEnemy(renderer, {
+    const dummy = {
         type: 'dummy',
         isDead: false,
         x: 100,
@@ -186,12 +186,9 @@ test('training dummies keep their name and dps overlay', () => {
         rotation: 0,
         currentDps: 321,
         sprite: { draw() {} }
-    });
-
-    assert.deepEqual(
-        calls.filter(([method]) => method === 'fillText').map(call => call[1]),
-        ['training dummy', '321 dps']
-    );
+    };
+    EntityRenderer.drawEnemy(renderer, dummy);
+    assert.deepEqual(calls.filter(([method]) => method === 'fillText'), []);
 });
 
 test('missing chest sprites retain their original fallback borders', () => {

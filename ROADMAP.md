@@ -722,6 +722,1023 @@ supabase policy proof remains open.
 - docs describe the code that actually ships;
 - release smoke covers offline and two-client online play.
 
+## milestone 8 — arsenal: apotheosis
+
+goal: make parts, weapon families, level-ups, and enemy roles reinforce one
+build system instead of behaving like unrelated stat buckets.
+
+status: cleared locally on 2026-08-03 for framebound v1.2.0-beta. final balance
+still depends on longer human runs, because a green test suite cannot tell us
+whether floor six feels fun or like tax fraud.
+
+### shipped foundation
+
+- ballistic, laser, and missile upgrades now affect real cooldown and damage
+  paths in offline and host-authoritative co-op simulation;
+- level-up cards are filtered against each player's installed weapon families;
+- ballistic pierce, laser chaining, and missile blast-radius evolution create
+  distinct mechanical directions instead of three differently colored damage
+  percentages;
+- permanent arsenal stats migrate through old saves, room snapshots, and peer
+  snapshots without deleting old runs;
+- enemy hp and damage use separate long-run curves instead of doubling every
+  floor;
+- enemy bodies and tuning live in editable part blueprints, while room spawn
+  selection lives in a separate roster module;
+- interceptor, repair tender, and bulwark roles enter the roster gradually;
+- devtools can spawn every new enemy independently for layout and behavior
+  iteration;
+- the repair tender has a visible repair pulse, and enemy body parts can be
+  rearranged without rewriting its support behavior;
+- new runs choose a balanced ballistic, laser, or missile starter package and
+  never roll a drone carrier;
+- rocketle and lps now sit near the same ideal starter damage budget as three
+  darts, while needlepoint pierces real debris and scales above common rarity;
+- swarm hive is a real fourth combat family backed by data-driven drone
+  blueprints, per-player ownership, and future-safe upgrade hooks;
+- the cockpit separates weapon cooldowns, installed utility cooldowns, and
+  exact per-part damage contribution instead of truncating new hardpoints;
+- cleared rooms charge a host-authoritative five-second salvage system whose
+  one-second clockwise laser sweep destroys remaining crates and asteroids;
+- crates and asteroids produce stable destruction fragments that persist
+  through room snapshots instead of rerolling glitter every rendered frame;
+- the hangar, pickups, shops, treasure caches, and vault prompts use the current
+  lowercase cockpit typography and more legible part telemetry;
+- patch notes, hangar telemetry, automated gates, live browser checks, and the
+  signed macos bundle identify the release as `arsenal: apotheosis`.
+
+### next balance pass
+
+- collect full-run damage, pick-rate, and death-floor data from real playtests;
+- tune upgrade values and roster weights from those runs without changing the
+  approved family identities;
+- add new player parts only with their art, mount behavior, host authority,
+  save schema, renderer, and focused mechanic test defined together.
+
+## milestone 9 — hard raster
+
+goal: replace the accidental browser-scaled canvas presentation with a deliberate
+pixel renderer: continuously rotated assembled ships, a webgl world compositor,
+and a completely independent native-resolution hud.
+
+status: completed locally on 2026-08-08. the owner approved the 3x release pixel
+scale after reviewing the normal-size 1x/2x/3x comparison. phases 9.0 through 9.6,
+the complete automated gate, browser gameplay and live-resize smoke, signed macos
+build, artifact verification, and packaged-app launch smoke all pass.
+
+### problem being fixed
+
+- `imageSmoothingEnabled = false` only controls image sampling. it does not make
+  arbitrary canvas transforms, fractional camera coordinates, vector paths, or
+  font rendering pixel-perfect.
+- the current ship renderer rotates and positions every installed part
+  independently. diagonal headings therefore place connected parts on different
+  fractional pixels and create unstable edges and visible seams.
+- the current `0.6` camera zoom maps a four-unit authored sprite pixel to `2.4`
+  screen pixels. no output grid can represent that ratio with equal-sized square
+  pixels.
+- the canvas buffer follows css dimensions with `dpr = 1`, even on high-dpi or
+  fractionally scaled displays. the browser can resample the completed frame a
+  second time.
+- world and hud currently share the presentation canvas. applying a final shader
+  there would also chew up hud text, bars, maps, and cockpit lines.
+- the existing smoothing and css-pixelation settings describe only fragments of
+  the real pipeline and can claim a crisp result while diagonal ships still look
+  wrong.
+
+### approved visual contract
+
+- ship hulls rotate continuously through the full 360 degrees; cached or visibly
+  quantized facing directions are not the target.
+- the assembled hull is treated as one visual object, so connected parts cannot
+  drift apart or acquire different resampling artifacts.
+- independently aimed turrets remain independent visual layers.
+- the world uses hard pixel sampling with no bilinear blur.
+- some crisp pixel crawl at changing diagonal angles is acceptable; blurred edge
+  colors, soft seams, and differently scaled source pixels are not.
+- hud, minimap, cockpit telemetry, menus, overlays, and html typography do not go
+  through the world shader.
+- movement, aim input, projectile direction, hitboxes, camera world extent, room
+  visibility, multiplayer authority, and simulation timing remain unchanged.
+- the compositor is core presentation, not an `eye candy` effect. optional bloom,
+  scanlines, graphs, and decorative effects remain controlled by `eye candy`.
+
+### target frame architecture
+
+1. **simulation:** produces the same authoritative world state and continuous
+   angles it does now. it knows nothing about pixel grids or webgl.
+2. **viewport contract:** owns css size, physical size, device-pixel ratio,
+   integer world scale, letterbox/crop remainder, camera projection, and inverse
+   pointer mapping in one tested place.
+3. **ship assembly cache:** builds one unrotated texture from the complete hull,
+   weapon bases, and static utility parts. cache keys include the validated part
+   layout and visual variants, never position, aim, cooldown, or gameplay state.
+4. **dynamic ship layers:** draw aimed turrets, recoil, shields, core animation,
+   damage flashes, and other changing effects separately from the cached hull.
+5. **world source surface:** receives rooms, entities, particles, projectiles,
+   assembled ships, remote players, enemies, bosses, and world-space effects in
+   the existing draw order.
+6. **webgl pixel compositor:** uploads the world source, uses nearest sampling,
+   snaps sampling to the selected physical pixel grid, preserves palette colors
+   and hard alpha boundaries, and presents the world through one full-screen
+   pass.
+7. **hud surface:** a transparent native-resolution 2d canvas sits above the
+   webgl world. `HudRenderer`, minimap, cursor, prompts, cockpit telemetry, and
+   debug text draw here without shader sampling.
+8. **dom surface:** menus, settings, patch notes, hangar/editor overlays, and
+   accessibility-friendly controls remain normal dom above both canvases.
+
+the intended visible stack is:
+
+```text
+dom menus and overlays
+native-resolution hud canvas
+webgl pixel-composited world canvas
+window background
+```
+
+### ownership and module boundaries
+
+- keep `Renderer` as the small game-facing facade while moving implementation
+  details under `engine/rendering/`.
+- add a viewport owner for resize, dpr, integer scaling, projection, and input
+  conversion. `Input`, `Camera`, and fullscreen handling must consume this owner
+  rather than reimplement its ratios.
+- add a world-surface owner for the 2d source buffer and frame lifecycle.
+- add a webgl compositor owner for context creation, shader compilation, texture
+  upload, nearest-neighbor state, presentation, context loss, and fallback.
+- add a hud-surface owner that exposes only the native 2d hud context.
+- add a ship-assembly renderer/cache beside entity rendering. `Ship` and part
+  definitions remain model/data objects and do not create canvases or gl state.
+- make `FramePresentationSystem` explicitly sequence `begin world`, world draw,
+  world composite, hud clear, and hud draw.
+- make renderer selection dependency-injectable so command tests and headless
+  simulation do not require webgl.
+
+### implementation sequence
+
+#### 9.0 — freeze visual and behavioral evidence
+
+- capture deterministic player, remote-player, enemy, and boss assemblies at
+  cardinal and diagonal headings in the visual gallery.
+- capture normal gameplay, hangar, minimap, pause, level-up, and main-menu frames.
+- record camera world bounds and mouse-to-world results across representative
+  window sizes before changing projection code.
+- retain the current canvas path as a temporary compatibility implementation,
+  not as a second permanently supported renderer.
+
+gate: the evidence reproduces the diagonal ship defect and the existing hud,
+camera, input, and draw-order contracts before extraction begins.
+
+#### 9.1 — separate world and hud without changing pixels
+
+- create stacked world and hud canvases with explicit z-order and pointer-event
+  ownership.
+- route every world draw to the world surface and every hud draw to the hud
+  surface.
+- keep the compositor in a pass-through mode so this phase changes architecture,
+  not presentation.
+- preserve menus, hangar, editor, pause, cursor, screenshots, and resize behavior.
+
+gate: before/after captures are visually equivalent, hud command tests still
+pass, input remains accurate, and the game is playable before shader work starts.
+
+#### 9.2 — make viewport and resize math authoritative
+
+- replace the hard-coded `dpr = 1` path with an explicit css/logical/physical
+  viewport model.
+- choose an integer physical world-pixel scale per window and center any remainder
+  smaller than one world pixel without stretching the frame.
+- decouple presentation density from camera world extent so changing pixel scale
+  cannot zoom gameplay in or out.
+- keep camera presentation translation continuous; the hard pixel grid must not
+  quantize camera motion or alter authoritative positions.
+- route mouse and cursor coordinates through the inverse viewport transform.
+
+gate: resizing, fullscreen changes, retina displays, fractional desktop scaling,
+and browser zoom cannot leave stale buffers, shift aim, change visible world
+bounds, or introduce a fractional final blit.
+
+#### 9.3 — assemble ships before transforming them
+
+- compose static hull parts and weapon bases into one texture in validated ship
+  layout order.
+- invalidate only when layout, part rotation, part art, palette, or persistent
+  visual damage changes.
+- draw recoil, aimed turrets, shields, animated cores, and temporary effects as
+  explicit dynamic layers anchored to the same assembly transform.
+- use the complete rotated assembly geometry for visual bounds and culling; never
+  fall back to the anchor core.
+- use the same path for the local player, remote players, enemies, and bosses.
+
+gate: connected parts remain connected at every heading, hangar edits invalidate
+the cache immediately, independent turrets still track continuously, and no ship
+collision or weapon-origin calculation moves.
+
+#### 9.4 — introduce the webgl pixel compositor
+
+- compile a minimal webgl 2 full-screen vertex/fragment pair with deterministic
+  nearest sampling and no implicit mipmaps, filtering, color interpolation, or
+  premultiplied-alpha surprises.
+- upload only the world source and present it below the untouched hud canvas.
+- quantize sample coordinates to the viewport owner's physical world-pixel grid.
+- keep continuous ship angles; do not replace them with cached rotation frames.
+- handle context loss and restoration without losing a run. if webgl genuinely
+  cannot initialize, fall back to the pass-through renderer with one bounded
+  warning instead of crashing.
+- keep shader source local and compatible with the browser and tauri content
+  security policies.
+
+gate: diagonal ships contain no blended edge colors or inter-part seams, full
+rotation has no angle stepping, and hud pixels are identical to the separated
+pre-shader hud reference.
+
+#### 9.5 — tune the hard-pixel presentation
+
+- compare small integer world-pixel scales in the visual gallery at normal play
+  size instead of judging enlarged crops alone.
+- select the default using player-ship readability, projectile identity, debris,
+  enemy silhouettes, camera motion, and room visibility together.
+- prevent pixel-grid changes from altering world scale or simulation coordinates.
+- keep palette quantization optional unless it proves it preserves every existing
+  family, rarity, biome, warning, and damage color.
+- keep bloom and cockpit decoration after hard sampling and behind `eye candy`;
+  never soften the base world texture to fake glow.
+
+design checkpoint: the owner approves the normal-scale rendered comparison before
+the chosen pixel scale becomes the release default.
+
+#### 9.6 — remove the old presentation path
+
+- delete the obsolete offscreen-resolution and css-pixelation code after the
+  compositor has passed parity gates.
+- replace misleading settings with truthful controls only if the owner approves
+  their player-facing behavior; do not expose raw implementation toggles.
+- document the final renderer, surface ownership, fallback, and shader contracts.
+- update patch notes only when the new renderer is actually shipped.
+
+gate: there is one production world renderer, one hud surface, no dead smoothing
+toggles, no duplicate resize/input math, and no compatibility path silently used
+on supported desktop hardware.
+
+### shader requirements
+
+- webgl 2 with `nearest` minification and magnification, clamped edges, no mipmaps,
+  and explicit alpha handling.
+- source colors must survive sampling exactly unless an approved post-effect is
+  active.
+- transparent pixels remain transparent and cannot grow dark or bright fringes.
+- the pixel grid is derived from physical output size, not frame time or camera
+  position, so a stationary scene cannot shimmer.
+- shader compilation and link errors include the failing stage in development
+  logs but show only one concise fallback notice to players.
+- context restore rebuilds programs, buffers, texture state, and viewport state
+  without reconstructing or mutating game simulation.
+- no shader uniform may contain gameplay authority or feed values back into the
+  simulation.
+
+### tests and rendered proof
+
+- unit-test viewport selection, integer remainder placement, camera projection,
+  inverse input mapping, dpr changes, and zero/invalid dimensions.
+- unit-test assembly cache keys, invalidation, part ordering, rotated bounds,
+  turret anchors, and remote/enemy/boss reuse.
+- test compositor initialization, nearest texture state, resize, shader failure,
+  context loss/restoration, and pass-through fallback with a controllable gl
+  adapter.
+- retain renderer-command tests for world and hud ownership and exact draw order.
+- add deterministic pixel captures for at least `0`, `22.5`, `45`, `67.5`, and
+  `90` degree hull headings plus independently aimed turrets.
+- inspect those captures at normal play scale and enlarged nearest-neighbor scale;
+  assert that hull edges contain only source palette or transparent pixels.
+- compare hud-only captures before and after the shader with zero shader-induced
+  differences.
+- run resize and aim checks at representative `16:9`, `16:10`, ultrawide, small
+  window, retina, and fractional-dpr configurations.
+- smoke local player, remote player, enemies, boss, hangar edit, room transition,
+  pause, fullscreen map, level-up, and main-menu return in a real browser.
+- smoke host and guest rendering through a real peer session so remote assemblies
+  and independently aimed weapons use the same path.
+- run the complete javascript suite, lint, checked javascript, source hygiene,
+  import graph, production build, rust tests, native macos build, strict signature
+  verification, packaged-app resize/fullscreen smoke, and console-error check.
+- capture gpu timing and sustained frame pacing with a projectile-heavy room at
+  `1920x1080` and retina output. performance evidence must compare the same scene
+  before and after; an idle menu frame proves nothing.
+
+### failure conditions
+
+- hud, minimap, cursor, or menu text passes through the pixel shader.
+- the implementation hides blur by snapping simulation rotation or projectile
+  aim.
+- changing window size changes camera world extent, ship speed, input aim, or
+  collision results.
+- connected parts separate, overlap differently, or change mounting geometry.
+- local, remote, enemy, and boss ships use visibly different filtering paths.
+- webgl loss crashes, pauses permanently, deletes the run, or corrupts saves.
+- the fallback becomes the normal path on supported tauri macos or windows builds.
+- the shader improves enlarged screenshots while normal play becomes noisy,
+  unreadable, or exhausting.
+- optional glow, scanlines, or palette work is used to declare the base hard-pixel
+  renderer complete.
+
+### milestone exit gate
+
+- a continuously rotating assembled ship stays hard-edged and connected at every
+  heading with no cached-angle stepping and no blended diagonal seams;
+- the world is presented through the webgl pixel compositor on supported browser
+  and desktop builds;
+- hud and dom presentation remain outside the shader and match their approved
+  reference;
+- camera extent, input mapping, movement, weapons, collisions, draw order, saves,
+  and multiplayer outcomes match the pre-refactor evidence;
+- resize, fullscreen, dpr changes, context loss, and fallback have explicit tested
+  outcomes;
+- normal-scale visual proof is approved, the full automated gate passes, and the
+  macos app is rebuilt and launch-smoked;
+- every implementation phase ended in a playable state and can be reverted
+  independently.
+
+## milestone 10 — signal forge
+
+goal: put a complete jfxr-powered sound laboratory inside authenticated devtools
+so a generated sound can be previewed, assigned to a part or game event with a
+click, heard immediately, and restored on the next launch without dragging files,
+renaming assets, editing code, or rebuilding the game.
+
+status: authoring tool and runtime foundation completed on 2026-08-08. jfxr
+generation, parameter editing, waveform preview, searchable coverage, explicit
+custom/default/missing states, per-part and global-event binding, delayed impact
+and detonation routing, drone/shield/booster slots, indexeddb persistence, native
+desktop mirroring, saved-sound editing, default restoration, and fixed-path pack
+promotion are working. the remaining missing-sound pass is creative content: four
+unresolved sound identities across five visible target slots are exposed in the
+forge and require owner-approved choices rather than invented defaults.
+
+### source and integration decision
+
+- use `jfxr` 0.13.0 from `https://github.com/ttencate/jfxr`, pinned exactly and
+  retained under its bsd-3-clause license with attribution.
+- lazy-load the standalone synthesizer library only when the sound lab opens. do
+  not inherit jfxr's application ui or angularjs stack.
+- do not iframe `jfxr.frozenfractal.com`. the desktop navigation guard and content security
+  policy correctly reject arbitrary external pages, the tool must work offline,
+  and an internet page does not belong inside a privileged desktop webview.
+- do not make exporting a wav, opening a file picker, dragging a file, changing a
+  filename, or restarting vite part of the normal authoring loop.
+- preserve the useful jfxr workflow: presets, randomize, mutate, parameter editing,
+  immediate preview, copyable settings, and deterministic wav rendering.
+- keep the sound lab behind the existing devtools authentication boundary. it is
+  a private authoring surface, not a player-facing settings screen.
+
+### intended five-click workflow
+
+1. open devtools and click **signal forge**.
+2. generate, randomize, mutate, or tune a sound and click **preview** as often as
+   needed.
+3. click **apply**.
+4. click a rendered part card or a named global-event card, then click the exact
+   event slot when that target has more than one sound.
+5. trigger the part or event in the running game and hear the replacement
+   immediately.
+
+there is no manual sound id field in the primary workflow. internal ids remain
+visible in a small diagnostics area for debugging, not as homework for the owner.
+
+### target-picker behavior
+
+- show every player part from `PartsLibrary` as its real sprite, name, footprint,
+  family, and rarity. clicking a card assigns the sound to that part definition,
+  so every installed copy uses it.
+- filter the available slots by capability instead of showing nonsense choices:
+  weapons expose fire, charge, loop, release, impact, and explosion where their
+  mechanics support them; shields expose absorb, break, restore, and ready;
+  boosters expose engage, sustain, release, and ready; drone carriers expose
+  launch, drone fire, drone hit, and drone death.
+- support future part mechanics through declared audio capabilities instead of a
+  hard-coded list in the devtool ui.
+- provide separate global-event cards for player, enemies, rooms, rewards,
+  environment, hangar, menus, and progression.
+- include at least player damage/death/respawn, enemy hit/death, boss death,
+  projectile impact, explosion, dash, salvage sweep, room enter/lock/clear,
+  portal, chest, shop purchase, part pickup, xp/gold/hp pickup, crate/asteroid
+  break, level-up choice, hangar install/remove, and ui confirm/back slots.
+- allow selecting an installed part directly in the hangar as a shortcut to its
+  definition card, but never store a binding against one transient ship-grid
+  instance.
+- show the active fallback chain before applying: exact part event, weapon or
+  utility family event, global event, packaged default, then silence.
+
+### audio-event architecture
+
+- replace scattered string literals and the private `WEAPON_SOUNDS` table with a
+  versioned `SoundEventRegistry` containing stable ids, category, label, allowed
+  target types, fallback, default asset, and default playback policy.
+- give part definitions declarative audio capabilities and default bindings. new
+  mechanics add their slots beside the mechanic instead of patching devtools.
+- carry source part id and sound-event intent through projectile impact and other
+  delayed effects so a rocket can use its own impact sound after leaving the gun.
+- keep sound selection presentation-only. it must not enter simulation snapshots,
+  p2p authority, save-state determinism, damage logic, cooldowns, or scoring.
+- make `AudioManager` own decoded buffers, active voices, buses, limiter nodes,
+  hot replacement, preview isolation, and fallback resolution.
+- add explicit `replace`, `preview`, `restore default`, and `stop preview` APIs.
+  callers keep requesting semantic events instead of fetching buffers directly.
+- audit every existing `audio.play(...)` request against the registry. references
+  such as `overheat`, `reload`, `respawn`, and `click_short` currently fail
+  silently because they are not present in the startup manifest; the milestone
+  must make missing bindings visible in the forge and fail its validation gate.
+- retain existing volume, pitch, random pitch, loop, and spam-limiting behavior as
+  event defaults or call-site overrides without changing combat cadence.
+
+### generated-sound model
+
+each authored sound stores:
+
+- a stable generated-sound id and editable lowercase display name;
+- the pinned jfxr schema version and complete synthesizer parameter document;
+- deterministic rendered pcm/wav data for playback parity across jfxr upgrades;
+- duration, sample rate, channel count, byte size, peak, and integrated loudness
+  metadata where available;
+- preview gain, default event gain, pitch, allowed pitch randomization, loop
+  points where supported, and spam/voice-limit policy;
+- creation and modification time plus the jfxr package version;
+- every event binding that currently references the sound.
+
+store both the recipe and rendered audio. the recipe makes later editing possible;
+the rendered bytes ensure an upstream synthesizer change cannot quietly alter an
+already approved sound.
+
+### instant runtime replacement
+
+- jfxr renders into an in-memory buffer and hands it directly to `AudioManager`.
+- applying a binding swaps the decoded buffer atomically. sounds already playing
+  finish normally; the next trigger uses the replacement.
+- applying never reloads the page, restarts the run, rebuilds vite, or changes
+  authoritative game state.
+- offer **preview raw**, **preview with event settings**, **test once**, **test
+  spam**, and **test in game** actions so a nice isolated zap is not accidentally
+  an unbearable minigun sound.
+- keep a short bounded undo history for sound edits and binding changes.
+- provide one-click **compare default**, **restore default**, **duplicate**, and
+  **unbind** operations.
+- show a persistent `custom`, `default`, or `missing` badge on every event card.
+
+### persistence without rebuilding
+
+- store generated wav blobs, recipes, and bindings in a versioned indexeddb sound
+  pack. localstorage is not suitable for binary audio and its small synchronous
+  quota would turn this tool into garbage immediately.
+- load the sound pack after packaged defaults and before normal gameplay begins,
+  then hot-register valid overrides with `AudioManager`.
+- mirror the same validated pack into the tauri application-data directory using
+  bounded atomic replacement, the same way native run saves avoid partial files.
+- select the newest complete valid browser/native copy on desktop startup and
+  repair the stale copy without deleting the good one.
+- cap sound duration, individual bytes, total pack bytes, decoded memory, and
+  simultaneous preview voices. reject corrupt or absurd entries without blocking
+  the rest of the pack.
+- include schema migration and a **reset corrupt entry** path. one broken sound
+  cannot disable all audio or trap startup.
+- runtime sound overrides are local presentation data. multiplayer does not send
+  audio blobs or bindings; every peer hears its own installed sound pack.
+
+### promoting an approved sound pack
+
+iteration requires no build. shipping a public app still needs one final build,
+because other computers cannot hear files that only exist in the owner's app-data
+directory. promotion makes that final packaging automatic instead of manual:
+
+- add **promote pack** in authenticated devtools.
+- in a desktop development build, write validated wav files beneath a fixed
+  generated-sounds source directory and regenerate one canonical sound-pack
+  manifest.
+- sanitize every generated filename from the stable sound id. never accept an
+  arbitrary path from javascript.
+- perform temporary-file plus atomic-replace writes, retain the previous manifest
+  on failure, and report exactly which entry failed.
+- make browser development export one complete pack artifact as a fallback; it is
+  not required for the normal desktop workflow.
+- packaged release builds can load promoted defaults but cannot write into their
+  signed application bundle.
+- keep generated wav files and the manifest deterministic so source control shows
+  only real sound changes instead of timestamp or ordering noise.
+- include the jfxr license and pinned package version with every promoted source pack.
+
+### sound-lab ui
+
+- open as a large dedicated devtools window, not inside the existing narrow
+  spawner sidebar.
+- use framebound's lowercase silkscreen/pixelify cockpit styling around the local
+  jfxr controls without hiding or renaming synthesis parameters into nonsense.
+- group the workspace into generator, waveform/parameter editor, preview meter,
+  current sound, target picker, binding inspector, and pack status.
+- show a waveform and duration meter, peak/clipping warning, event gain, pitch,
+  random pitch, active-voice limit, and approximate packed size.
+- provide searchable categories and part families, but make the common weapon,
+  impact, pickup, room, and ui events reachable without searching.
+- pause gameplay input while the forge owns keyboard shortcuts. space previews
+  the sound instead of firing; escape closes the current picker before the forge.
+- stop preview voices and release forge-only listeners when the window closes.
+- preserve the current run and resume it exactly where it was.
+
+### safety and quality rules
+
+- run previews through a dedicated gain and hard limiter before the master bus so
+  randomize cannot produce an ear-murdering spike.
+- warn on clipping, excessive dc offset, inaudible output, invalid loop points,
+  excessive duration, and large decoded memory.
+- never normalize or otherwise alter the approved waveform silently. offer a
+  deliberate normalize action with before/after preview.
+- bound randomize and mutate generation time and make cancellation immediate.
+- prevent overlapping previews from stacking without limit.
+- accept only the pinned jfxr parameter schema and generated pcm/wav data in the
+  primary workflow. arbitrary uploaded audio is outside this milestone.
+- do not add external network permissions, remote scripts, `unsafe-eval`, broad
+  filesystem access, or arbitrary tauri write paths.
+- opening or using the forge does not taint a run because audio is cosmetic, but
+  devtools gameplay cheats retain their existing taint behavior.
+
+### implementation sequence
+
+#### 10.0 — inventory every sound event
+
+- replace the startup array with the versioned registry while preserving every
+  currently audible default, volume, pitch, randomization, loop, and spam rule.
+- find missing referenced sounds, unused wav files, duplicate aliases, dynamic
+  part mappings, and events that currently have no sound call at all.
+- add a generated audit view showing bound, missing, unused, and overridden slots.
+
+gate: every runtime sound request resolves through the registry, existing audio
+parity tests pass, and missing references can no longer fail silently.
+
+#### 10.1 — hot replacement and persistent sound packs
+
+- add bounded generated-sound validation, indexeddb storage, desktop mirroring,
+  startup recovery, migration, and atomic `AudioManager` replacement.
+- build a tiny test harness that synthesizes a known buffer, binds it, triggers
+  the event, reloads the page, and proves the same bytes are active.
+
+gate: a generated test sound applies and survives restart without touching the
+source sound directory or rebuilding.
+
+#### 10.2 — local jfxr workbench
+
+- isolate the pinned jfxr synthesizer behind a framebound adapter and retain its license.
+- adapt preset, randomize, mutate, parameter editing, preview, deterministic
+  render, and recipe serialization behind a framebound-owned adapter.
+- lazy-load the editor and synthesis code only after authenticated devtools opens
+  the forge.
+
+gate: the forge creates, edits, previews, closes, reopens, and reproduces the same
+sound offline with no leaked listeners, voices, or timers.
+
+#### 10.3 — click-to-bind parts and events
+
+- render capability-aware part and global-event cards.
+- connect apply, undo, compare, restore, test, and binding-status flows.
+- integrate the hangar shortcut and delayed projectile/utility event resolution.
+
+gate: the owner can generate a sound, click apply, click dart `fire`, resume, and
+hear the dart use it immediately; the same flow works for one utility and one
+global room or pickup event.
+
+#### 10.4 — promote and package
+
+- add the constrained desktop promotion command, canonical generated manifest,
+  deterministic wav output, attribution, and browser pack fallback.
+- teach normal startup to layer promoted defaults, local overrides, and packaged
+  fallbacks in a documented order.
+
+gate: a promoted pack survives a clean production build and fresh app-data
+directory, while unpromoted experimentation remains local.
+
+#### 10.5 — complete the missing-sound pass
+
+- use the forge to fill missing weapon, utility, drone, enemy, environment, room,
+  reward, hangar, and ui slots.
+- approve sounds by hearing them in their real cadence and gameplay context, not
+  by previewing each one alone.
+- update patch notes only after the tool and promoted pack actually ship.
+
+design checkpoint: sound selection is creative work. the tool may expose and
+accelerate decisions, but it must not silently generate and approve the final
+sound identity of parts, enemies, or events.
+
+### tests and live proof
+
+- validate unique event ids, valid fallback chains, valid part capabilities,
+  existing asset reachability, and zero unregistered runtime sound requests.
+- test recipe and sound-pack bounds, migration, corruption isolation, newest-copy
+  recovery, quota failure, atomic desktop writes, filename sanitization, and
+  refusal to write outside the generated-sounds directory.
+- test immediate replacement, active-voice completion, preview cleanup, limiter
+  routing, restore default, undo, loop handling, spam limits, and suspended audio
+  context recovery.
+- test that forge shortcuts cannot move, shoot, pause, open the map, or edit the
+  hangar underneath the window.
+- browser-smoke generate, preview, bind, trigger, reload, restore, and corrupt-one
+  entry recovery with zero console errors.
+- desktop-smoke the same flow in the packaged macos app using application-data
+  persistence and in `tauri dev` using constrained promotion.
+- verify a clean profile loads promoted defaults and an existing profile layers
+  local overrides without mutating saves.
+- run the complete javascript, lint, checked-javascript, source-hygiene, csp,
+  production-build, rust, native-signature, and packaged-startup gates.
+- inspect memory and active audio-node counts after repeated open/close, randomize,
+  preview-spam, and one hundred hot replacements.
+
+### milestone exit gate
+
+- devtools opens a local offline jfxr sound lab with no iframe or external runtime
+  dependency;
+- generated sounds preview safely and bind to visible parts or semantic game
+  events without manual ids, filenames, file movement, source edits, or rebuilds;
+- the next real event trigger uses the new sound immediately;
+- bindings and rendered audio survive browser and desktop restart with corruption
+  containment and bounded storage;
+- every runtime sound request is registered, missing and unused sounds are visible,
+  and new part mechanics can declare new audio slots without editing devtools ui;
+- undo, compare, restore default, limiter protection, preview cleanup, and fallback
+  behavior are tested;
+- promoted packs produce deterministic source assets and ship correctly after the
+  one final release build;
+- gameplay, saves, p2p authority, timing, and player-facing menus remain unchanged;
+- the complete automated gate and live browser/native authoring smokes pass.
+
+## milestone 11 — cursed vaults: blood contract
+
+goal: replace the current pair of glowing treasure chests with a distinct,
+readable, replayable cursed-vault set piece whose price, danger, presentation,
+reward, persistence, and co-op ownership all express one approved risk/reward
+contract.
+
+status: implemented locally on 2026-08-08. the approved first release uses one
+exclusive gilded/blood choice, no hidden permanent curse, shared gold or a
+survivable payer-owned blood sacrifice, an eighteen-second containment assault,
+and a payer-owned three-part cache. automated, save, snapshot, renderer, audio,
+and packaged-app gates pass; live two-device feel acceptance remains external.
+
+### current-state diagnosis
+
+- a vault is an optional one-cell side room with at most one generated per floor
+  and a flat thirty-percent branch attempt from a combat room.
+- the room contains two instances of the normal treasure-chest sprite placed two
+  hundred units apart. gold or red glow is doing nearly all the visual work.
+- one chest asks for gold and one asks for hp. both costs multiply by `1.5` every
+  floor; the strict `hp > cost` rule can make the blood option unusable before the
+  room itself stops spawning.
+- paying starts three timed waves containing four, five, and six enemies. every
+  enemy receives `1.5x` hp, but the room does not otherwise create a unique
+  encounter.
+- activating either contract marks both chests as visually locked during combat,
+  but only the paid chest records payment. after clearing, the other chest can be
+  purchased to start another complete ambush, so the apparent choice is not an
+  actual choice.
+- completion drops three unrestricted random parts. there is no reward preview,
+  curse identity, build-aware selection, vault-exclusive pool, pity rule, or
+  protection from three useless duplicates.
+- the room has no dedicated geometry, machinery, hazards, phase telegraphs,
+  environmental storytelling, entrance sequence, completion sequence, or stable
+  destruction state.
+- notifications still describe a generic ambush and generic loot instead of a
+  cursed contract.
+- delayed waves use a real-time timeout beside room state. cancellation exists,
+  but active encounter phase and countdown are not modeled as first-class state.
+- saves remember chest flags and ordinary room state, but not a complete explicit
+  contract/phase/reward decision that can prove exact mid-vault recovery.
+- co-op can host-authoritatively activate the chest, but payment ownership,
+  confirmation, reward ownership, dead-player participation, and simultaneous
+  interaction behavior are not designed as a coherent vault contract.
+
+### non-negotiable presentation contract
+
+- entering a cursed vault must be recognizable before reading a tooltip. room
+  silhouette, floor markings, machinery, lighting, palette, and sound carry the
+  identity together.
+- reuse framebound's neon outline language, pixelated typography, lowercase text,
+  top-down readability, and current biome colors; do not paste a gothic fantasy
+  room into the cockpit aesthetic.
+- blood and gilded contracts must be distinguishable through shape, animation,
+  iconography, and spatial treatment in addition to red versus gold color.
+- every dangerous phase has a readable telegraph at normal play scale. decoration
+  cannot hide projectiles, enemies, exits, pickups, or the player's ship.
+- the room begins quiet, visibly commits when a contract is accepted, escalates
+  through the encounter, and reaches an unmistakable stable completed state.
+- destruction and completion effects use authored fragments and deterministic
+  animation, not per-frame glitter noise.
+- prompts, countdowns, warnings, contract text, and rewards use the current fonts
+  and lowercase language.
+- `eye candy` may remove secondary particles, graphs, and decorative animation;
+  contract state, telegraphs, hazards, and reward readability are never optional.
+
+### design checkpoint 11.a — what is the contract
+
+the following must be chosen with the owner before gameplay code starts:
+
+1. **exclusive choice:** selecting gilded or blood permanently seals the other
+   contract for that vault.
+2. **double debt:** both contracts remain possible, but the second price and
+   encounter mutate because the player already robbed the first.
+3. **single changing altar:** one altar rolls a clearly previewed price, curse,
+   encounter, and reward package instead of presenting two fixed chests.
+
+recommended starting point: exclusive choice. it creates an actual decision,
+keeps the room short enough not to become compulsory floor homework, and makes
+balancing one reward budget possible. this is a recommendation, not approval.
+
+the checkpoint must also decide whether `cursed` means:
+
+- only an upfront sacrifice plus dangerous encounter;
+- a temporary encounter modifier that ends when the vault opens;
+- a run-long drawback attached to a stronger reward;
+- or a mixture where every contract previews its exact drawback before payment.
+
+no hidden permanent curse is allowed. if a consequence survives the room, the
+player sees it before accepting.
+
+### design checkpoint 11.b — price and reward ownership
+
+- decide whether gilded cost uses shared team gold or the activating player's
+  private entitlement. current co-op gold is shared, but rewards and builds are
+  private; the vault cannot quietly invent a third ownership rule.
+- decide whether blood cost is flat hp, percent current hp, percent maximum hp,
+  temporary maximum-hp loss, or another explicit sacrifice.
+- decide whether payment can kill, leave one hp, or require a displayed safety
+  margin. the current strict-survival rule is not automatically retained.
+- decide whether one player can commit the team immediately, whether the room uses
+  a short cancellable confirmation, or whether every living player must confirm.
+- decide whether the reward belongs to the payer, becomes a private choice for
+  each living player, drops into nearest-player pickup rules, or uses a new
+  contract-specific allocation.
+- decide what dead spectators receive if the vault is completed and whether vault
+  completion can resurrect anyone. boss-kill resurrection remains unchanged
+  unless explicitly expanded.
+- define a floor-aware price budget against real player hp, expected gold, room
+  depth, and reward value instead of continuing exponential numbers by habit.
+
+### design checkpoint 11.c — encounter families
+
+the system should support data-driven encounter definitions, but the first set is
+chosen from approved candidates rather than dumping every idea into one room:
+
+- **containment:** destroy curse pylons while enemies are strengthened by the
+  surviving network.
+- **collection:** enemies drop volatile charges that must be delivered to the
+  vault while fighting.
+- **survival:** hold the chamber through a short continuous assault with visible
+  phase timing instead of three identical kill-all waves.
+- **execution:** one elite assembled from editable enemy parts is supported by a
+  small role-driven escort.
+- **pursuit:** the contract marks one player and changes pressure as the mark moves
+  or latches, without breaking the existing circling-latch enemy rule.
+- **fracture:** portions of the arena become hazardous through clearly telegraphed
+  sweeps or fields while normal enemies continue attacking.
+
+the first release should ship a small strong set, not six half-working gimmicks.
+every encounter family declares its duration target, spawn budget, enemy roster,
+objective, failure conditions, telegraphs, cleanup, reward multiplier, and co-op
+scaling in data.
+
+### room and prop architecture
+
+- create a dedicated vault-room layout owner instead of adding more branches to
+  generic `Room.draw` and `Room.startAmbush`.
+- define stable authored anchors for entrance, contract altar, sealed reliquary,
+  pylons, spawn gates, objective zones, hazards, reward emergence, and decoration.
+- keep collision geometry separate from decorative art and expose a devtools
+  overlay for every vault anchor, hazard, spawn lane, and blocked cell.
+- support multiple layout blueprints selected by seeded generation while keeping
+  the contract altar and exits readable.
+- validate layouts against ship assembly bounds, enemy sizes, projectile lanes,
+  camera framing, teleport entry points, and co-op player count.
+- make vault-specific props first-class room-owned entities with deterministic
+  ids, update ownership, rendering, collision policy, snapshot state, and cleanup.
+- allow enemy bodies used by vault encounters to remain editable part blueprints;
+  encounter behavior references a role or blueprint id rather than hard-coded
+  sprite geometry.
+- never make one specific part size, starter loadout, dash range, or weapon family
+  mandatory to navigate or complete the room.
+
+### contract and encounter state model
+
+replace loose chest booleans with one versioned vault state machine:
+
+```text
+dormant
+offer visible
+commit countdown
+contract paid
+sealing
+encounter active
+phase transition
+reward ready
+claimed
+completed
+```
+
+- cancellation before payment returns to `offer visible`; cancellation after the
+  irreversible commit follows the approved contract rule.
+- every transition is idempotent and host-authoritative.
+- time is simulation time, not an untracked wall-clock timeout.
+- state records contract id, payer, payment result, sealed alternatives, encounter
+  definition, phase, phase time, objective progress, deterministic rng state,
+  living spawned ids, prop/hazard state, reward roll, reward ownership, claimed
+  state, and completion state.
+- revisiting, tactical-map teleport, save/continue, guest reconnect, and full
+  resync reconstruct the exact visible and interactive phase.
+- reward generation occurs once and is stored before presentation. reconnecting,
+  clicking twice, or crashing between victory and pickup cannot reroll or duplicate
+  it.
+
+### system ownership
+
+- `VaultDefinitionRegistry` owns contract, encounter, layout, price, reward, and
+  presentation references as validated data.
+- `VaultEncounterSystem` owns the state machine, simulation-time phases,
+  objectives, spawns, hazards, completion, cancellation, and cleanup.
+- `VaultEconomy` computes previewable prices and validates/commits payment exactly
+  once against the approved solo and co-op rules.
+- `VaultRewardSystem` creates and assigns the stored reward exactly once.
+- `VaultRenderer` owns room props, contract state, objective telegraphs, and
+  completion presentation while normal enemies/projectiles keep their existing
+  renderers.
+- `VaultHud` owns the compact contract preview, commit countdown, current
+  objective, phase progress, and reward claim prompt.
+- `Room` owns and snapshots the vault systems but does not implement their
+  mechanics.
+- `WorldInteractionSystem` sends a semantic vault intent and receives a result;
+  it does not deduct resources, spawn waves, or roll rewards itself.
+- host simulation owns all outcomes. guests may preview and request interaction
+  but cannot pay, advance phases, create enemies, or claim rewards locally.
+
+### visual and audio direction
+
+- build the room around a sealed mechanical reliquary rather than two floating
+  treasure boxes.
+- use a restrained cursed palette derived from current colors: poisoned mint,
+  ultraviolet, blood red, oxidized gold, cold cyan, and near-black, with contract
+  colors reserved for meaningful state.
+- let floor circuits, containment rings, shutters, pylons, warning chevrons, and
+  the altar animate from encounter state instead of playing arbitrary loops.
+- show cost physically: gilded conduits drain toward the altar; blood routing
+  pulls from the activating ship into the chamber.
+- telegraph spawn gates and hazards before they become dangerous.
+- give reward emergence weight: unlock sequence, reliquary opening, stable light,
+  and readable private ownership marker where applicable.
+- define semantic sound slots for offer reveal, contract hover, commit countdown,
+  gold payment, blood payment, seal, phase start, objective progress, hazard
+  warning, failure, unlock, reward reveal, and claim.
+- milestone 10's signal forge can author those sounds later, but the vault rework
+  cannot depend on signal forge completion. temporary packaged defaults must use
+  the same semantic slots.
+- build the room correctly in the current renderer and provide a hard-raster
+  reference for milestone 9; neither milestone blocks the other's architecture.
+
+### rewards and balance requirements
+
+- calculate the current gold/hp price curves, enemy hp budget, expected encounter
+  time, damage risk, and three-random-part reward value across every floor before
+  replacing numbers.
+- define a reward budget shared by every contract, then spend it through rarity,
+  choice count, exclusivity, build relevance, and curse severity.
+- avoid fake choice: displayed alternatives must differ materially and the player
+  must know what category of reward is being risked.
+- prevent empty pools, core parts, invalid definitions, impossible placements,
+  and accidental duplicate unique parts.
+- decide whether vault-exclusive parts exist only when their mechanics and art are
+  designed. the rework does not invent placeholder exclusives to fill a table.
+- provide bad-luck protection appropriate to the approved reward form without
+  guaranteeing an optimal build.
+- scale co-op pressure through encounter budget and objectives, not by multiplying
+  every enemy's hp until the room becomes wet concrete.
+- collect contract selection, completion, damage taken, clear time, reward choice,
+  floor, player count, and failure data in local development telemetry.
+
+### implementation sequence
+
+#### 11.0 — freeze and audit the existing vault
+
+- capture current room generation, both payment paths, first and second ambush,
+  all three waves, reward claim, revisit, save/continue, and host/guest behavior.
+- measure prices, survivability, enemy budget, clear time, and reward value by
+  floor.
+- add characterization tests for the accidental second-contract behavior before
+  the design checkpoint decides whether to preserve or remove it.
+
+gate: the existing mechanics and defects are reproducible and no new rule has
+been smuggled in under visual cleanup.
+
+#### 11.1 — approve the contract
+
+- present concise rendered room/layout concepts plus the contract, curse,
+  payment, reward, co-op, and encounter-family choices above.
+- choose one initial layout language and a deliberately small first encounter set.
+- record the approved contract in a dedicated vault design document.
+
+gate: the owner approves the normal-scale room concept and exact gameplay rules
+before production art, balance, or encounter implementation begins.
+
+#### 11.2 — extract authoritative vault state
+
+- introduce the registries, state machine, economy, rewards, snapshots, and peer
+  protocol while temporarily driving the old chest visuals and old encounter.
+- migrate valid version-two room snapshots into the new dormant, active, reward,
+  or completed state without deleting runs.
+- replace wall-clock wave callbacks with simulation-time phases.
+
+gate: old presentation remains playable while duplicate payment, reward reroll,
+reconnect divergence, and incomplete snapshot state are impossible.
+
+#### 11.3 — build layouts, props, and presentation
+
+- implement the approved layout blueprints, reliquary, altar, contract states,
+  pylons/props, telegraphs, lower-case ui, minimap state, and deterministic effects.
+- validate normal-scale clarity with starter, large, asymmetric, and co-op ships.
+
+gate: the vault is unmistakable on entry, every state reads without debug text,
+and visuals do not alter collision or obscure combat.
+
+#### 11.4 — implement approved encounters and rewards
+
+- add only the approved encounter families, objective behavior, co-op scaling,
+  price rules, curse rules, reward budget, ownership, and claim flow.
+- reuse editable enemy-part blueprints and role behavior rather than welding art
+  into encounter code.
+
+gate: every contract completes, fails, saves, resumes, reconnects, and rewards
+exactly as approved in solo and four-player host-authoritative simulation.
+
+#### 11.5 — balance and ship
+
+- run seeded floor sweeps plus real human runs, then tune price, duration, spawn
+  budget, telegraph time, and reward value from evidence.
+- add final sounds through semantic slots, update patch notes, and rebuild the
+  desktop app only after design and parity approval.
+
+gate: players sometimes reject the vault for rational build/run reasons, accept
+it for understandable upside, and never need hidden wiki knowledge to predict the
+contract.
+
+### tests and rendered proof
+
+- test vault generation count, reachability, layout anchors, spawn lanes, collision
+  clearance, seeded selection, and every floor/biome combination.
+- test all state transitions, repeated intents, simultaneous peer intents,
+  insufficient payment, disconnect during commit, death during payment, team wipe,
+  host departure, cancellation, phase timeout, objective completion, and cleanup.
+- test exact save/continue and room-snapshot restore at every state-machine phase.
+- test reward roll-once, ownership, private visibility where applicable, claim,
+  reconnect, unclaimed revisit, duplicate click, and corrupt snapshot rejection.
+- test that non-vault rooms retain their current generation, pacing, clear rules,
+  rewards, debris, salvage sweep, and transitions.
+- render deterministic galleries for every layout, contract state, phase,
+  telegraph, hazard, completion, reward state, minimap marker, and `eye candy`
+  setting.
+- browser-smoke both contracts, every shipped encounter family, pause, resize,
+  save/menu/continue, tactical-map revisit, and normal gameplay afterward.
+- peer-smoke two players paying, fighting, dying, spectating, reconnecting, and
+  claiming according to the approved ownership rules.
+- run the full javascript, coverage, lint, checked-javascript, source-hygiene,
+  import, production-build, rust, native-build, signature, and packaged-app gates.
+
+### failure conditions
+
+- the vault remains two recolored normal chests in an ordinary empty room.
+- `cursed` is only a larger hp multiplier or a surprise permanent penalty.
+- a tooltip or color alone carries information required to survive the encounter.
+- exponential prices create options that are technically displayed but normally
+  impossible to buy.
+- the room becomes mandatory because its reward dominates every ordinary route.
+- difficulty scaling turns into enemy-health inflation or unreadable projectile
+  spam.
+- different peers see different contract, phase, objective, reward, or ownership
+  state.
+- save/continue rerolls payment, encounter, curse, or reward.
+- leaving, teleporting, changing floor, or ending a run leaks vault timers,
+  enemies, hazards, props, audio loops, or ui into another room.
+- room art assumes one ship footprint and clips or traps valid assemblies.
+- renderer or signal-forge milestones are treated as excuses to leave the vault
+  half-playable.
+
+### milestone exit gate
+
+- cursed vaults have an approved contract, curse, payment, co-op, encounter, and
+  reward identity documented outside implementation code;
+- the room has dedicated readable layouts, props, stateful presentation,
+  telegraphs, lowercase ui, minimap state, and semantic audio hooks;
+- payment, phase progression, failure, completion, reward generation, and claim
+  are host-authoritative, idempotent, deterministic where required, and exactly
+  restorable;
+- the fake-choice and exponential-cost defects are resolved according to the
+  approved design;
+- every shipped encounter is meaningfully different, normal-scale readable, and
+  balanced against its reward without becoming compulsory;
+- solo and co-op browser smokes, save/reconnect/revisit proof, full automated
+  gates, and the packaged macos smoke all pass;
+- non-vault gameplay, movement, weapons, parts, rooms, saves, and presentation
+  remain unchanged outside explicitly approved vault rules.
+
 ## priority queue
 
 the next concrete batches, in order:
