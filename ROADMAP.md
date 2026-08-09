@@ -45,6 +45,14 @@ completed on 2026-07-25:
 - extracted friendly/enemy hive spawning, drone caps, collision, and death cleanup into a tested `DroneSystem`;
 - rejected invalid hive spawn geometry instead of constructing `NaN` drones;
 - passed 130 node tests, `git diff --check`, a production build, and a live hive-carrier smoke that spawned and ran enemy drones with no browser errors.
+- added ten non-starter drone-family carriers with distinct hard-raster silhouettes,
+  data-driven projectile profiles, hostile-drone interception, repair support, and
+  contact ramming while preserving striker fallback and per-player ownership.
+- added the `?visual-gallery=drone-family` proof route with all ten carrier and
+  deployed-drone silhouettes plus lowercase labels.
+- passed 535 node tests, lint, typecheck, source hygiene, import audit, version
+  alignment, a production build, and a live ten-part gallery with no browser
+  warnings or errors.
 - extracted offline enemy updates, remote interpolation, freeze behavior, separation, drops, boss death, score doubling, and portal creation into a tested `EnemyLifecycleSystem`;
 - preserved the original boss reward order, including score doubling before same-frame enemy score is awarded;
 - passed 140 node tests, a production build, and a live boss-kill smoke that displayed the level-up choices and `portal opened` feedback with no browser errors.

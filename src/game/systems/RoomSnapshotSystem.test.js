@@ -126,7 +126,13 @@ test('active snapshots restore a live fight, bullets, drones, and loose rewards'
         10, 20, 0.4, 'rocket_le', 600, 'enemy', 12, 2, random
     );
     projectile.life = 0.8;
-    const drone = new Drone(30, 40, null, 'enemy', random);
+    const drone = new Drone(30, 40, null, 'player', random, {
+        type: 'rammer',
+        damage: 30,
+        sourcePartId: 'drone_ram_hive',
+        sourcePartKey: 'drone_ram_hive@1,2',
+        sourcePartName: 'ram hive'
+    });
     drone.hp = 6;
     const pickup = new ItemPickup(50, 60, 'hull', random);
     pickup.life = 4;
@@ -169,6 +175,10 @@ test('active snapshots restore a live fight, bullets, drones, and loose rewards'
     assert.equal(game.projectiles[0].life, 0.8);
     assert.equal(game.drones[0] instanceof Drone, true);
     assert.equal(game.drones[0].hp, 6);
+    assert.equal(game.drones[0].droneType, 'rammer');
+    assert.equal(game.drones[0].role, 'ram');
+    assert.equal(game.drones[0].damage, 30);
+    assert.equal(game.drones[0].sourcePartKey, 'drone_ram_hive@1,2');
     assert.equal(game.xpOrbs[0].value, 9);
     assert.equal(game.goldOrbs[0].value, 3);
     assert.equal(game.hpOrbs[0].value, 5);

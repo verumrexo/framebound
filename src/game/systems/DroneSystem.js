@@ -35,19 +35,36 @@ export class DroneSystem {
             const droneParts = [...player.ship.getUniqueParts()].filter(part =>
                 this.partsLibrary[part.partId]?.type === PartType.DRONE
             );
+            const capacityBonus = Math.floor(
+                player.ship.permanentStats?.droneCapacityAdd || 0
+            );
             const capacity = droneParts.reduce(
                 (total, part) => total + (
                     this.partsLibrary[part.partId]?.stats?.droneCapacity || 0
                 ),
                 0
-            ) + Math.floor(player.ship.permanentStats?.droneCapacityAdd || 0);
+            ) + capacityBonus;
             const activeCount = game.drones.filter(drone =>
                 drone.owner === 'player' && drone.ownerPlayerId === player.id
             ).length;
             if (activeCount >= capacity) continue;
 
-            for (const part of droneParts) {
+            for (const [partIndex, part] of droneParts.entries()) {
                 const def = this.partsLibrary[part.partId];
+                const sourcePartKey = this.getDroneSourceKey(part);
+                const allocatedBonus = Math.floor(
+                    capacityBonus / Math.max(1, droneParts.length)
+                ) + (partIndex < capacityBonus % Math.max(1, droneParts.length) ? 1 : 0);
+                const partCapacity = (def.stats.droneCapacity || 0) + allocatedBonus;
+                const partActiveCount = game.drones.filter(drone =>
+                    drone.owner === 'player' &&
+                    drone.ownerPlayerId === player.id &&
+                    (
+                        drone.sourcePartKey === sourcePartKey ||
+                        drone.ownerPart === part
+                    )
+                ).length;
+                if (partActiveCount >= partCapacity) continue;
                 const rate = 1 + Math.max(
                     0,
                     player.ship.permanentStats?.droneRateAdd || 0
@@ -75,21 +92,19 @@ export class DroneSystem {
                     continue;
                 }
 
+                part.droneLabel = def.name.toLowerCase();
                 const drone = new this.DroneClass(
                     position.x,
                     position.y,
                     part,
                     'player',
                     null,
-                    {
-                        type: def.stats.droneType,
-                        damage: def.stats.droneDamage * (
-                            player.ship.permanentStats?.droneDamageMul || 1
-                        ),
-                        attackCooldown: def.stats.droneAttackCooldown
-                    }
+                    this.getDroneConfig(
+                        def,
+                        player.ship.permanentStats?.droneDamageMul || 1,
+                        part
+                    )
                 );
-                drone.ownerPart.droneLabel = def.name.toLowerCase();
                 drone.ownerPlayerId = player.id;
                 game.drones.push(drone);
                 game.showNotification('drone deployed', '#00ffff');
@@ -167,11 +182,7 @@ export class DroneSystem {
                     part,
                     'enemy',
                     null,
-                    {
-                        type: def.stats.droneType,
-                        damage: def.stats.droneDamage,
-                        attackCooldown: def.stats.droneAttackCooldown
-                    }
+                    this.getDroneConfig(def, 1, part)
                 );
                 drone.spawnerEnemy = enemy;
                 game.drones.push(drone);
@@ -179,6 +190,39 @@ export class DroneSystem {
                 part.lastDroneSpawn = now;
             }
         }
+    }
+
+    getDroneConfig(definition, damageMultiplier = 1, part = null) {
+        const stats = definition.stats || {};
+        const config = {
+            type: stats.droneType,
+            damage: (stats.droneDamage ?? 0) * damageMultiplier,
+            attackCooldown: stats.droneAttackCooldown ?? 0.8,
+            sourcePartId: definition.id || part?.partId || 'drone',
+            sourcePartKey: part ? this.getDroneSourceKey(part) : definition.id,
+            sourcePartName: String(definition.name || definition.id).toLowerCase()
+        };
+        const profileFields = [
+            'projectileType',
+            'projectileSpeed',
+            'projectileLifetime',
+            'shotCount',
+            'spread',
+            'optimalDistance',
+            'targetPriority',
+            'role',
+            'repairAmount',
+            'contactRange'
+        ];
+        for (const field of profileFields) {
+            const statKey = `drone${field[0].toUpperCase()}${field.slice(1)}`;
+            if (stats[statKey] !== undefined) config[field] = stats[statKey];
+        }
+        return config;
+    }
+
+    getDroneSourceKey(part) {
+        return `${part.partId}@${part.x},${part.y}`;
     }
 
     getPartWorldPosition(shipX, shipY, shipRotation, part) {

@@ -3,6 +3,7 @@ import { RemotePlayer } from '../../engine/RemotePlayer.js';
 import { Renderer } from '../../engine/Renderer.js';
 import { Viewport } from '../../engine/rendering/Viewport.js';
 import { Drone } from '../../shared/entities/Drone.js';
+import { DRONE_BLUEPRINTS } from '../../shared/combat/DroneBlueprints.js';
 import { Portal } from '../../shared/entities/Portal.js';
 import { Ship } from '../../shared/entities/Ship.js';
 import { TrainingDummy } from '../../shared/entities/TrainingDummy.js';
@@ -53,6 +54,10 @@ function isHardRasterProofRoute(search = globalThis.window?.location?.search || 
 
 function isShopProofRoute(search = globalThis.window?.location?.search || '') {
     return new URLSearchParams(search).get('visual-gallery') === 'shop';
+}
+
+function isDroneFamilyProofRoute(search = globalThis.window?.location?.search || '') {
+    return new URLSearchParams(search).get('visual-gallery') === 'drone-family';
 }
 
 export function getHardRasterProofScale(search = globalThis.window?.location?.search || '') {
@@ -376,6 +381,87 @@ function renderShopProof(canvas) {
     canvas.style.display = 'none';
 }
 
+export function createDroneFamilyProofEntries() {
+    return Object.values(PartsLibrary)
+        .filter(definition => definition.type === 'drone' && definition.id !== 'custom_1769974460678')
+        .map(definition => {
+            const blueprint = DRONE_BLUEPRINTS[definition.stats.droneType];
+            return {
+                partId: definition.id,
+                carrierLabel: definition.name,
+                droneType: blueprint.id,
+                droneLabel: blueprint.label,
+                partDef: definition
+            };
+        });
+}
+
+function renderDroneFamilyProof(canvas) {
+    document.title = 'framebound drone family proof';
+    const renderer = new Renderer(canvas);
+    renderer.clear('#03070c');
+    const entries = createDroneFamilyProofEntries();
+    const columns = 5;
+    const rows = 2;
+    const panelWidth = renderer.width / columns;
+    const panelHeight = renderer.height / rows;
+    const ctx = renderer.ctx;
+
+    withDeterministicVisuals(() => {
+        entries.forEach((entry, index) => {
+            const x = index % columns * panelWidth;
+            const y = Math.floor(index / columns) * panelHeight;
+            ctx.save();
+            ctx.strokeStyle = 'rgba(0, 255, 255, 0.22)';
+            ctx.strokeRect(x + 6, y + 6, panelWidth - 12, panelHeight - 12);
+            ctx.translate(x + panelWidth / 2, y + panelHeight / 2);
+
+            ctx.save();
+            ctx.scale(0.62, 0.62);
+            entry.partDef.sprite.draw(ctx, -58, 0, 0);
+            ctx.restore();
+
+            const drone = new Drone(58, 0, null, 'player', () => 0.5, {
+                type: entry.droneType
+            });
+            ctx.save();
+            ctx.scale(2.2, 2.2);
+            EntityRenderer.drawDrone(renderer, drone);
+            ctx.restore();
+            ctx.restore();
+
+            drawLabel(
+                ctx,
+                `${entry.carrierLabel} // ${entry.droneLabel}`,
+                x + 8,
+                y + panelHeight - 38,
+                panelWidth - 16
+            );
+        });
+    });
+
+    renderer.present();
+    canvas.dataset.visualGalleryMode = 'drone-family';
+    canvas.dataset.visualGalleryDroneCount = String(entries.length);
+    canvas.dataset.visualGalleryReady = 'true';
+
+    const proofImage = document.createElement('img');
+    proofImage.id = 'visual-gallery-proof';
+    proofImage.alt = 'deterministic framebound drone family proof';
+    proofImage.src = canvas.toDataURL('image/png');
+    proofImage.style.position = 'fixed';
+    proofImage.style.inset = '0';
+    proofImage.style.width = '100vw';
+    proofImage.style.height = '100vh';
+    proofImage.style.objectFit = 'contain';
+    proofImage.style.imageRendering = 'pixelated';
+    proofImage.style.background = '#03070c';
+    proofImage.style.zIndex = '1';
+    document.body.appendChild(proofImage);
+    canvas.style.display = 'none';
+    return entries;
+}
+
 function createPanels() {
     const ship = new Ship();
     ship.x = 0;
@@ -654,6 +740,9 @@ export function renderVisualGallery(canvas) {
     }
     if (isShopProofRoute()) {
         return renderShopProof(canvas);
+    }
+    if (isDroneFamilyProofRoute()) {
+        return renderDroneFamilyProof(canvas);
     }
 
     document.title = 'framebound visual parity gallery';

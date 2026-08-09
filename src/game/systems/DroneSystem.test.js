@@ -23,11 +23,13 @@ const PARTS = {
 };
 
 class DroneStub {
-    constructor(x, y, ownerPart, owner = 'player') {
+    constructor(x, y, ownerPart, owner = 'player', _random = null, config = {}) {
         this.x = x;
         this.y = y;
         this.ownerPart = ownerPart;
         this.owner = owner;
+        this.config = config;
+        this.sourcePartKey = config.sourcePartKey;
         this.ownerPlayerId = owner === 'player' ? 'host' : null;
         this.radius = 8;
         this.isDead = false;
@@ -41,6 +43,7 @@ function createHarness({
     enemies = [],
     parts = [],
     peers = [],
+    partsLibrary = PARTS,
     now = () => 7001
 } = {}) {
     const calls = [];
@@ -86,7 +89,7 @@ function createHarness({
         game,
         system: new DroneSystem(game, {
             DroneClass: DroneStub,
-            partsLibrary: PARTS,
+            partsLibrary,
             tileSize: 28,
             now
         })
@@ -171,6 +174,97 @@ test('guest hives deploy drones from the guest ship position', () => {
     assert.equal(game.drones[0].y, 600);
     assert.equal(game.drones[0].ownerPlayerId, 'guest_1');
     assert.equal(guestPart.lastDroneSpawn, 7001);
+});
+
+test('new drone roles and zero-damage repair profiles flow through the spawn system', () => {
+    const repairId = 'drone_repair_choir';
+    const repairPart = {
+        partId: repairId,
+        x: 0,
+        y: 0,
+        rotation: 0
+    };
+    const repairDef = {
+        width: 2,
+        height: 2,
+        type: 'drone',
+        name: 'repair choir',
+        stats: {
+            weaponGroup: 'drone',
+            droneSpawnCooldown: 5,
+            droneCapacity: 2,
+            droneDamage: 0,
+            droneAttackCooldown: 2,
+            droneType: 'mender',
+            droneRole: 'repair',
+            droneRepairAmount: 4
+        }
+    };
+    const { game, system } = createHarness({
+        parts: [repairPart],
+        partsLibrary: { [repairId]: repairDef }
+    });
+
+    system.spawnFriendlyDrones();
+
+    assert.equal(game.drones.length, 1);
+    assert.deepEqual(game.drones[0].config, {
+        type: 'mender',
+        damage: 0,
+        attackCooldown: 2,
+        sourcePartId: repairId,
+        sourcePartKey: `${repairId}@0,0`,
+        sourcePartName: 'repair choir',
+        role: 'repair',
+        repairAmount: 4
+    });
+});
+
+test('mixed carriers fill their own capacity instead of one type starving another', () => {
+    let currentTime = 10000;
+    const firstId = 'drone_first';
+    const secondId = 'drone_second';
+    const firstPart = { partId: firstId, x: 0, y: 0, rotation: 0 };
+    const secondPart = {
+        partId: secondId,
+        x: 1,
+        y: 0,
+        rotation: 0,
+        lastDroneSpawn: 9500
+    };
+    const makeDefinition = (id, type) => ({
+        id,
+        width: 1,
+        height: 1,
+        type: 'drone',
+        name: id,
+        stats: {
+            weaponGroup: 'drone',
+            droneSpawnCooldown: 5,
+            droneCapacity: 1,
+            droneDamage: 1,
+            droneAttackCooldown: 1,
+            droneType: type
+        }
+    });
+    const { game, system } = createHarness({
+        parts: [firstPart, secondPart],
+        partsLibrary: {
+            [firstId]: makeDefinition(firstId, 'needle'),
+            [secondId]: makeDefinition(secondId, 'torch')
+        },
+        now: () => currentTime
+    });
+
+    system.spawnFriendlyDrones();
+    assert.deepEqual(game.drones.map(drone => drone.config.type), ['needle']);
+
+    currentTime = 16000;
+    system.spawnFriendlyDrones();
+    assert.deepEqual(
+        game.drones.map(drone => drone.config.type),
+        ['needle', 'torch']
+    );
 });
 
 test('enemy hives stop at twelve enemy drones and retain their spawner', () => {

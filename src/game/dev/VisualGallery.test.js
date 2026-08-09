@@ -6,6 +6,7 @@ import { getShopItemState } from '../renderers/ShopPresentation.js';
 const {
     HARD_RASTER_HEADINGS_DEGREES,
     createHardRasterProofScenes,
+    createDroneFamilyProofEntries,
     createShopProofItems,
     getHardRasterProofScale
 } = await import('./VisualGallery.js');
@@ -50,4 +51,16 @@ test('shop proof covers affordable, unaffordable, and sold terminal states', () 
         items.map(item => getShopItemState(item, 65)),
         ['affordable', 'affordable', 'unaffordable', 'sold']
     );
+});
+
+test('drone-family proof covers every new carrier and deployed silhouette', () => {
+    const entries = createDroneFamilyProofEntries();
+    assert.equal(entries.length, 10);
+    assert.equal(new Set(entries.map(entry => entry.partId)).size, 10);
+    assert.equal(new Set(entries.map(entry => entry.droneType)).size, 10);
+    for (const entry of entries) {
+        assert.equal(entry.carrierLabel, entry.carrierLabel.toLowerCase());
+        assert.equal(entry.droneLabel, entry.droneLabel.toLowerCase());
+        assert.ok(entry.partDef.sprite.data.length > 0);
+    }
 });

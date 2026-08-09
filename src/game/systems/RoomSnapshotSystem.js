@@ -45,7 +45,8 @@ const PROJECTILE_STATE_KEYS = [
 const DRONE_STATE_KEYS = [
     'x', 'y', 'owner', 'isDead', 'hp', 'speed', 'turnRate', 'radius',
     'rotation', 'cooldown', 'maxCooldown', 'range', 'state',
-    'ownerPlayerId'
+    'ownerPlayerId', 'droneType', 'damage', 'sourcePartId',
+    'sourcePartKey', 'sourcePartName'
 ];
 
 export function snapshotRooms(game) {
@@ -427,7 +428,15 @@ function restoreDrone(data) {
         state.y,
         null,
         state.owner,
-        deterministicRandom
+        deterministicRandom,
+        {
+            type: state.droneType,
+            damage: state.damage,
+            attackCooldown: state.maxCooldown,
+            sourcePartId: state.sourcePartId,
+            sourcePartKey: state.sourcePartKey,
+            sourcePartName: state.sourcePartName
+        }
     );
     applyState(entity, state, DRONE_STATE_KEYS);
     entity.ownerPlayerId = typeof state.ownerPlayerId === 'string'

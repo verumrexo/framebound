@@ -38,6 +38,7 @@ export const CHANGELOG = [
             'fix: needlepoint now pierces rocks and crates, and its uncommon roll is stronger than its common roll.',
             'hud: weapon, utility, and exact per-part damage telemetry now live in separate cockpit panels; utility telemetry only appears when a matching module is installed.',
             'drones: swarm hive is now a real drone-family part with data-driven blueprints and upgrade hooks for future drone types.',
+            'drones: added ten non-starter carriers with distinct silhouettes, data-driven projectile profiles, hostile-drone interception, repair support, and contact ramming while preserving striker fallback and per-player ownership.',
             'salvage: cleared rooms charge a one-use clockwise laser sweep that destroys remaining boxes and rocks after five seconds.',
             'visuals: destroyed boxes and rocks now leave stable physical fragments instead of rerolling glitter noise every frame.',
             'save: destruction fragments and salvage-sweep progress now survive room revisits, continue, and host-authoritative snapshots.',

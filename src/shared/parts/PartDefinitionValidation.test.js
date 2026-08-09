@@ -72,3 +72,50 @@ test('weapons require safe damage, cooldown, and group values', () => {
         stats: { ...weapon.stats, cooldown: 1, weaponGroup: 'utility' }
     }), true);
 });
+
+test('repair drone carriers allow zero damage but keep the other runtime guards', () => {
+    const repair = makePart({
+        type: PartType.DRONE,
+        stats: {
+            hp: 80,
+            mass: 8,
+            weaponGroup: 'drone',
+            droneSpawnCooldown: 9,
+            droneCapacity: 2,
+            droneDamage: 0,
+            droneAttackCooldown: 2,
+            droneType: 'mender',
+            droneRole: 'repair'
+        }
+    });
+
+    assert.equal(validatePartDefinition('test_part', repair), true);
+    assert.throws(
+        () => validatePartDefinition('test_part', {
+            ...repair,
+            stats: { ...repair.stats, droneCapacity: 0 }
+        }),
+        /positive droneCapacity/
+    );
+    assert.throws(
+        () => validatePartDefinition('test_part', {
+            ...repair,
+            stats: { ...repair.stats, droneDamage: -1 }
+        }),
+        /non-negative droneDamage/
+    );
+    assert.throws(
+        () => validatePartDefinition('test_part', {
+            ...repair,
+            stats: { ...repair.stats, droneRole: 'attack' }
+        }),
+        /positive droneDamage/
+    );
+    assert.throws(
+        () => validatePartDefinition('test_part', {
+            ...repair,
+            stats: { ...repair.stats, droneType: '' }
+        }),
+        /must have a droneType/
+    );
+});
