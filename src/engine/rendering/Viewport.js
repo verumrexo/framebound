@@ -26,6 +26,11 @@ export class Viewport {
         this.worldSourceInsetY = 0;
     }
 
+    setWorldPixelScale(scale) {
+        this.worldPixelScale = Math.max(1, Math.min(3, Math.round(Number(scale) || 3)));
+        return this.worldPixelScale;
+    }
+
     resize() {
         const cssWidth = this.canvas.clientWidth || globalThis.window?.innerWidth || 1;
         const cssHeight = this.canvas.clientHeight || globalThis.window?.innerHeight || 1;

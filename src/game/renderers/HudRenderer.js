@@ -140,7 +140,9 @@ export class HudRenderer {
         ctx.fillStyle = UI_COLORS.dim;
         ctx.font = UI_FONTS.tiny;
         ctx.textAlign = 'right';
-        ctx.fillText(`fps ${game.fps}`, renderer.width - 18, renderer.height - 18);
+        if (game.showFps !== false) {
+            ctx.fillText(`fps ${game.fps}`, renderer.width - 18, renderer.height - 18);
+        }
         const seedText = game.levelGen ? `seed: ${game.levelGen.seed}` : '';
         ctx.fillText(
             `${game.version} // ${game.versionName} // ${seedText}`,

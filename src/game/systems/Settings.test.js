@@ -2,10 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Settings } from './Settings.js';
 
-test('settings ui cleanup stops and forgets its background animation timer', (t) => {
-    const cleared = [];
+test('settings ui cleanup cancels pending setup before it can bind controls', (t) => {
     const cancelledSetups = [];
-    t.mock.method(globalThis, 'clearInterval', timer => cleared.push(timer));
     t.mock.method(
         globalThis,
         'clearTimeout',
@@ -13,15 +11,12 @@ test('settings ui cleanup stops and forgets its background animation timer', (t)
     );
 
     const settings = Object.create(Settings.prototype);
-    settings.updateInterval = 42;
     settings.setupTimeout = 17;
 
     settings.stopUpdating();
     settings.stopUpdating();
 
-    assert.deepEqual(cleared, [42]);
     assert.deepEqual(cancelledSetups, [17]);
-    assert.equal(settings.updateInterval, null);
     assert.equal(settings.setupTimeout, null);
 });
 
@@ -39,7 +34,9 @@ test('stored settings reject markup and clamp malformed numeric values', (t) => 
         ['framebound_game_settings', JSON.stringify({
             showDamageNumbers: 'yes',
             damageNumberMode: '<script>',
-            eyeCandy: 'absolutely'
+            eyeCandy: 'absolutely',
+            rasterScale: 99,
+            showFps: 'sometimes'
         })]
     ]);
     globalThis.localStorage = {
@@ -61,6 +58,8 @@ test('stored settings reject markup and clamp malformed numeric values', (t) => 
         assert.equal(game.showDamageNumbers, true);
         assert.equal(game.damageNumberMode, 'singular');
         assert.equal(game.eyeCandy, true);
+        assert.equal(game.rasterScale, 3);
+        assert.equal(game.showFps, true);
         assert.equal(settings.sliderStates.cursorThickness.current, 10);
         assert.equal(settings.sliderStates.cursorLength.current, 5);
         assert.equal(settings.sliderStates.cursorGap.current, 3);
@@ -102,10 +101,39 @@ test('eye candy is persisted with the other game settings', () => {
             {
                 showDamageNumbers: true,
                 damageNumberMode: 'singular',
-                eyeCandy: false
+                eyeCandy: false,
+                rasterScale: 3,
+                showFps: true
             }
         ]);
     } finally {
         globalThis.localStorage = originalStorage;
     }
+});
+
+test('game settings normalize supported raster scales and preserve legacy defaults', () => {
+    const settings = Object.create(Settings.prototype);
+    settings.defaults = {
+        showDamageNumbers: true,
+        damageNumberMode: 'singular',
+        eyeCandy: true,
+        rasterScale: 3,
+        showFps: true
+    };
+
+    assert.deepEqual(settings.normalizeGameSettings({ rasterScale: 1, showFps: false }), {
+        showDamageNumbers: true,
+        damageNumberMode: 'singular',
+        eyeCandy: true,
+        rasterScale: 1,
+        showFps: false
+    });
+    assert.deepEqual(settings.normalizeGameSettings({}), {
+        showDamageNumbers: true,
+        damageNumberMode: 'singular',
+        eyeCandy: true,
+        rasterScale: 3,
+        showFps: true
+    });
+    assert.equal(settings.normalizeGameSettings({ rasterScale: 2.5 }).rasterScale, 3);
 });

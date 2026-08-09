@@ -99,3 +99,30 @@ test('renderer keeps fractional world camera motion continuous without mutating 
     assert.equal(canvas.dataset.rasterBackend, 'webgl2');
     assert.deepEqual(renderer.projectWorldToHud(400.5, 210.25, camera), viewport.projectWorldToHud(400.5, 210.25, camera));
 });
+
+test('renderer applies raster scale through the viewport and keeps camera coordinates stable', () => {
+    const canvas = {
+        style: {},
+        dataset: {},
+        clientWidth: 800,
+        clientHeight: 600
+    };
+    const viewport = new Viewport(canvas, { getDevicePixelRatio: () => 1 });
+    const worldSurface = { canvas: {}, ctx: {}, resize() {}, clear() {} };
+    const hudSurface = { ctx: {}, resize() {}, clear() {} };
+    const compositor = { backend: 'fallback', resize() {}, present() {} };
+    const renderer = new Renderer(canvas, {
+        hudCanvas: { style: {} },
+        viewport,
+        worldSurface,
+        hudSurface,
+        compositor
+    });
+    const camera = { x: 42.5, y: 18.25, zoom: 1 };
+
+    assert.equal(renderer.setRasterScale(1), 1);
+    assert.equal(renderer.viewport.worldPixelScale, 1);
+    assert.equal(renderer.width, 800);
+    assert.equal(renderer.height, 600);
+    assert.deepEqual(camera, { x: 42.5, y: 18.25, zoom: 1 });
+});

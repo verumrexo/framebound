@@ -22,10 +22,10 @@ test('existing part art and approved family metadata stay exact', () => {
         .update(JSON.stringify(manifest))
         .digest('hex');
 
-    assert.equal(manifest.length, 30);
+    assert.equal(manifest.length, 40);
     assert.equal(
         hash,
-        '529e15a197e0d00b51600e35e334a232dbc80db8bbbcc50c39e4547b87669e2d'
+        '6527f3c4bb09f558617f9336bf127f5ce9f8791353f469f63268871255c8bee1'
     );
 });
 

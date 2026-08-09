@@ -66,15 +66,27 @@ export function validatePartDefinition(libraryId, definition) {
     }
 
     if (definition.type === PartType.DRONE) {
-        for (const key of [
-            'droneSpawnCooldown',
-            'droneCapacity',
-            'droneDamage',
-            'droneAttackCooldown'
-        ]) {
+        for (const key of ['droneSpawnCooldown', 'droneCapacity', 'droneAttackCooldown']) {
             if (!positiveNumber(definition.stats[key])) {
                 throw new TypeError(`drone part ${libraryId} must have a positive ${key}`);
             }
+        }
+        const repairDrone = definition.stats.droneRole === 'repair';
+        const validDamage = repairDrone
+            ? nonNegativeNumber(definition.stats.droneDamage)
+            : positiveNumber(definition.stats.droneDamage);
+        if (!validDamage) {
+            throw new TypeError(
+                `drone part ${libraryId} must have a ${repairDrone
+                    ? 'non-negative'
+                    : 'positive'} droneDamage`
+            );
+        }
+        if (
+            typeof definition.stats.droneType !== 'string' ||
+            definition.stats.droneType.trim().length === 0
+        ) {
+            throw new TypeError(`drone part ${libraryId} must have a droneType`);
         }
         if (definition.stats.weaponGroup !== 'drone') {
             throw new TypeError(`drone part ${libraryId} must use the drone group`);

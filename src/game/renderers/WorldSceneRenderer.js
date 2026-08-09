@@ -77,9 +77,9 @@ export class WorldSceneRenderer {
             }
 
             game.shopItems.forEach(item => {
-                if (!item.purchased) {
-                    this.entityRenderer.drawShopItem(renderer, item);
-                }
+                this.entityRenderer.drawShopItem(renderer, item, {
+                    credits: game.gold
+                });
             });
 
             game.treasureChests.forEach(chest => {

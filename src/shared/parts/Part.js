@@ -2,6 +2,12 @@ import { Assets } from '../../Assets.js';
 import { Sprite } from '../../engine/Sprite.js';
 import { PartDef, PartType, TILE_SIZE } from './PartDefinitions.js';
 import { validatePartsLibrary } from './PartDefinitionValidation.js';
+import { createDronePartCatalog } from './DronePartFactory.js';
+import { DRONE_PART_SPECS_NEEDLE_INTERCEPTOR } from './drone/DronePartBatchNeedleInterceptor.js';
+import { DRONE_PART_SPECS_TORCH_LANCE } from './drone/DronePartBatchTorchLance.js';
+import { DRONE_PART_SPECS_BOMBARD_FLAK } from './drone/DronePartBatchBombardFlak.js';
+import { DRONE_PART_SPECS_BASTION_REPAIR } from './drone/DronePartBatchBastionRepair.js';
+import { DRONE_PART_SPECS_RAM_STORM } from './drone/DronePartBatchRamStorm.js';
 
 export { PartDef, PartType, TILE_SIZE };
 
@@ -215,5 +221,14 @@ export const PartsLibrary = {
     // lattice hull
     'custom_1769996267734': new PartDef('custom_1769996267734', 'lattice hull', PartType.HULL, new Sprite([1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 0, 0, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1], 8, 15, 4, { 1: '#26d426', 2: '#333' }), { hp: 40, mass: 4 }, 1, 2)
 };
+
+const droneCatalog = createDronePartCatalog([
+    ...DRONE_PART_SPECS_NEEDLE_INTERCEPTOR,
+    ...Object.values(DRONE_PART_SPECS_TORCH_LANCE),
+    ...DRONE_PART_SPECS_BOMBARD_FLAK,
+    ...DRONE_PART_SPECS_BASTION_REPAIR,
+    ...Object.values(DRONE_PART_SPECS_RAM_STORM)
+], []);
+Object.assign(PartsLibrary, droneCatalog.parts);
 
 validatePartsLibrary(PartsLibrary);

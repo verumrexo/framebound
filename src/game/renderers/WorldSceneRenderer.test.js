@@ -156,6 +156,7 @@ test('world scene preserves entity, interaction, projectile, player, and effect 
         'remote-custom',
         'drawShip',
         'drawShopItem',
+        'drawShopItem',
         'drawTreasureChest',
         'projectile',
         'drawDrone',

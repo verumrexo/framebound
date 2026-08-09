@@ -1,10 +1,13 @@
 import '../../tests/setup.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { getShopItemState } from '../renderers/ShopPresentation.js';
 
 const {
     HARD_RASTER_HEADINGS_DEGREES,
     createHardRasterProofScenes,
+    createDroneFamilyProofEntries,
+    createShopProofItems,
     getHardRasterProofScale
 } = await import('./VisualGallery.js');
 
@@ -39,4 +42,25 @@ test('hard-raster proof defaults to the approved 3x scale and accepts only bound
     assert.equal(getHardRasterProofScale('?visual-gallery=hard-raster&raster-scale=3'), 3);
     assert.equal(getHardRasterProofScale('?visual-gallery=hard-raster&raster-scale=4'), 3);
     assert.equal(getHardRasterProofScale('?visual-gallery=hard-raster&raster-scale=0'), 3);
+});
+
+test('shop proof covers affordable, unaffordable, and sold terminal states', () => {
+    const items = createShopProofItems(1000, 800);
+    assert.equal(items.length, 4);
+    assert.deepEqual(
+        items.map(item => getShopItemState(item, 65)),
+        ['affordable', 'affordable', 'unaffordable', 'sold']
+    );
+});
+
+test('drone-family proof covers every new carrier and deployed silhouette', () => {
+    const entries = createDroneFamilyProofEntries();
+    assert.equal(entries.length, 10);
+    assert.equal(new Set(entries.map(entry => entry.partId)).size, 10);
+    assert.equal(new Set(entries.map(entry => entry.droneType)).size, 10);
+    for (const entry of entries) {
+        assert.equal(entry.carrierLabel, entry.carrierLabel.toLowerCase());
+        assert.equal(entry.droneLabel, entry.droneLabel.toLowerCase());
+        assert.ok(entry.partDef.sprite.data.length > 0);
+    }
 });

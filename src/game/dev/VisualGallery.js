@@ -3,11 +3,13 @@ import { RemotePlayer } from '../../engine/RemotePlayer.js';
 import { Renderer } from '../../engine/Renderer.js';
 import { Viewport } from '../../engine/rendering/Viewport.js';
 import { Drone } from '../../shared/entities/Drone.js';
+import { DRONE_BLUEPRINTS } from '../../shared/combat/DroneBlueprints.js';
 import { Portal } from '../../shared/entities/Portal.js';
 import { Ship } from '../../shared/entities/Ship.js';
 import { TrainingDummy } from '../../shared/entities/TrainingDummy.js';
 import { PartsLibrary } from '../../shared/parts/Part.js';
 import { EntityRenderer } from '../renderers/EntityRenderer.js';
+import { WorldOverlayRenderer } from '../renderers/WorldOverlayRenderer.js';
 import { drawProjectile } from '../renderers/ProjectileRenderer.js';
 import { VaultRenderer } from '../renderers/VaultRenderer.js';
 
@@ -48,6 +50,14 @@ export function createHardRasterProofScenes() {
 
 function isHardRasterProofRoute(search = globalThis.window?.location?.search || '') {
     return new URLSearchParams(search).get('visual-gallery') === 'hard-raster';
+}
+
+function isShopProofRoute(search = globalThis.window?.location?.search || '') {
+    return new URLSearchParams(search).get('visual-gallery') === 'shop';
+}
+
+function isDroneFamilyProofRoute(search = globalThis.window?.location?.search || '') {
+    return new URLSearchParams(search).get('visual-gallery') === 'drone-family';
 }
 
 export function getHardRasterProofScale(search = globalThis.window?.location?.search || '') {
@@ -262,6 +272,194 @@ function renderHardRasterProof(canvas) {
     canvas.dataset.visualGalleryProofComplete = 'true';
     canvas.dataset.visualGalleryReady = 'true';
     return scenes;
+}
+
+export function createShopProofItems(centerX = 0, centerY = 0) {
+    const offers = [
+        {
+            type: 'heal',
+            name: 'repair kit',
+            description: 'restore 50 hp',
+            price: 20
+        },
+        {
+            type: 'part',
+            name: PartsLibrary.gun_basic.name,
+            partId: 'gun_basic',
+            description: 'weapon',
+            price: 40,
+            partDef: PartsLibrary.gun_basic
+        },
+        {
+            type: 'part',
+            name: PartsLibrary.railgun.name,
+            partId: 'railgun',
+            description: 'weapon',
+            price: 80,
+            partDef: PartsLibrary.railgun
+        },
+        {
+            type: 'part',
+            name: PartsLibrary.custom_1768410823264.name,
+            partId: 'custom_1768410823264',
+            description: 'shield',
+            price: 55,
+            partDef: PartsLibrary.custom_1768410823264,
+            purchased: true
+        }
+    ];
+    return offers.map((data, index) => ({
+        x: centerX - 360 + index * 240,
+        y: centerY,
+        radius: 40,
+        life: 0,
+        bobOffset: index * 0.45,
+        purchased: Boolean(data.purchased),
+        data,
+        partDef: data.partDef
+    }));
+}
+
+function renderShopProof(canvas) {
+    document.title = 'framebound shop terminal proof';
+    const renderer = new Renderer(canvas);
+    renderer.clear('#03070c');
+
+    const centerX = renderer.width / 2;
+    const centerY = renderer.height * 0.58;
+    const items = createShopProofItems(centerX, centerY);
+    const ctx = renderer.ctx;
+    ctx.save();
+    ctx.strokeStyle = 'rgba(85, 255, 194, 0.18)';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(140, 120, renderer.width - 280, renderer.height - 220);
+    ctx.restore();
+
+    items.forEach(item => EntityRenderer.drawShopItem(renderer, item, { credits: 65 }));
+
+    const game = {
+        renderer: {
+            ctx,
+            withWorldOverlay: (_camera, draw) => draw()
+        },
+        camera: { x: 0, y: 0, zoom: 1 },
+        floor: 0,
+        rooms: [],
+        enemies: [],
+        bosses: [],
+        network: { otherPlayers: new Map() },
+        shopItems: items,
+        hoveredShopItem: items[1],
+        hoveredTreasureChest: null,
+        hoveredVaultChest: null,
+        currentRoom: { type: 'shop' },
+        playerShip: { hp: 100, maxHp: 100 },
+        gold: 65,
+        showDamageNumbers: false,
+        damageNumbers: []
+    };
+    withDeterministicVisuals(() => new WorldOverlayRenderer(game).draw());
+
+    renderer.present();
+    canvas.dataset.visualGalleryMode = 'shop';
+    canvas.dataset.visualGalleryShopStates = 'affordable,affordable,unaffordable,sold';
+    canvas.dataset.visualGalleryReady = 'true';
+
+    const proofImage = document.createElement('img');
+    proofImage.id = 'visual-gallery-proof';
+    proofImage.alt = 'deterministic framebound shop terminal proof';
+    proofImage.src = canvas.toDataURL('image/png');
+    proofImage.style.position = 'fixed';
+    proofImage.style.inset = '0';
+    proofImage.style.width = '100vw';
+    proofImage.style.height = '100vh';
+    proofImage.style.objectFit = 'contain';
+    proofImage.style.imageRendering = 'pixelated';
+    proofImage.style.background = '#03070c';
+    proofImage.style.zIndex = '1';
+    document.body.appendChild(proofImage);
+    canvas.style.display = 'none';
+}
+
+export function createDroneFamilyProofEntries() {
+    return Object.values(PartsLibrary)
+        .filter(definition => definition.type === 'drone' && definition.id !== 'custom_1769974460678')
+        .map(definition => {
+            const blueprint = DRONE_BLUEPRINTS[definition.stats.droneType];
+            return {
+                partId: definition.id,
+                carrierLabel: definition.name,
+                droneType: blueprint.id,
+                droneLabel: blueprint.label,
+                partDef: definition
+            };
+        });
+}
+
+function renderDroneFamilyProof(canvas) {
+    document.title = 'framebound drone family proof';
+    const renderer = new Renderer(canvas);
+    renderer.clear('#03070c');
+    const entries = createDroneFamilyProofEntries();
+    const columns = 5;
+    const rows = 2;
+    const panelWidth = renderer.width / columns;
+    const panelHeight = renderer.height / rows;
+    const ctx = renderer.ctx;
+
+    withDeterministicVisuals(() => {
+        entries.forEach((entry, index) => {
+            const x = index % columns * panelWidth;
+            const y = Math.floor(index / columns) * panelHeight;
+            ctx.save();
+            ctx.strokeStyle = 'rgba(0, 255, 255, 0.22)';
+            ctx.strokeRect(x + 6, y + 6, panelWidth - 12, panelHeight - 12);
+            ctx.translate(x + panelWidth / 2, y + panelHeight / 2);
+
+            ctx.save();
+            ctx.scale(0.62, 0.62);
+            entry.partDef.sprite.draw(ctx, -58, 0, 0);
+            ctx.restore();
+
+            const drone = new Drone(58, 0, null, 'player', () => 0.5, {
+                type: entry.droneType
+            });
+            ctx.save();
+            ctx.scale(2.2, 2.2);
+            EntityRenderer.drawDrone(renderer, drone);
+            ctx.restore();
+            ctx.restore();
+
+            drawLabel(
+                ctx,
+                `${entry.carrierLabel} // ${entry.droneLabel}`,
+                x + 8,
+                y + panelHeight - 38,
+                panelWidth - 16
+            );
+        });
+    });
+
+    renderer.present();
+    canvas.dataset.visualGalleryMode = 'drone-family';
+    canvas.dataset.visualGalleryDroneCount = String(entries.length);
+    canvas.dataset.visualGalleryReady = 'true';
+
+    const proofImage = document.createElement('img');
+    proofImage.id = 'visual-gallery-proof';
+    proofImage.alt = 'deterministic framebound drone family proof';
+    proofImage.src = canvas.toDataURL('image/png');
+    proofImage.style.position = 'fixed';
+    proofImage.style.inset = '0';
+    proofImage.style.width = '100vw';
+    proofImage.style.height = '100vh';
+    proofImage.style.objectFit = 'contain';
+    proofImage.style.imageRendering = 'pixelated';
+    proofImage.style.background = '#03070c';
+    proofImage.style.zIndex = '1';
+    document.body.appendChild(proofImage);
+    canvas.style.display = 'none';
+    return entries;
 }
 
 function createPanels() {
@@ -539,6 +737,12 @@ function createPanels() {
 export function renderVisualGallery(canvas) {
     if (isHardRasterProofRoute()) {
         return renderHardRasterProof(canvas);
+    }
+    if (isShopProofRoute()) {
+        return renderShopProof(canvas);
+    }
+    if (isDroneFamilyProofRoute()) {
+        return renderDroneFamilyProof(canvas);
     }
 
     document.title = 'framebound visual parity gallery';

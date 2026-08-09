@@ -16,6 +16,9 @@ completed on 2026-07-25:
 - added the full test suite to the github pages build, consolidated duplicate biome/collision tests, and documented the supported node/test command;
 - passed 89 unique node tests, real socket.io integration tests, `git diff --check`, a production build, and live canvas smoke tests with no browser errors;
 - approved host-authoritative peer-to-peer multiplayer as the replacement for the legacy dedicated socket.io server.
+- reworked shop rooms into hard-raster salvage terminals with family-accented pedestals,
+  readable native overlay cards, shared-credit and stock telemetry, affordability states,
+  and persistent sold pedestals without changing the four-offer purchase contract.
 - fixed continue so it generates only the saved world and hydrates it once;
 - reject incomplete or inaccessible saves before game hydration;
 - extracted tested room-transition and game-over lifecycle owners from `Game`;
@@ -42,6 +45,14 @@ completed on 2026-07-25:
 - extracted friendly/enemy hive spawning, drone caps, collision, and death cleanup into a tested `DroneSystem`;
 - rejected invalid hive spawn geometry instead of constructing `NaN` drones;
 - passed 130 node tests, `git diff --check`, a production build, and a live hive-carrier smoke that spawned and ran enemy drones with no browser errors.
+- added ten non-starter drone-family carriers with distinct hard-raster silhouettes,
+  data-driven projectile profiles, hostile-drone interception, repair support, and
+  contact ramming while preserving striker fallback and per-player ownership.
+- added the `?visual-gallery=drone-family` proof route with all ten carrier and
+  deployed-drone silhouettes plus lowercase labels.
+- passed 535 node tests, lint, typecheck, source hygiene, import audit, version
+  alignment, a production build, and a live ten-part gallery with no browser
+  warnings or errors.
 - extracted offline enemy updates, remote interpolation, freeze behavior, separation, drops, boss death, score doubling, and portal creation into a tested `EnemyLifecycleSystem`;
 - preserved the original boss reward order, including score doubling before same-frame enemy score is awarded;
 - passed 140 node tests, a production build, and a live boss-kill smoke that displayed the level-up choices and `portal opened` feedback with no browser errors.
@@ -367,6 +378,15 @@ completed on 2026-07-25:
 
 - github actions run `30706641165` proved the clean-install, test, coverage,
   source, native-save, and macos/windows artifact gates on 2026-08-01.
+
+- reworked settings into display, audio, gameplay, and reticle tabs with live
+  hard-raster 1x/2x/3x selection, fullscreen control, fps visibility, scoped
+  reset defaults, preserved legacy storage compatibility, and a live reticle
+  preview without changing gameplay or default visuals.
+- settings batch verification requires focused normalization/persistence,
+  renderer scaling, fps visibility, and teardown tests, plus the production
+  build and `git diff --check`; browser smoke must cover live scale changes,
+  fullscreen label synchronization, reset, pause settings, and normal gameplay.
 
 ## objective
 

@@ -1,8 +1,18 @@
 import { TILE_SIZE, PartsLibrary } from '../../shared/parts/Part.js';
 import { WEAPON_FAMILIES } from '../../shared/combat/WeaponFamilies.js';
-import { UI_FONTS } from '../ui/UiTheme.js';
+import { UI_COLORS, UI_FONTS, drawUiPanel } from '../ui/UiTheme.js';
 import { VAULT_CONTRACTS, VaultPhase } from '../../shared/vault/VaultDefinitions.js';
 import { getVaultOffer } from '../vault/VaultEconomy.js';
+import {
+    getShopAccent,
+    getShopActionText,
+    getShopCategory,
+    getShopHeader,
+    getShopItemState,
+    getShopStateLabel,
+    getShopStatRows,
+    getShopBobY
+} from './ShopPresentation.js';
 
 /** Native-HUD annotations projected through the exact world compositor map. */
 export class WorldOverlayRenderer {
@@ -148,50 +158,130 @@ export class WorldOverlayRenderer {
 
     drawShopOverlays() {
         const { game } = this;
-        for (const item of game.shopItems) {
-            if (item.purchased) continue;
-            const bobY = item.y + Math.sin((item.life || 0) * 2 + (item.bobOffset || 0)) * 6;
-            const ctx = game.renderer.ctx;
+        const items = game.shopItems || [];
+        if (!items.length) return;
+
+        this.drawShopHeader(items);
+        const ctx = game.renderer.ctx;
+        items.forEach((item, index) => {
+            const state = getShopItemState(item, game.gold);
+            const accent = getShopAccent(item);
+            const bobY = getShopBobY(item);
+            const labelY = bobY + (item.radius || 40) + 56;
             ctx.save();
-            ctx.fillStyle = '#ffd700';
-            ctx.font = UI_FONTS.small;
             ctx.textAlign = 'center';
-            ctx.fillText(`${item.data.price}g`, item.x, bobY + item.radius + 18);
+            ctx.font = UI_FONTS.tiny;
+            ctx.fillStyle = UI_COLORS.muted;
+            ctx.fillText(
+                `${String(index + 1).padStart(2, '0')} // ${String(item.data?.name || 'offer').toLowerCase()}`,
+                item.x,
+                labelY
+            );
+            ctx.fillStyle = state === 'sold'
+                ? UI_COLORS.muted
+                : state === 'unaffordable' ? UI_COLORS.red : accent;
+            ctx.fillText(
+                state === 'sold'
+                    ? 'sold'
+                    : `${item.data?.price || 0}g // ${getShopStateLabel(state)}`,
+                item.x,
+                labelY + 16
+            );
             ctx.restore();
-        }
+        });
+
         const item = game.hoveredShopItem;
-        if (item && !item.purchased) this.drawShopTooltip(item, game.gold >= item.data.price);
+        if (item && !item.purchased) this.drawShopTooltip(item, game.gold);
     }
 
-    drawShopTooltip(item, canAfford) {
-        const ctx = this.game.renderer.ctx;
-        const bobY = item.y + Math.sin(item.life * 2 + item.bobOffset) * 6;
-        const tooltipW = 180;
-        const tooltipH = item.data.type === 'heal' ? 70 : 90;
-        const tooltipX = item.x - tooltipW / 2;
-        const tooltipY = bobY - item.radius - tooltipH - 20;
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
-        ctx.fillRect(tooltipX, tooltipY, tooltipW, tooltipH);
-        ctx.strokeStyle = canAfford ? '#ffd700' : '#ff4444';
-        ctx.lineWidth = 2;
-        ctx.strokeRect(tooltipX, tooltipY, tooltipW, tooltipH);
-        ctx.fillStyle = '#fff';
-        ctx.font = "14px 'Silkscreen', 'Pixelify Sans', monospace";
-        ctx.textAlign = 'center';
-        ctx.fillText(String(item.data.name).toLowerCase(), item.x, tooltipY + 20);
-        ctx.fillStyle = '#aaa';
-        ctx.font = "13px 'Pixelify Sans', 'Silkscreen', monospace";
-        ctx.fillText(String(item.data.description).toLowerCase(), item.x, tooltipY + 40);
-        if (item.partDef?.stats) {
-            const stats = item.partDef.stats;
-            ctx.fillStyle = '#888';
-            ctx.font = "11px 'Pixelify Sans', 'Silkscreen', monospace";
-            ctx.fillText(`hp: ${stats.hp || 0} | mass: ${stats.mass || 0}`, item.x, tooltipY + 56);
-        }
-        ctx.fillStyle = canAfford ? '#44ff44' : '#ff4444';
-        ctx.font = "13px 'Pixelify Sans', 'Silkscreen', monospace";
-        ctx.fillText(canAfford ? '[e] buy' : 'not enough gold!', item.x, tooltipY + tooltipH - 8);
+    drawShopHeader(items) {
+        const { game } = this;
+        const ctx = game.renderer.ctx;
+        const header = getShopHeader(items, game.gold);
+        const centerX = items.reduce((sum, item) => sum + item.x, 0) / items.length;
+        // Leave a clean lane above every offer for the hover card. The header
+        // is persistent, so it must never sit behind the selected card.
+        const topY = Math.min(...items.map(item => item.y)) - 312;
+        const width = 360;
+        const height = 76;
+        const x = centerX - width / 2;
+        drawUiPanel(ctx, x, topY, width, height, UI_COLORS.amber);
+        ctx.save();
         ctx.textAlign = 'left';
+        ctx.fillStyle = UI_COLORS.amber;
+        ctx.font = UI_FONTS.label;
+        ctx.fillText('salvage exchange', x + 16, topY + 21);
+        ctx.fillStyle = UI_COLORS.ink;
+        ctx.font = UI_FONTS.small;
+        ctx.fillText(header.label, x + 16, topY + 43);
+        ctx.fillStyle = header.stockRemaining ? UI_COLORS.mint : UI_COLORS.muted;
+        ctx.textAlign = 'right';
+        ctx.fillText(header.stockLabel, x + width - 16, topY + 43);
+        ctx.fillStyle = UI_COLORS.muted;
+        ctx.font = UI_FONTS.tiny;
+        ctx.fillText('hover an offer // [e] or click to authorize', x + width - 16, topY + 62);
+        ctx.restore();
+    }
+
+    drawShopTooltip(item, credits) {
+        const ctx = this.game.renderer.ctx;
+        const bobY = getShopBobY(item);
+        const state = typeof credits === 'boolean'
+            ? getShopItemState(item, credits ? item.data.price : item.data.price - 1)
+            : getShopItemState(item, credits);
+        const accent = getShopAccent(item);
+        const category = getShopCategory(item);
+        const rows = getShopStatRows(item, 4);
+        const tooltipW = 300;
+        const tooltipH = 168;
+        const tooltipX = item.x - tooltipW / 2;
+        const tooltipY = bobY - item.radius - tooltipH - 24;
+        drawUiPanel(ctx, tooltipX, tooltipY, tooltipW, tooltipH, accent);
+        ctx.save();
+        ctx.textAlign = 'left';
+        ctx.fillStyle = accent;
+        ctx.font = UI_FONTS.label;
+        ctx.fillText(String(item.data?.name || 'offer').toLowerCase(), tooltipX + 16, tooltipY + 22);
+        ctx.fillStyle = UI_COLORS.muted;
+        ctx.font = UI_FONTS.tiny;
+        ctx.fillText(
+            `${category} // ${String(item.data?.description || 'no specification').toLowerCase()}`,
+            tooltipX + 16,
+            tooltipY + 40
+        );
+
+        rows.forEach((row, index) => {
+            const column = index % 2;
+            const rowIndex = Math.floor(index / 2);
+            const rowX = tooltipX + 16 + column * 136;
+            const rowY = tooltipY + 67 + rowIndex * 18;
+            ctx.fillStyle = UI_COLORS.muted;
+            ctx.fillText(`${row.label}:`, rowX, rowY);
+            ctx.fillStyle = UI_COLORS.ink;
+            ctx.textAlign = 'right';
+            ctx.fillText(row.value, rowX + 112, rowY);
+            ctx.textAlign = 'left';
+        });
+
+        const priceY = tooltipY + 122;
+        ctx.fillStyle = UI_COLORS.muted;
+        ctx.fillText('price:', tooltipX + 16, priceY);
+        ctx.fillStyle = state === 'unaffordable' ? UI_COLORS.red : accent;
+        ctx.textAlign = 'right';
+        ctx.fillText(`${item.data?.price || 0}g`, tooltipX + tooltipW - 16, priceY);
+        ctx.textAlign = 'left';
+        ctx.fillStyle = state === 'unaffordable'
+            ? UI_COLORS.red
+            : state === 'sold' ? UI_COLORS.muted : UI_COLORS.mint;
+        ctx.font = UI_FONTS.small;
+        ctx.fillText(
+            getShopActionText(item, typeof credits === 'boolean'
+                ? credits ? item.data.price : item.data.price - 1
+                : credits),
+            tooltipX + 16,
+            tooltipY + tooltipH - 18
+        );
+        ctx.restore();
     }
 
     drawChestOverlays() {

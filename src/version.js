@@ -12,6 +12,7 @@ export const CHANGELOG = [
         items: [
             'overhaul: rebuilt weapon families, level-up evolution, modular enemies, and long-run balance as one connected system.',
             'rendering: the world now uses an approved 3x hard-raster webgl2 compositor while the hud, menus, minimap, and cockpit telemetry stay at native resolution.',
+            'shops: rebuilt the four-offer room as a salvage terminal with family-accented pedestals, shared-credit telemetry, readable stat cards, affordability states, and sold stock markers without changing shop economy or ownership.',
             'fix: enemy health bars, damage numbers, tutorial text, shop prices, and interaction cards now use the native overlay instead of leaking through the world shader.',
             'fix: hangar and ship-builder panels now stay above the native hud canvas instead of being covered by their own ship and grid layer.',
             'rendering: connected ship parts are assembled before continuous rotation, eliminating diagonal seams without quantizing hull or turret angles.',
@@ -37,6 +38,7 @@ export const CHANGELOG = [
             'fix: needlepoint now pierces rocks and crates, and its uncommon roll is stronger than its common roll.',
             'hud: weapon, utility, and exact per-part damage telemetry now live in separate cockpit panels; utility telemetry only appears when a matching module is installed.',
             'drones: swarm hive is now a real drone-family part with data-driven blueprints and upgrade hooks for future drone types.',
+            'drones: added ten non-starter carriers with distinct silhouettes, data-driven projectile profiles, hostile-drone interception, repair support, and contact ramming while preserving striker fallback and per-player ownership.',
             'salvage: cleared rooms charge a one-use clockwise laser sweep that destroys remaining boxes and rocks after five seconds.',
             'visuals: destroyed boxes and rocks now leave stable physical fragments instead of rerolling glitter noise every frame.',
             'save: destruction fragments and salvage-sweep progress now survive room revisits, continue, and host-authoritative snapshots.',
