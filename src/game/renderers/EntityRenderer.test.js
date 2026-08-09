@@ -191,6 +191,30 @@ test('training dummy labels are excluded from the world pass', () => {
     assert.deepEqual(calls.filter(([method]) => method === 'fillText'), []);
 });
 
+test('shop offers render angular terminal bases and keep purchased stock as sold pedestals', () => {
+    const { calls, renderer } = createRenderer();
+    EntityRenderer.drawShopItem(renderer, {
+        x: 100,
+        y: 200,
+        radius: 40,
+        life: 0,
+        bobOffset: 0,
+        purchased: true,
+        data: { type: 'part', price: 40 },
+        partDef: {
+            stats: { hp: 20, mass: 2, weaponGroup: 'rocket' },
+            sprite: { draw: () => calls.push(['part-art']) }
+        }
+    }, { credits: 0 });
+
+    assert.ok(calls.some(([method]) => method === 'closePath'));
+    assert.ok(calls.some(([method]) => method === 'lineTo'));
+    assert.equal(calls.some(([method]) => method === 'part-art'), true);
+    assert.ok(calls.some(call => (
+        call[0] === 'set' && call[1] === 'globalAlpha' && call[2] === 0.46
+    )));
+});
+
 test('missing chest sprites retain their original fallback borders', () => {
     const treasure = createRenderer();
     EntityRenderer.drawTreasureChest(treasure.renderer, {

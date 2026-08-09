@@ -58,11 +58,33 @@ test('world overlay renderer moves every informational world annotation onto the
     assert.ok(text.includes('training dummy'));
     assert.ok(text.includes('2 dps'));
     assert.ok(text.includes('6g'));
-    assert.ok(text.includes('[e] buy'));
+    assert.ok(text.some(value => String(value).includes('authorize purchase')));
+    assert.ok(text.includes('salvage exchange'));
+    assert.ok(text.includes('shared credits // 10g'));
     assert.ok(text.includes('treasure cache'));
     assert.ok(text.includes('gilded protocol'));
     assert.ok(text.includes('exclusive contract // payer owns cache'));
     assert.ok(text.includes(9));
     assert.deepEqual(calls.at(0)[0], 'overlay-begin');
     assert.deepEqual(calls.at(-1), ['overlay-end']);
+});
+
+test('shop cards expose a credit shortfall while sold stock keeps its label', () => {
+    const unavailable = createHarness();
+    unavailable.game.gold = 0;
+    unavailable.renderer.draw();
+    const unavailableText = unavailable.calls
+        .filter(([type]) => type === 'text')
+        .map(([, value]) => String(value));
+    assert.ok(unavailableText.includes('credit shortfall // need 6g'));
+
+    const sold = createHarness();
+    sold.game.shopItems[0].purchased = true;
+    sold.game.hoveredShopItem = null;
+    sold.renderer.draw();
+    const soldText = sold.calls
+        .filter(([type]) => type === 'text')
+        .map(([, value]) => String(value));
+    assert.ok(soldText.includes('sold'));
+    assert.ok(soldText.includes('stock // 0/1'));
 });

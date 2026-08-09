@@ -7,6 +7,11 @@ import {
     localToWorld
 } from './ShipAssemblyRenderer.js';
 import { SHIP_ASSEMBLY_PROFILES } from './ShipAssemblyCache.js';
+import {
+    getShopAccent,
+    getShopItemState,
+    getShopBobY
+} from './ShopPresentation.js';
 
 export class EntityRenderer {
 
@@ -475,33 +480,101 @@ export class EntityRenderer {
         }
     }
 
-    static drawShopItem(renderer, item) {
-        if (item.purchased) return;
+    static drawShopItem(renderer, item, { credits = Number.POSITIVE_INFINITY } = {}) {
         const ctx = renderer.ctx;
-        const bobY = item.y + Math.sin((item.life || 0) * 2 + (item.bobOffset || 0)) * 6;
+        const accent = getShopAccent(item);
+        const state = getShopItemState(item, credits);
+        const bobY = getShopBobY(item);
+        const isSold = state === 'sold';
+        const isAffordable = state === 'affordable';
+        const opacity = isSold ? 0.46 : state === 'unaffordable' ? 0.68 : 1;
 
         ctx.save();
-        ctx.translate(item.x, bobY);
+        ctx.globalAlpha = opacity;
 
-        ctx.shadowBlur = 20;
-        ctx.shadowColor = item.data.type === 'heal' ? '#44ff44' : '#ffd700';
-
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+        // The terminal base is deliberately angular and stays on the hard-
+        // raster world surface. Text/status belongs to WorldOverlayRenderer.
+        ctx.translate(item.x, item.y + 34);
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.58)';
         ctx.beginPath();
-        ctx.arc(0, 0, item.radius, 0, Math.PI * 2);
+        ctx.moveTo(-48, 18);
+        ctx.lineTo(-34, -6);
+        ctx.lineTo(34, -6);
+        ctx.lineTo(48, 18);
+        ctx.lineTo(32, 31);
+        ctx.lineTo(-32, 31);
+        ctx.closePath();
         ctx.fill();
-
-        ctx.strokeStyle = item.data.type === 'heal' ? '#44ff44' : '#ffd700';
+        ctx.strokeStyle = accent;
         ctx.lineWidth = 2;
+        ctx.stroke();
+
+        ctx.fillStyle = accent;
+        ctx.globalAlpha = opacity * 0.32;
+        ctx.fillRect(-27, 7, 54, 3);
+        ctx.fillRect(-20, 18, 40, 2);
+        ctx.globalAlpha = opacity;
+
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = isAffordable ? 2 : 1;
+        ctx.beginPath();
+        ctx.moveTo(-32, 28);
+        ctx.lineTo(-25, 35);
+        ctx.lineTo(25, 35);
+        ctx.lineTo(32, 28);
+        ctx.stroke();
+        ctx.restore();
+
+        ctx.save();
+        ctx.globalAlpha = opacity;
+        ctx.translate(item.x, bobY);
+        ctx.shadowBlur = isSold ? 0 : isAffordable ? 18 : 8;
+        ctx.shadowColor = accent;
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.84)';
+        ctx.beginPath();
+        ctx.moveTo(-item.radius + 8, -item.radius);
+        ctx.lineTo(item.radius - 8, -item.radius);
+        ctx.lineTo(item.radius, -item.radius + 8);
+        ctx.lineTo(item.radius, item.radius - 8);
+        ctx.lineTo(item.radius - 8, item.radius);
+        ctx.lineTo(-item.radius + 8, item.radius);
+        ctx.lineTo(-item.radius, item.radius - 8);
+        ctx.lineTo(-item.radius, -item.radius + 8);
+        ctx.closePath();
+        ctx.fill();
+        ctx.strokeStyle = accent;
+        ctx.lineWidth = isAffordable ? 3 : 2;
         ctx.stroke();
         ctx.shadowBlur = 0;
 
-        if (item.data.type === 'heal') {
-            ctx.fillStyle = '#ff4444';
-            ctx.fillRect(-10, -3, 20, 6);
-            ctx.fillRect(-3, -10, 6, 20);
-        } else if (item.partDef && item.partDef.sprite) {
+        if (item.data?.type === 'heal') {
+            ctx.fillStyle = '#ff4d5a';
+            ctx.fillRect(-12, -4, 24, 8);
+            ctx.fillRect(-4, -12, 8, 24);
+            ctx.fillStyle = '#ffd8d8';
+            ctx.fillRect(-8, -2, 16, 4);
+            ctx.fillRect(-2, -8, 4, 16);
+        } else if (item.partDef?.sprite) {
+            ctx.globalAlpha = isSold ? 0.25 : state === 'unaffordable' ? 0.7 : 1;
             item.partDef.sprite.draw(ctx, 0, 0, 0);
+        }
+
+        if (isSold) {
+            ctx.globalAlpha = 0.7;
+            ctx.strokeStyle = '#82909a';
+            ctx.lineWidth = 4;
+            ctx.beginPath();
+            ctx.moveTo(-item.radius + 7, item.radius - 8);
+            ctx.lineTo(item.radius - 7, -item.radius + 8);
+            ctx.stroke();
+        } else if (!isAffordable) {
+            ctx.globalAlpha = 0.7;
+            ctx.strokeStyle = '#ff4d5a';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(-item.radius + 7, -item.radius + 8);
+            ctx.lineTo(item.radius - 7, item.radius - 8);
+            ctx.stroke();
         }
 
         ctx.restore();

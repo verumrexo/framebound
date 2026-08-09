@@ -16,6 +16,9 @@ completed on 2026-07-25:
 - added the full test suite to the github pages build, consolidated duplicate biome/collision tests, and documented the supported node/test command;
 - passed 89 unique node tests, real socket.io integration tests, `git diff --check`, a production build, and live canvas smoke tests with no browser errors;
 - approved host-authoritative peer-to-peer multiplayer as the replacement for the legacy dedicated socket.io server.
+- reworked shop rooms into hard-raster salvage terminals with family-accented pedestals,
+  readable native overlay cards, shared-credit and stock telemetry, affordability states,
+  and persistent sold pedestals without changing the four-offer purchase contract.
 - fixed continue so it generates only the saved world and hydrates it once;
 - reject incomplete or inaccessible saves before game hydration;
 - extracted tested room-transition and game-over lifecycle owners from `Game`;

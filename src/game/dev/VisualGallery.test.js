@@ -1,10 +1,12 @@
 import '../../tests/setup.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { getShopItemState } from '../renderers/ShopPresentation.js';
 
 const {
     HARD_RASTER_HEADINGS_DEGREES,
     createHardRasterProofScenes,
+    createShopProofItems,
     getHardRasterProofScale
 } = await import('./VisualGallery.js');
 
@@ -39,4 +41,13 @@ test('hard-raster proof defaults to the approved 3x scale and accepts only bound
     assert.equal(getHardRasterProofScale('?visual-gallery=hard-raster&raster-scale=3'), 3);
     assert.equal(getHardRasterProofScale('?visual-gallery=hard-raster&raster-scale=4'), 3);
     assert.equal(getHardRasterProofScale('?visual-gallery=hard-raster&raster-scale=0'), 3);
+});
+
+test('shop proof covers affordable, unaffordable, and sold terminal states', () => {
+    const items = createShopProofItems(1000, 800);
+    assert.equal(items.length, 4);
+    assert.deepEqual(
+        items.map(item => getShopItemState(item, 65)),
+        ['affordable', 'affordable', 'unaffordable', 'sold']
+    );
 });
