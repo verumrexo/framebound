@@ -86,3 +86,22 @@ test('world-to-hud projection includes source inset, compositor offset, pixel sc
     assert.ok(Math.abs(projected.x - ((viewport.worldOffsetX + (source.scale * 400.5 + source.x) * viewport.worldPixelScale) / viewport.dpr)) < 1e-12);
     assert.ok(Math.abs(projected.y - ((viewport.worldOffsetY + (source.scale * 210.25 + source.y) * viewport.worldPixelScale) / viewport.dpr)) < 1e-12);
 });
+
+test('viewport can change hard-raster scale without changing logical coordinates', () => {
+    const viewport = new Viewport({ clientWidth: 853, clientHeight: 480 }, {
+        getDevicePixelRatio: () => 1
+    }).resize();
+    const camera = { x: 123.4, y: 89.8, zoom: 0.6 };
+    const before = viewport.getWorldCameraTransform(camera);
+
+    assert.equal(viewport.setWorldPixelScale(1), 1);
+    viewport.resize();
+
+    assert.equal(viewport.worldPixelScale, 1);
+    assert.equal(viewport.width, 853);
+    assert.equal(viewport.height, 480);
+    assert.equal(viewport.getWorldCameraTransform(camera).scale, (853 / 853) * 0.6);
+    assert.deepEqual(camera, { x: 123.4, y: 89.8, zoom: 0.6 });
+    assert.notEqual(before.scale, viewport.getWorldCameraTransform(camera).scale);
+    assert.equal(viewport.setWorldPixelScale(99), 3);
+});

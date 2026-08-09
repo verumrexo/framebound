@@ -368,6 +368,15 @@ completed on 2026-07-25:
 - github actions run `30706641165` proved the clean-install, test, coverage,
   source, native-save, and macos/windows artifact gates on 2026-08-01.
 
+- reworked settings into display, audio, gameplay, and reticle tabs with live
+  hard-raster 1x/2x/3x selection, fullscreen control, fps visibility, scoped
+  reset defaults, preserved legacy storage compatibility, and a live reticle
+  preview without changing gameplay or default visuals.
+- settings batch verification requires focused normalization/persistence,
+  renderer scaling, fps visibility, and teardown tests, plus the production
+  build and `git diff --check`; browser smoke must cover live scale changes,
+  fullscreen label synchronization, reset, pause settings, and normal gameplay.
+
 ## objective
 
 recover the original framebound cleanly: preserve the offline game, restore anything flattened by the multiplayer migration, make failures reproducible, and then reduce `game.js` one proven boundary at a time.

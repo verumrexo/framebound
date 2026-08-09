@@ -61,6 +61,12 @@ export class Renderer {
         for (const observer of this.resizeObservers) observer(this.viewport);
     }
 
+    setRasterScale(scale) {
+        this.viewport.setWorldPixelScale(scale);
+        this.resize();
+        return this.viewport.worldPixelScale;
+    }
+
     onResize(observer) {
         this.resizeObservers.add(observer);
         return () => this.resizeObservers.delete(observer);

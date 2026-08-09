@@ -132,6 +132,15 @@ test('normal hud preserves bars, minimap anchoring, frame accounting, and final 
     assert.ok(calls.some(call => call[0] === 'text' && call[1] === 'notice'));
 });
 
+test('hud measures fps but hides only the fps label when disabled', () => {
+    const { game, calls, hud } = createHarness({ showFps: false });
+    hud.draw();
+
+    assert.equal(game.frameCount, 3);
+    assert.equal(calls.some(call => call[0] === 'text' && call[1] === 'fps 60'), false);
+    assert.equal(calls.some(call => call[0] === 'text' && call[1] === '1.1.0 // beta // seed: 17'), true);
+});
+
 test('eye candy adds cockpit telemetry without replacing the required hud', () => {
     const { game, calls, hud } = createHarness({ eyeCandy: true });
     game.enemies = [{ isDead: false }, { isDead: true }];
