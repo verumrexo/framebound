@@ -16,6 +16,7 @@ const MAX_SAVED_PARTS = 512;
 const MAX_VISITED_ROOMS = 512;
 const MAX_GRID_COORDINATE = 512;
 const MAX_SAVE_BYTES = 8 * 1024 * 1024;
+const ACTIVE_ABILITY_IDS = ['blink', 'decoy', 'stealth', 'emp'];
 const PART_RUNTIME_KEYS = [
     'cooldown',
     'recoil',
@@ -25,7 +26,8 @@ const PART_RUNTIME_KEYS = [
     'chargeReady',
     'burstLeft',
     'burstTimer',
-    'shieldCooldown'
+    'shieldCooldown',
+    'abilityCooldown'
 ];
 
 export class SaveManager {
@@ -175,6 +177,12 @@ export class SaveManager {
                         ...game.playerShip.permanentStats
                     },
                     parts: shipParts
+                },
+                playerAbilityState: game.abilitySystem?.snapshotShipState?.(
+                    game.playerShip
+                ) || {
+                    cooldowns: {},
+                    stealthTimer: 0
                 },
                 inventory: { ...game.hangar.inventory },
                 currentRoomGrid: {
@@ -341,6 +349,14 @@ export class SaveManager {
             portal === undefined ||
             portal === null ||
             (object(portal) && finite(portal.x) && finite(portal.y));
+        const validAbilityState = state => {
+            if (state === undefined) return true;
+            if (!object(state) || !object(state.cooldowns)) return false;
+            if (!finite(state.stealthTimer) || state.stealthTimer < 0) return false;
+            return Object.entries(state.cooldowns).every(([id, value]) =>
+                ACTIVE_ABILITY_IDS.includes(id) && finite(value) && value >= 0
+            );
+        };
 
         const validBase = object(data) &&
             (data.version === LEGACY_SAVE_VERSION ||
@@ -376,6 +392,7 @@ export class SaveManager {
             data.playerShip.hp <= data.playerShip.maxHp &&
             validPermanentStats(data.playerShip.permanentStats) &&
             validParts(data.playerShip.parts) &&
+            validAbilityState(data.playerAbilityState) &&
             validInventory(data.inventory) &&
             object(data.currentRoomGrid) &&
             inGridRange(data.currentRoomGrid.x) &&
@@ -418,11 +435,12 @@ export class SaveManager {
                 permanentStats: normalizedStats
             },
             roomSnapshots: [],
-            activeWorld: {
-                enemies: [],
-                bosses: [],
-                projectiles: [],
-                drones: [],
+                activeWorld: {
+                    enemies: [],
+                    bosses: [],
+                    projectiles: [],
+                    drones: [],
+                    decoys: [],
                 xpOrbs: [],
                 goldOrbs: [],
                 hpOrbs: [],

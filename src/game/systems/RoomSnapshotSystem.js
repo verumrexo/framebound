@@ -13,6 +13,7 @@ import { Shipwreck } from '../../shared/entities/Shipwreck.js';
 import { TreasureChest } from '../../shared/entities/TreasureChest.js';
 import { VaultChest } from '../../shared/entities/VaultChest.js';
 import { XPOrb } from '../../shared/entities/XPOrb.js';
+import { Decoy } from '../../shared/entities/Decoy.js';
 import {
     createVaultState,
     isVaultContractId,
@@ -31,7 +32,8 @@ const ENEMY_STATE_KEYS = [
     'engagementDist', 'detectionDist', 'damageMultiplier',
     'shootRate', 'shootCooldown', 'aimAngle', 'coopTargetId',
     'circleAngle', 'circleDirection', 'supportCooldown',
-    'supportPulseTimer', 'supportTargetX', 'supportTargetY'
+    'supportPulseTimer', 'supportTargetX', 'supportTargetY',
+    'empTimer', 'hackTimer', 'hackedByPlayerId'
 ];
 const PROJECTILE_STATE_KEYS = [
     'x', 'y', 'vx', 'vy', 'angle', 'type', 'owner', 'damage',
@@ -40,13 +42,21 @@ const PROJECTILE_STATE_KEYS = [
     'baseAngle', 'speed', 'driftDirection', 'secondaryWavySpeed',
     'secondaryWavyAmp', 'homingStrength', 'spinAngle', 'clusterCount',
     'explosionRadius', 'hitCount', 'remainingPierces', 'chainCount',
-    'blastRadiusMul'
+    'blastRadiusMul', 'shouldExplode', 'armed', 'triggered',
+    'armingTime', 'armingTimeRemaining', 'triggerRadius', 'blastRadius',
+    'explosionDamage', 'shrapnelCount', 'shrapnelDamage',
+    'ricochetCount', 'ricochetRange', 'ricochetDamageMul',
+    'sourcePlayerId', 'sourcePartId', 'sourcePartKey', 'sourcePartName',
+    'weaponFamily', 'hackDuration', 'isVisualOnly', 'prismChild'
 ];
 const DRONE_STATE_KEYS = [
     'x', 'y', 'owner', 'isDead', 'hp', 'speed', 'turnRate', 'radius',
     'rotation', 'cooldown', 'maxCooldown', 'range', 'state',
     'ownerPlayerId', 'droneType', 'damage', 'sourcePartId',
     'sourcePartKey', 'sourcePartName'
+];
+const DECOY_STATE_KEYS = [
+    'x', 'y', 'isDead', 'hp', 'maxHp', 'radius', 'duration', 'life'
 ];
 
 export function snapshotRooms(game) {
@@ -109,6 +119,7 @@ export function snapshotActiveWorld(game) {
         bosses: (game.bosses || []).map(snapshotEnemy),
         projectiles: (game.projectiles || []).map(snapshotProjectile),
         drones: (game.drones || []).map(snapshotDrone),
+        decoys: (game.decoys || []).map(snapshotDecoy),
         xpOrbs: (game.xpOrbs || []).map(snapshotOrb),
         goldOrbs: (game.goldOrbs || []).map(snapshotOrb),
         hpOrbs: (game.hpOrbs || []).map(snapshotOrb),
@@ -166,6 +177,7 @@ export function restoreActiveWorld(game, state) {
     game.bosses = state.bosses.map(data => restoreEnemy(data, game));
     game.projectiles = state.projectiles.map(restoreProjectile);
     game.drones = state.drones.map(restoreDrone);
+    game.decoys = (state.decoys || []).map(restoreDecoy);
     game.xpOrbs = state.xpOrbs.map(data => restoreOrb(data, XPOrb));
     game.goldOrbs = state.goldOrbs.map(data => restoreOrb(data, GoldOrb));
     game.hpOrbs = state.hpOrbs.map(data => restoreOrb(data, HPOrb));
@@ -195,6 +207,7 @@ export function isValidSnapshotData(roomSnapshots, activeWorld) {
         validEntityArray(activeWorld.bosses, validEnemySnapshot) &&
         validEntityArray(activeWorld.projectiles, validProjectileSnapshot) &&
         validEntityArray(activeWorld.drones, validDroneSnapshot) &&
+        validEntityArray(activeWorld.decoys || [], validDecoySnapshot) &&
         validEntityArray(activeWorld.xpOrbs, validOrbSnapshot) &&
         validEntityArray(activeWorld.goldOrbs, validOrbSnapshot) &&
         validEntityArray(activeWorld.hpOrbs, validOrbSnapshot) &&
@@ -413,7 +426,8 @@ function restoreProjectile(data) {
         deterministicRandom
     );
     applyState(entity, state, PROJECTILE_STATE_KEYS);
-    if (entity.isBeam) entity.targetHits = new Map();
+    if (entity.isBeam || state.isBeam === true) entity.targetHits = new Map();
+    if (state.type === 'ricochet_slug') entity.hitTargets = new Set();
     return entity;
 }
 
@@ -443,6 +457,35 @@ function restoreDrone(data) {
         ? state.ownerPlayerId
         : (state.owner === 'player' ? 'host' : null);
     entity.target = null;
+    return entity;
+}
+
+function snapshotDecoy(entity) {
+    return {
+        id: String(entity.id || '').slice(0, 100),
+        ownerPlayerId: entity.ownerPlayerId == null
+            ? null
+            : String(entity.ownerPlayerId).slice(0, 100),
+        state: pickState(entity, DECOY_STATE_KEYS)
+    };
+}
+
+function restoreDecoy(data) {
+    const state = data.state;
+    const entity = new Decoy(
+        data.id,
+        state.x,
+        state.y,
+        data.ownerPlayerId,
+        {
+            hp: state.hp,
+            maxHp: state.maxHp,
+            radius: state.radius,
+            duration: state.duration,
+            life: state.life
+        }
+    );
+    applyState(entity, state, DECOY_STATE_KEYS);
     return entity;
 }
 
@@ -658,6 +701,21 @@ function validStateSnapshot(value, requiredKeys) {
         requiredKeys.every(key => Number.isFinite(value[key]));
 }
 
+function validOptionalStateFields(
+    value,
+    { numbers = [], strings = [], booleans = [] } = {}
+) {
+    return numbers.every(key =>
+        value[key] === undefined || Number.isFinite(value[key])
+    ) && strings.every(key =>
+        value[key] === undefined ||
+        value[key] === null ||
+        typeof value[key] === 'string'
+    ) && booleans.every(key =>
+        value[key] === undefined || typeof value[key] === 'boolean'
+    );
+}
+
 function validEnemySnapshot(value) {
     return isObject(value) &&
         (value.kind === 'enemy' || value.kind === 'boss') &&
@@ -666,6 +724,10 @@ function validEnemySnapshot(value) {
         Number.isFinite(value.floorLevel) &&
         Number.isFinite(value.level) &&
         validStateSnapshot(value.state, ['x', 'y']) &&
+        validOptionalStateFields(value.state, {
+            numbers: ['empTimer', 'hackTimer'],
+            strings: ['hackedByPlayerId']
+        }) &&
         validEntityArray(value.shipParts, part =>
             isObject(part) &&
             Number.isInteger(part.x) &&
@@ -684,7 +746,25 @@ function validProjectileSnapshot(value) {
             'x', 'y', 'angle', 'damage', 'maxLife'
         ]) &&
         typeof value.state.type === 'string' &&
-        typeof value.state.owner === 'string';
+        typeof value.state.owner === 'string' &&
+        validOptionalStateFields(value.state, {
+            numbers: [
+                'armingTime', 'armingTimeRemaining', 'triggerRadius',
+                'blastRadius', 'explosionDamage', 'shrapnelCount',
+                'shrapnelDamage', 'ricochetCount', 'ricochetRange',
+                'ricochetDamageMul', 'hitCount', 'remainingPierces',
+                'chainCount', 'hackDuration', 'beamLength',
+                'explosionRadius', 'blastRadiusMul'
+            ],
+            strings: [
+                'sourcePlayerId', 'sourcePartId', 'sourcePartKey',
+                'sourcePartName', 'weaponFamily'
+            ],
+            booleans: [
+                'shouldExplode', 'armed', 'triggered', 'isBeam',
+                'isVisualOnly', 'prismChild'
+            ]
+        });
 }
 
 function validDroneSnapshot(value) {
@@ -694,6 +774,18 @@ function validDroneSnapshot(value) {
         (
             value.state.ownerPlayerId == null ||
             typeof value.state.ownerPlayerId === 'string'
+        );
+}
+
+function validDecoySnapshot(value) {
+    return isObject(value) &&
+        typeof value.id === 'string' &&
+        value.id.length > 0 &&
+        value.id.length <= 100 &&
+        (value.ownerPlayerId === null || typeof value.ownerPlayerId === 'string') &&
+        validStateSnapshot(value.state, ['x', 'y']) &&
+        ['hp', 'maxHp', 'radius', 'duration', 'life'].every(key =>
+            Number.isFinite(value.state[key]) && value.state[key] >= 0
         );
 }
 

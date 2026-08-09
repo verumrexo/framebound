@@ -206,6 +206,7 @@ export class PeerNetworkManager {
                 this.onStatus?.('invalid_resync');
                 return;
             }
+            this.applyRemoteAbilityState(state);
             this.cancelGuestReadyTimeout();
             this.resumeToken = client.resumeToken;
             this.connected = true;
@@ -217,7 +218,13 @@ export class PeerNetworkManager {
                 client.requestResync();
                 return;
             }
+            this.applyRemoteAbilityState(state);
             this.noteGuestActivity();
+        };
+        client.onEvent = event => {
+            if (event.eventType === 'room_state') {
+                this.onStatus?.('room_state', event.payload);
+            }
         };
         client.onActivity = message => {
             if (message.type === 'ping') this.noteGuestActivity();
@@ -242,6 +249,21 @@ export class PeerNetworkManager {
         });
         if (sent) this.lastFireIntent = intent;
         return sent;
+    }
+
+    sendAbility(abilityId, aimAngle) {
+        if (
+            !this.isGuest ||
+            !this.client?.connected ||
+            !['blink', 'decoy', 'stealth', 'emp'].includes(abilityId) ||
+            !Number.isFinite(aimAngle)
+        ) {
+            return false;
+        }
+        return this.sendOrQueueAction('ability', {
+            abilityId,
+            aimAngle
+        });
     }
 
     sendInteraction(targetKind, targetIndex) {
@@ -357,6 +379,16 @@ export class PeerNetworkManager {
             player.update?.(dt);
         }
         this.flushPendingActions();
+    }
+
+    applyRemoteAbilityState(state) {
+        if (!state?.players || !this.game.abilitySystem) return;
+        const self = state.players.find(player => player.id === state.self);
+        if (!self) return;
+        this.game.abilitySystem.restoreShipState(this.game.playerShip, {
+            cooldowns: self.abilityCooldowns,
+            stealthTimer: self.stealthTimer
+        });
     }
 
     disconnect() {

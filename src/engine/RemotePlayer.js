@@ -16,6 +16,7 @@ export class RemotePlayer {
         this.maxHp = 100;
         this.isDead = false;
         this.suspended = false;
+        this.stealthTimer = 0;
 
         // Interpolation
         this.interpolationBuffer = [];
@@ -30,6 +31,9 @@ export class RemotePlayer {
         if (typeof data.isDead === 'boolean') this.isDead = data.isDead;
         if (typeof data.suspended === 'boolean') {
             this.suspended = data.suspended;
+        }
+        if (Number.isFinite(data.stealthTimer)) {
+            this.stealthTimer = Math.max(0, data.stealthTimer);
         }
         // data: { x, y, rotation, input, hp, maxHp }
         // We add a timestamp when we receive it (or server timestamp if available, but client receive time is simpler for now)
@@ -71,6 +75,7 @@ export class RemotePlayer {
                 if (snap.input) this.input = snap.input;
                 if (snap.hp !== undefined) this.hp = snap.hp;
                 if (snap.maxHp !== undefined) this.maxHp = snap.maxHp;
+                this.applyStealthSnapshot(snap);
             }
             return;
         }
@@ -86,6 +91,7 @@ export class RemotePlayer {
             if (snap.input) this.input = snap.input;
             if (snap.hp !== undefined) this.hp = snap.hp;
             if (snap.maxHp !== undefined) this.maxHp = snap.maxHp;
+            this.applyStealthSnapshot(snap);
             return;
         }
 
@@ -108,6 +114,27 @@ export class RemotePlayer {
         if (fromNode.input) this.input = fromNode.input;
         if (fromNode.hp !== undefined) this.hp = fromNode.hp;
         if (fromNode.maxHp !== undefined) this.maxHp = fromNode.maxHp;
+        this.applyInterpolatedStealth(fromNode, toNode, progress);
+    }
+
+    applyStealthSnapshot(snapshot) {
+        if (Number.isFinite(snapshot?.stealthTimer)) {
+            this.stealthTimer = Math.max(0, snapshot.stealthTimer);
+        }
+    }
+
+    applyInterpolatedStealth(fromNode, toNode, progress) {
+        const fromTimer = fromNode?.stealthTimer;
+        const toTimer = toNode?.stealthTimer;
+        if (Number.isFinite(fromTimer) && Number.isFinite(toTimer)) {
+            this.stealthTimer = Math.max(
+                0,
+                fromTimer + (toTimer - fromTimer) * progress
+            );
+            return;
+        }
+        this.applyStealthSnapshot(fromNode);
+        this.applyStealthSnapshot(toNode);
     }
 
     draw(renderer) {

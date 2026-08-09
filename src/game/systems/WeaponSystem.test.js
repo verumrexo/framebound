@@ -70,6 +70,42 @@ test('a basic weapon fires immediately from the original muzzle and applies cool
     assert.deepEqual(result, { isMouseDown: true, blockedFrame: false });
 });
 
+test('stealth breaks when the real weapon spawn path creates a volley', () => {
+    const part = { partId: 'gun_basic', x: 0, y: 0, rotation: 0 };
+    const { game } = makeGame(part);
+    game.playerShip.stealthTimer = 4;
+    const system = new WeaponSystem(game, {
+        ProjectileClass: ProjectileStub,
+        random: () => 0.5
+    });
+    game.spawnProjectile = (...args) => system.spawnProjectile(...args);
+
+    system.update(0.016, updateState());
+
+    assert.equal(game.projectiles.length, 1);
+    assert.equal(game.playerShip.stealthTimer, 0);
+});
+
+test('stealth survives a held-fire frame while the weapon is still on cooldown', () => {
+    const part = {
+        partId: 'gun_basic',
+        x: 0,
+        y: 0,
+        rotation: 0,
+        cooldown: 1
+    };
+    const { game, calls } = makeGame(part);
+    game.playerShip.stealthTimer = 4;
+    const system = new WeaponSystem(game);
+    game.spawnProjectile = (...args) => system.spawnProjectile(...args);
+
+    system.update(0.016, updateState());
+
+    assert.equal(game.playerShip.stealthTimer, 4);
+    assert.equal(game.projectiles.length, 0);
+    assert.equal(calls.some(call => call[0] === 'shot'), false);
+});
+
 test('rocket bay bonus creates a same-frame burst and preserves its shortened interval', () => {
     const rocketId = Object.keys(PartsLibrary).find(id =>
         PartsLibrary[id]?.type === 'weapon' &&
@@ -278,4 +314,108 @@ test('family upgrades affect actual cooldown, damage, and projectile mechanics',
     const projectile = game.projectiles[0];
     assert.equal(projectile.args[6], def.stats.damage * 1.4);
     assert.equal(projectile.remainingPierces, 2);
+});
+
+test('new ship stats defensively modify cooldown, projectile speed, fmj damage, and pierce', () => {
+    const part = { partId: 'needler', x: 0, y: 0, rotation: 0 };
+    const { game } = makeGame(part);
+    game.playerShip.stats = {
+        accelerantCount: 0,
+        rocketBayCount: 0,
+        globalFireRateMul: 1.25,
+        projectileSpeedMul: 1.5,
+        velocityDamageMul: 1.1,
+        velocityPierceAdd: 1
+    };
+    const system = new WeaponSystem(game, {
+        ProjectileClass: ProjectileStub,
+        random: () => 0.5
+    });
+    const def = {
+        id: 'needler',
+        stats: {
+            weaponGroup: 'velocity',
+            projectileType: 'mini_bullet',
+            projectileSpeed: 1000,
+            damage: 2
+        }
+    };
+
+    system.spawnProjectile(def, 0, 0, 0, part);
+
+    assert.equal(game.projectiles[0].args[4], 1500);
+    assert.equal(game.projectiles[0].args[6], 2.2);
+    assert.equal(game.projectiles[0].remainingPierces, 1);
+
+    system.update(0.016, updateState());
+    assert.equal(part.cooldown, PartsLibrary.needler.stats.cooldown / 1.25);
+});
+
+test('auto aim follows the closest live hostile inside the exact assist cone and range', () => {
+    const part = { partId: 'needler', x: 0, y: 0, rotation: 0 };
+    const { game } = makeGame(part, {
+        enemies: [
+            { x: 300, y: 230, isDead: false },
+            { x: 300, y: 360, isDead: false },
+            { x: 2000, y: 200, isDead: false }
+        ]
+    });
+    game.playerShip.stats.aimAssistAngle = 0.2;
+    game.playerShip.stats.aimAssistRange = 750;
+    const system = new WeaponSystem(game);
+
+    const result = system.getInitialShotOrigin(part, PartsLibrary.needler, 1000, 200);
+
+    assert.ok(Math.abs(result.angle - Math.atan2(30, 200)) < 1e-9);
+});
+
+test('prism creates two non-recursive side beams with the corrected laser split stat keys', () => {
+    const part = { partId: 'pulse_lance', x: 0, y: 0, rotation: 0 };
+    const { game } = makeGame(part);
+    game.playerShip.stats = {
+        accelerantCount: 0,
+        rocketBayCount: 0,
+        laserSplitCount: 2,
+        laserSplitAngle: 0.1396263402,
+        laserSplitDamageMul: 0.45
+    };
+    const system = new WeaponSystem(game, {
+        ProjectileClass: ProjectileStub,
+        random: () => 0.5
+    });
+
+    system.spawnProjectile(PartsLibrary.pulse_lance, 0, 0, 0, part);
+
+    assert.equal(game.projectiles.length, 3);
+    assert.deepEqual(game.projectiles.map(projectile => projectile.args[2]), [
+        0,
+        -0.1396263402,
+        0.1396263402
+    ]);
+    assert.deepEqual(game.projectiles.map(projectile => projectile.args[6]), [
+        14,
+        6.3,
+        6.3
+    ]);
+    assert.deepEqual(game.projectiles.map(projectile => projectile.prismChild === true), [
+        false,
+        true,
+        true
+    ]);
+});
+
+test('rangefinder scales legacy laser speeds at the weapon boundary', () => {
+    const part = { partId: 'pulse_lance', x: 0, y: 0, rotation: 0 };
+    const { game } = makeGame(part);
+    game.playerShip.stats.projectileSpeedMul = 1.2;
+    const system = new WeaponSystem(game, {
+        ProjectileClass: ProjectileStub,
+        random: () => 0.5
+    });
+
+    system.spawnProjectile(PartsLibrary.pulse_lance, 0, 0, 0, part);
+
+    assert.equal(game.projectiles[0].speed, 1800);
+    assert.equal(game.projectiles[0].vx, 1800);
+    assert.equal(game.projectiles[0].vy, 0);
 });

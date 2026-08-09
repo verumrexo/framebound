@@ -53,6 +53,7 @@ import { PeerNetworkManager } from './PeerNetworkManager.js';
 import { CombatTelemetry } from '../game/systems/CombatTelemetry.js';
 import { SalvageSweepSystem } from '../game/systems/SalvageSweepSystem.js';
 import { SignalForgeRuntime } from '../game/audio/SignalForgeRuntime.js';
+import { AbilitySystem } from '../game/systems/AbilitySystem.js';
 
 export class Game {
     constructor(canvas) {
@@ -96,6 +97,8 @@ export class Game {
         this.gameOverController = new GameOverController(this);
         this.worldInteractions = new WorldInteractionSystem(this);
         this.drones = [];
+        this.decoys = [];
+        this.abilitySystem = new AbilitySystem(this);
         this.droneSystem = new DroneSystem(this);
         this.enemies = [];
         this.bosses = [];

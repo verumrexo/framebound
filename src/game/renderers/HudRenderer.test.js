@@ -232,6 +232,24 @@ test('vault containment status stays on the native hud', () => {
     assert.ok(text.includes('hold 10.8s'));
 });
 
+test('active ability hud shows selection, cooldown, and edge controls', () => {
+    const { calls, hud } = createHarness({
+        abilitySystem: {
+            selectedAbility: () => ({ id: 'blink', label: 'warp gate' }),
+            snapshotShipState: () => ({
+                cooldowns: { blink: 2.5 },
+                stealthTimer: 0
+            })
+        }
+    });
+
+    hud.draw();
+
+    const text = calls.filter(call => call[0] === 'text').map(call => call[1]);
+    assert.ok(text.includes('warp gate // 2.5s'));
+    assert.ok(text.includes('q // cycle   rmb // activate'));
+});
+
 test('hangar, ship builder, and game-over modes keep their original precedence', () => {
     const hangar = createHarness();
     hangar.game.hangar.active = true;

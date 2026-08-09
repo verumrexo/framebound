@@ -7,6 +7,7 @@ import { recoverShip } from './PlayerRecoverySystem.js';
 import { applyUpgradeToShip } from './LevelUpManager.js';
 import { WeaponSystem } from './WeaponSystem.js';
 import { applyRandomStarterLoadout } from '../../shared/combat/StarterLoadouts.js';
+import { AbilitySystem } from './AbilitySystem.js';
 
 export class HostGameSimulation {
     constructor(game, {
@@ -14,7 +15,8 @@ export class HostGameSimulation {
         WeaponSystemClass = WeaponSystem,
         random = () => game.levelGen?.random?.() ?? Math.random(),
         starterLoadout = null,
-        maxPlayers = 4
+        maxPlayers = 4,
+        AbilitySystemClass = AbilitySystem
     } = {}) {
         this.game = game;
         this.ShipClass = ShipClass;
@@ -24,6 +26,7 @@ export class HostGameSimulation {
             ShipClass === Ship ? applyRandomStarterLoadout : null
         );
         this.maxPlayers = maxPlayers;
+        this.abilitySystem = game.abilitySystem || new AbilitySystemClass(game);
         this.peers = new Map();
         this.nextPlayerId = 1;
         this.levelUpInProgress = false;
@@ -168,6 +171,23 @@ export class HostGameSimulation {
             };
         }
 
+        if (action === 'ability') {
+            const outcome = this.abilitySystem.activateForPlayer(
+                playerId,
+                peer.ship,
+                payload
+            );
+            if (!outcome) return false;
+            return {
+                type: 'room_state',
+                payload: {
+                    playerId,
+                    abilityId: outcome.abilityId,
+                    activeWorld: snapshotActiveWorld(this.game)
+                }
+            };
+        }
+
         // Explicit transition claims stay rejected. The host derives room and
         // portal crossings from authoritative ship positions instead.
         return false;
@@ -281,7 +301,11 @@ export class HostGameSimulation {
             hp: ship.hp,
             maxHp: ship.maxHp,
             isDead: Boolean(ship.isDead),
-            suspended
+            suspended,
+            stealthTimer: Number.isFinite(ship.stealthTimer)
+                ? Math.max(0, ship.stealthTimer)
+                : 0,
+            abilityCooldowns: this.abilitySystem.snapshotShipState(ship).cooldowns
         };
         state.permanentStats = { ...ship.permanentStats };
         if (includeParts) {
@@ -307,6 +331,16 @@ export class HostGameSimulation {
             network: null,
             sourcePlayerId: playerId
         };
+        Object.defineProperties(context, {
+            enemies: {
+                enumerable: true,
+                get: () => this.game.enemies || []
+            },
+            bosses: {
+                enumerable: true,
+                get: () => this.game.bosses || []
+            }
+        });
         const weaponSystem = new this.WeaponSystemClass(context, {
             random: this.random
         });

@@ -6,6 +6,7 @@ const { Room } = await import('../environment/Room.js');
 const { Asteroid } = await import('../../shared/entities/Asteroid.js');
 const { Boss } = await import('../../shared/entities/Boss.js');
 const { Drone } = await import('../../shared/entities/Drone.js');
+const { Decoy } = await import('../../shared/entities/Decoy.js');
 const { Enemy } = await import('../../shared/entities/Enemy.js');
 const { GoldOrb } = await import('../../shared/entities/GoldOrb.js');
 const { HPOrb } = await import('../../shared/entities/HPOrb.js');
@@ -136,12 +137,15 @@ test('active snapshots restore a live fight, bullets, drones, and loose rewards'
     drone.hp = 6;
     const pickup = new ItemPickup(50, 60, 'hull', random);
     pickup.life = 4;
+    const decoy = new Decoy('decoy-1', 120, 130, 'guest_1');
+    decoy.hp = 19;
 
     const snapshot = snapshotActiveWorld({
         enemies: [enemy],
         bosses: [boss],
         projectiles: [projectile],
         drones: [drone],
+        decoys: [decoy],
         xpOrbs: [new XPOrb(70, 80, 9)],
         goldOrbs: [new GoldOrb(90, 100, 3)],
         hpOrbs: [new HPOrb(110, 120, 5)],
@@ -179,11 +183,105 @@ test('active snapshots restore a live fight, bullets, drones, and loose rewards'
     assert.equal(game.drones[0].role, 'ram');
     assert.equal(game.drones[0].damage, 30);
     assert.equal(game.drones[0].sourcePartKey, 'drone_ram_hive@1,2');
+    assert.equal(game.decoys[0].id, 'decoy-1');
+    assert.equal(game.decoys[0].ownerPlayerId, 'guest_1');
+    assert.equal(game.decoys[0].hp, 19);
     assert.equal(game.xpOrbs[0].value, 9);
     assert.equal(game.goldOrbs[0].value, 3);
     assert.equal(game.hpOrbs[0].value, 5);
     assert.equal(game.itemPickups[0].life, 4);
     assert.equal(room.enemies, game.enemies);
+});
+
+test('combat statuses and runtime projectile fields round-trip safely', () => {
+    const enemy = new Enemy(100, 200, 'striker', 3, random, 'enemy-status');
+    enemy.empTimer = 2.25;
+    enemy.hackTimer = 6.5;
+    enemy.hackedByPlayerId = 'guest_1';
+
+    const mine = new Projectile(
+        10, 20, 0.4, 'proximity_mine', 0, 'player', 18, 18, random
+    );
+    Object.assign(mine, {
+        shouldExplode: true,
+        armed: true,
+        triggered: true,
+        armingTime: 0.65,
+        armingTimeRemaining: 0.2,
+        triggerRadius: 80,
+        blastRadius: 90,
+        explosionDamage: 18,
+        shrapnelCount: 10,
+        shrapnelDamage: 3.5,
+        sourcePlayerId: 'host',
+        sourcePartId: 'mine_placer',
+        sourcePartKey: 'mine_placer@1,2',
+        sourcePartName: 'mine placer',
+        weaponFamily: 'rocket',
+        hitCount: 2,
+        remainingPierces: 1,
+        chainCount: 3
+    });
+
+    const ricochet = new Projectile(
+        30, 40, 0.2, 'ricochet_slug', 800, 'player', 8, 2, random
+    );
+    Object.assign(ricochet, {
+        ricochetCount: 1,
+        ricochetRange: 320,
+        ricochetDamageMul: 0.7,
+        hitTargets: new Set(['already-hit'])
+    });
+
+    const beam = new Projectile(
+        50, 60, 0.1, 'beam_sword', 0, 'player', 28, 0.08, random
+    );
+    beam.targetHits.set('already-hit', 1);
+
+    const snapshot = snapshotActiveWorld({
+        enemies: [enemy],
+        bosses: [],
+        projectiles: [mine, ricochet, beam],
+        drones: [],
+        decoys: [],
+        xpOrbs: [],
+        goldOrbs: [],
+        hpOrbs: [],
+        itemPickups: []
+    });
+    const restoredGame = {
+        currentRoom: new Room(1, 0, 1, 1, random),
+        audio: {}
+    };
+
+    restoreActiveWorld(restoredGame, snapshot);
+
+    assert.equal(restoredGame.enemies[0].empTimer, 2.25);
+    assert.equal(restoredGame.enemies[0].hackTimer, 6.5);
+    assert.equal(restoredGame.enemies[0].hackedByPlayerId, 'guest_1');
+
+    const restoredMine = restoredGame.projectiles[0];
+    for (const key of [
+        'shouldExplode', 'armed', 'triggered', 'armingTime',
+        'armingTimeRemaining', 'triggerRadius', 'blastRadius',
+        'explosionDamage', 'shrapnelCount', 'shrapnelDamage',
+        'sourcePlayerId', 'sourcePartId', 'sourcePartKey',
+        'sourcePartName', 'weaponFamily', 'hitCount', 'remainingPierces',
+        'chainCount'
+    ]) {
+        assert.equal(restoredMine[key], mine[key], key);
+    }
+
+    const restoredRicochet = restoredGame.projectiles[1];
+    assert.equal(restoredRicochet.ricochetCount, 1);
+    assert.equal(restoredRicochet.ricochetRange, 320);
+    assert.equal(restoredRicochet.ricochetDamageMul, 0.7);
+    assert.equal(restoredRicochet.hitTargets instanceof Set, true);
+    assert.equal(restoredRicochet.hitTargets.size, 0);
+
+    const restoredBeam = restoredGame.projectiles[2];
+    assert.equal(restoredBeam.targetHits instanceof Map, true);
+    assert.equal(restoredBeam.targetHits.size, 0);
 });
 
 test('snapshot validation rejects non-finite and malformed entity state', () => {
@@ -236,4 +334,51 @@ test('snapshot validation rejects non-finite and malformed entity state', () => 
         ...validRooms[0],
         asteroids: 'nope'
     }], validWorld), false);
+
+    const validProjectile = {
+        state: {
+            x: 0,
+            y: 0,
+            angle: 0,
+            damage: 1,
+            maxLife: 1,
+            type: 'proximity_mine',
+            owner: 'player',
+            sourcePlayerId: 'host',
+            shouldExplode: false,
+            armingTime: 0.65
+        }
+    };
+    assert.equal(isValidSnapshotData(validRooms, {
+        ...validWorld,
+        projectiles: [validProjectile]
+    }), true);
+    assert.equal(isValidSnapshotData(validRooms, {
+        ...validWorld,
+        projectiles: [{
+            ...validProjectile,
+            state: { ...validProjectile.state, sourcePlayerId: 42 }
+        }]
+    }), false);
+    assert.equal(isValidSnapshotData(validRooms, {
+        ...validWorld,
+        projectiles: [{
+            ...validProjectile,
+            state: { ...validProjectile.state, shouldExplode: 'yes' }
+        }]
+    }), false);
+    assert.equal(isValidSnapshotData(validRooms, {
+        ...validWorld,
+        enemies: [{
+            kind: 'enemy',
+            id: 'enemy-status',
+            type: 'basic',
+            floorLevel: 1,
+            level: 1,
+            state: { x: 0, y: 0, empTimer: 'bad' },
+            shipParts: [],
+            weaponCooldowns: [],
+            activeBursts: []
+        }]
+    }), false);
 });

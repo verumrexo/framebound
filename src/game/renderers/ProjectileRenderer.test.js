@@ -151,3 +151,34 @@ test('grenade variants retain distinct sizes, colors, and cores', () => {
         ['drawRect', -4, -4, 8, 8, '#ffffff']
     ]);
 });
+
+test('new arsenal projectiles render with distinct deterministic silhouettes', () => {
+    const types = [
+        'beam_sword',
+        'arc_welder',
+        'proximity_mine',
+        'shrapnel_grenade',
+        'shrapnel_fragment',
+        'ricochet_slug',
+        'hack_dart',
+        'torpedo',
+        'mini_bullet'
+    ];
+
+    for (const type of types) {
+        const { renderer, calls } = createRenderer();
+        drawProjectile(renderer, createProjectile({
+            type,
+            isBeam: type === 'beam_sword' || type === 'arc_welder',
+            beamLength: type === 'beam_sword' ? 120 : 140,
+            armed: true
+        }));
+        const rects = drawRects(calls);
+        assert.ok(rects.length > 0, `${type} should draw at least one shape`);
+        assert.ok(calls.some(([name]) => name === 'save') || type === 'mini_bullet');
+    }
+
+    const mine = createRenderer();
+    drawProjectile(mine.renderer, createProjectile({ type: 'proximity_mine', armed: false }));
+    assert.equal(drawRects(mine.calls)[0][5], '#8c8c8c');
+});

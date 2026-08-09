@@ -30,6 +30,7 @@ export class FrameRuntimeSystem {
         if (game.gameplayOverlays.update(dt, isMouseDown)) return;
 
         game.playerStateGuard.repairNonFiniteState();
+        game.abilitySystem?.update?.(dt);
 
         const levelBonus = 1 + (game.level - 1) * 0.01;
 
@@ -43,6 +44,11 @@ export class FrameRuntimeSystem {
                 dt,
                 mouse,
                 guestMovementAxes
+            );
+            this.handleActiveAbilityInput(
+                guestAim.worldMouseX,
+                guestAim.worldMouseY,
+                true
             );
             game.peerNetwork.sendFireIntent(
                 isMouseDown,
@@ -72,6 +78,8 @@ export class FrameRuntimeSystem {
             mouse,
             movementAxes
         );
+
+        this.handleActiveAbilityInput(worldMouseX, worldMouseY, false);
 
         game.roomRuntime.update(dt);
         game.salvageSweep?.update?.(dt);
@@ -127,6 +135,7 @@ export class FrameRuntimeSystem {
             game.peerNetwork.updateGuest(dt);
             game.effects.updateExplosions(dt);
         } else {
+            game.abilitySystem?.update?.(dt);
             game.peerNetwork?.updateHost(dt);
             game.projectileSystem.update(dt);
             game.effects.updateExplosions(dt);
@@ -149,5 +158,39 @@ export class FrameRuntimeSystem {
         game.camera.update(dt);
         game.mouseDownLastFrame = isMouseDown;
         game.input.clearPressed();
+    }
+
+    handleActiveAbilityInput(worldMouseX, worldMouseY, isGuest) {
+        const game = this.game;
+        const abilitySystem = game.abilitySystem;
+        if (
+            !abilitySystem ||
+            game.hangar?.active ||
+            game.shipBuilder?.active
+        ) return;
+
+        if (game.input.isKeyPressed?.('KeyQ')) {
+            abilitySystem.cycleSelection(game.playerShip);
+        }
+
+        const mouse = game.input.getMousePos();
+        if (!mouse.wasRightPressed) return;
+
+        const selected = abilitySystem.selectedAbility(game.playerShip);
+        if (!selected) return;
+        const aimAngle = Math.atan2(
+            worldMouseY - game.y,
+            worldMouseX - game.x
+        );
+        const payload = {
+            abilityId: selected.id,
+            aimAngle
+        };
+
+        if (isGuest) {
+            game.peerNetwork?.sendAbility?.(payload.abilityId, payload.aimAngle);
+            return;
+        }
+        abilitySystem.activateForPlayer('host', game.playerShip, payload);
     }
 }

@@ -33,13 +33,15 @@ test('remote interpolation crosses the rotation seam by the shortest path', (t) 
             rotation: Math.PI - 0.1,
             hp: 80,
             maxHp: 120,
-            input: { up: true }
+            input: { up: true },
+            stealthTimer: 4
         },
         {
             timestamp: 1100,
             x: 100,
             y: 40,
-            rotation: -Math.PI + 0.1
+            rotation: -Math.PI + 0.1,
+            stealthTimer: 2
         }
     ];
 
@@ -51,6 +53,7 @@ test('remote interpolation crosses the rotation seam by the shortest path', (t) 
     assert.equal(player.hp, 80);
     assert.equal(player.maxHp, 120);
     assert.deepEqual(player.input, { up: true });
+    assert.equal(player.stealthTimer, 3);
 });
 
 test('remote interpolation falls back to oldest and latest snapshots safely', (t) => {
@@ -124,4 +127,31 @@ test('older interpolation samples cannot roll back discrete death state', (t) =>
 
     assert.equal(player.isDead, true);
     assert.equal(player.suspended, true);
+});
+
+test('remote stealth survives oldest and latest snapshot fallback paths', (t) => {
+    t.mock.method(Date, 'now', () => 950);
+    const player = new RemotePlayer('peer');
+    player.INTERPOLATION_DELAY = 100;
+    player.interpolationBuffer = [{
+        timestamp: 900,
+        x: 10,
+        y: 20,
+        rotation: 0,
+        stealthTimer: 2.5
+    }];
+
+    player.update(0.016);
+    assert.equal(player.stealthTimer, 2.5);
+
+    player.interpolationBuffer.push({
+        timestamp: 1000,
+        x: 30,
+        y: 40,
+        rotation: 0,
+        stealthTimer: 1
+    });
+    t.mock.method(Date, 'now', () => 1200);
+    player.update(0.016);
+    assert.equal(player.stealthTimer, 1);
 });

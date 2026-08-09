@@ -159,6 +159,31 @@ test('frame runtime preserves weapon and portal early-return boundaries', () => 
     );
 });
 
+test('live gameplay cycles and activates an active system on edge inputs', () => {
+    const { game, calls } = createGame({
+        input: {
+            isMouseDown: () => false,
+            isKeyPressed: code => code === 'KeyQ',
+            getMousePos: () => ({ x: 12, y: 34, wasRightPressed: true }),
+            clearPressed: record => calls.push(['clear-input'])
+        },
+        abilitySystem: {
+            cycleSelection: ship => calls.push(['cycle', ship]),
+            selectedAbility: ship => {
+                calls.push(['select', ship]);
+                return { id: 'blink' };
+            },
+            activateForPlayer: (...args) => calls.push(['activate', ...args])
+        }
+    });
+
+    new FrameRuntimeSystem(game).update(0.1);
+
+    const activate = calls.find(call => call[0] === 'activate');
+    assert.equal(activate[1], 'host');
+    assert.deepEqual(activate[3], { abilityId: 'blink', aimAngle: Math.atan2(560, 580) });
+});
+
 test('peer guests predict movement but skip local world authority', () => {
     const { game, calls } = createGame({
         peerNetwork: {
@@ -264,4 +289,24 @@ test('dead host keeps world authority running until boss resurrection', () => {
     assert.equal(calls.some(([name]) => name === 'weapons'), false);
     assert.equal(calls.some(([name]) => name === 'portals'), false);
     assert.equal(calls.some(([name]) => name === 'orbs'), false);
+});
+
+test('host spectator frames tick ability state once without double-ticking normal frames', () => {
+    for (const isSpectating of [false, true]) {
+        const abilityTicks = [];
+        const { game } = createGame({
+            isSpectating,
+            abilitySystem: {
+                update: dt => abilityTicks.push(dt)
+            },
+            peerNetwork: isSpectating ? {
+                isGuest: false,
+                updateHost: () => {}
+            } : undefined
+        });
+
+        new FrameRuntimeSystem(game).update(0.25);
+
+        assert.deepEqual(abilityTicks, [0.25]);
+    }
 });

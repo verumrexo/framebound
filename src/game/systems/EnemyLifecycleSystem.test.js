@@ -356,3 +356,75 @@ test('circlers lock their target inside orbit range until it dies', () => {
     players = [{ id: 'host', x: 10, y: 0 }];
     assert.equal(system.targetFor(circler).id, 'host');
 });
+
+test('stealth hides players while a viable nearby decoy remains targetable', () => {
+    const enemy = {
+        x: 0,
+        y: 0,
+        isDead: false,
+        update() {}
+    };
+    const { game, system } = createHarness({ enemies: [enemy] });
+    game.playerShip.stealthTimer = 3;
+    game.decoys = [{
+        id: 'decoy_1',
+        x: 40,
+        y: 0,
+        life: 5,
+        isDead: false
+    }];
+
+    assert.equal(system.targetFor(enemy).id, 'decoy_1');
+});
+
+test('hacked enemies target the nearest live enemy or boss, never players or decoys', () => {
+    const hacked = {
+        id: 'hacked',
+        x: 0,
+        y: 0,
+        isDead: false,
+        hackTimer: 4,
+        hackedByPlayerId: 'host',
+        update() {}
+    };
+    const hostile = {
+        id: 'hostile',
+        x: 30,
+        y: 0,
+        isDead: false,
+        hackTimer: 0,
+        update() {}
+    };
+    const farther = {
+        id: 'farther',
+        x: 200,
+        y: 0,
+        isDead: false,
+        hackTimer: 0,
+        update() {}
+    };
+    const hackedAlly = {
+        id: 'hacked_ally',
+        x: 5,
+        y: 0,
+        isDead: false,
+        hackTimer: 4,
+        hackedByPlayerId: 'host',
+        update() {}
+    };
+    const boss = {
+        id: 'boss',
+        x: 60,
+        y: 0,
+        isDead: false,
+        update() {}
+    };
+    const { game, system } = createHarness({
+        enemies: [hacked, hostile, farther, hackedAlly],
+        bosses: [boss]
+    });
+    game.playerShip.stealthTimer = 0;
+    game.decoys = [{ id: 'decoy', x: 1, y: 0, life: 5, isDead: false }];
+
+    assert.equal(system.targetFor(hacked), hostile);
+});

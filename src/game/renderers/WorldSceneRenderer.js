@@ -64,6 +64,9 @@ export class WorldSceneRenderer {
             game.itemPickups.forEach(entity =>
                 this.entityRenderer.drawItemPickup(renderer, entity));
 
+            (game.decoys || []).forEach(decoy =>
+                this.drawDecoy(renderer, decoy));
+
             game.enemies.forEach(entity =>
                 this.entityRenderer.drawEnemy(renderer, entity));
             game.bosses.forEach(entity =>
@@ -136,5 +139,56 @@ export class WorldSceneRenderer {
             ctx.fillRect(room.x, room.y, room.width, room.height);
         }
 
+    }
+
+    drawDecoy(renderer, decoy) {
+        if (!decoy || decoy.isDead) return;
+        const ctx = renderer.ctx;
+        ctx.save();
+        ctx.globalAlpha = 0.52;
+        ctx.strokeStyle = '#66f6ff';
+        ctx.fillStyle = 'rgba(102, 246, 255, 0.12)';
+        renderer.drawCircle?.(decoy.x, decoy.y, decoy.radius || 22, ctx.fillStyle);
+        renderer.drawLine?.(
+            decoy.x - 18,
+            decoy.y,
+            decoy.x + 18,
+            decoy.y,
+            ctx.strokeStyle,
+            2
+        );
+        renderer.drawLine?.(
+            decoy.x,
+            decoy.y - 18,
+            decoy.x,
+            decoy.y + 18,
+            ctx.strokeStyle,
+            2
+        );
+        renderer.drawLine?.(
+            decoy.x + 22,
+            decoy.y,
+            decoy.x + 8,
+            decoy.y - 8,
+            ctx.strokeStyle,
+            2
+        );
+        renderer.drawLine?.(
+            decoy.x + 8,
+            decoy.y - 8,
+            decoy.x + 8,
+            decoy.y + 8,
+            ctx.strokeStyle,
+            2
+        );
+        renderer.drawLine?.(
+            decoy.x + 8,
+            decoy.y + 8,
+            decoy.x + 22,
+            decoy.y,
+            ctx.strokeStyle,
+            2
+        );
+        ctx.restore();
     }
 }

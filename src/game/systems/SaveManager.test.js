@@ -161,7 +161,13 @@ test('save persists run identity, score, floor, biome, and permanent upgrades', 
         ],
         portals: [{ x: 5000, y: 6000 }],
         hangar: { inventory: { hull: 2 } },
-        currentRoom: { gridX: 0, gridY: 0 }
+        currentRoom: { gridX: 0, gridY: 0 },
+        abilitySystem: {
+            snapshotShipState: () => ({
+                cooldowns: { blink: 2.5 },
+                stealthTimer: 1.25
+            })
+        }
     };
 
     try {
@@ -178,6 +184,10 @@ test('save persists run identity, score, floor, biome, and permanent upgrades', 
         assert.deepEqual(saved.playerShip.parts[0].state, {
             cooldown: 0.75,
             chargeReady: true
+        });
+        assert.deepEqual(saved.playerAbilityState, {
+            cooldowns: { blink: 2.5 },
+            stealthTimer: 1.25
         });
         assert.equal(saved.roomSnapshots.length, 2);
         assert.deepEqual(saved.activeWorld.enemies, []);

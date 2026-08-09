@@ -26,7 +26,9 @@ function createHarness() {
             calls.push(['camera-begin', camera]);
             draw();
             calls.push(['camera-end']);
-        }
+        },
+        drawCircle: (...args) => calls.push(['draw-circle', ...args]),
+        drawLine: (...args) => calls.push(['draw-line', ...args])
     };
     const named = name => ({ name });
     const entityRenderer = {};
@@ -229,4 +231,17 @@ test('visited vault rooms use the dedicated world renderer', () => {
     assert.equal(call[2], room);
     assert.equal(call[3], true);
     assert.equal(calls.some(entry => entry[0] === 'drawVaultChest'), false);
+});
+
+test('decoys render as translucent fake ship markers before enemies', () => {
+    const { game, calls, scene } = createHarness();
+    game.decoys = [{ id: 'd1', x: 220, y: 240, radius: 22, isDead: false }];
+
+    scene.draw();
+
+    const firstMarker = calls.findIndex(call => call[0] === 'draw-circle');
+    const firstEnemy = calls.findIndex(call => call[0] === 'drawEnemy');
+    assert.ok(firstMarker >= 0);
+    assert.ok(firstMarker < firstEnemy);
+    assert.equal(calls.filter(call => call[0] === 'draw-line').length, 5);
 });

@@ -182,6 +182,9 @@ export class Hangar {
             <div class="workshop-tooltip-name" style="color:${familyColor}">
                 ${String(def.name).toLowerCase()}
             </div>
+            <div class="workshop-tooltip-description">
+                ${String(def.description || 'no specification')}
+            </div>
             <div class="workshop-tooltip-meta">
                 <span style="color:${rarityColor}">${def.rarity || 'common'}</span>
                 <span>${def.type}${def.stats.weaponGroup ? ` // ${def.stats.weaponGroup}` : ''}</span>

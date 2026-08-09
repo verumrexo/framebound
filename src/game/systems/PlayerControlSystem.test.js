@@ -15,7 +15,7 @@ function createHarness({
         vx: 0,
         vy: 0,
         rotation: 0,
-        stats: { boosterCount: 0 },
+        stats: { boosterCount: 0, cameraZoom: 0.6 },
         parts: new Map(parts.map((part, index) => [index, part])),
         update(dt, inputState, options) {
             calls.push([
@@ -103,6 +103,7 @@ test('ship state is synchronized both directions with movement options', () => {
     game.vx = 13;
     game.vy = 14;
     game.rotation = 15;
+    ship.stats.cameraZoom = 2;
     game.currentRoom.cleared = true;
     game.dashActiveTimer = 1;
     game.network.isConnected = true;
@@ -131,6 +132,7 @@ test('tracker aim uses world mouse while ordinary ships face velocity only above
     const tracked = createHarness({
         parts: [{ partId: 'custom_1768410456823' }]
     });
+    tracked.ship.stats.cameraZoom = 2;
     const trackedResult = tracked.system.applyMovement(
         0.016,
         { x: 160, y: 340 },
@@ -148,4 +150,28 @@ test('tracker aim uses world mouse while ordinary ships face velocity only above
     ordinary.game.vx = 51;
     result = ordinary.system.applyMovement(0.016, { x: 0, y: 0 }, { inputX: 0, inputY: 0 });
     assert.equal(result.inputState.aimAngle, Math.PI / 2);
+});
+
+test('captain seat zoom is applied before mouse conversion and restores on removal', () => {
+    const { game, ship, system } = createHarness();
+    ship.stats.cameraZoom = 0.48;
+
+    const zoomed = system.applyMovement(
+        0.016,
+        { x: 48, y: 48 },
+        { inputX: 0, inputY: 0 }
+    );
+    assert.equal(game.camera.zoom, 0.48);
+    assert.equal(zoomed.worldMouseX, 120);
+    assert.equal(zoomed.worldMouseY, 130);
+
+    ship.stats.cameraZoom = 0.6;
+    const restored = system.applyMovement(
+        0.016,
+        { x: 48, y: 48 },
+        { inputX: 0, inputY: 0 }
+    );
+    assert.equal(game.camera.zoom, 0.6);
+    assert.equal(restored.worldMouseX, 100);
+    assert.equal(restored.worldMouseY, 110);
 });

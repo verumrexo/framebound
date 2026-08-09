@@ -33,6 +33,12 @@ export function validatePartDefinition(libraryId, definition) {
         throw new TypeError(`part ${libraryId} must have a name`);
     }
     if (
+        typeof definition.description !== 'string' ||
+        definition.description.trim().length === 0
+    ) {
+        throw new TypeError(`part ${libraryId} must have a non-empty description`);
+    }
+    if (
         typeof definition.type !== 'string' ||
         !PART_TYPES.has(definition.type)
     ) {
@@ -46,6 +52,7 @@ export function validatePartDefinition(libraryId, definition) {
     }
 
     validateStatValues(libraryId, definition.stats);
+    validateMechanicStats(libraryId, definition.stats);
     requireNonNegativeNumber(libraryId, definition.stats, 'hp');
     requireNonNegativeNumber(libraryId, definition.stats, 'mass');
 
@@ -112,6 +119,66 @@ function validateStatValues(libraryId, stats) {
                 }
             }
         }
+        if (Array.isArray(value)) {
+            throw new TypeError(`part ${libraryId} has invalid ${key} config`);
+        }
+    }
+}
+
+/**
+ * Keep the newer catalog stats well-formed without imposing a schema on the
+ * older authored parts. These checks are intentionally about impossible
+ * values, not balance tuning.
+ *
+ * @param {string} libraryId
+ * @param {Record<string, unknown>} stats
+ */
+function validateMechanicStats(libraryId, stats) {
+    const positiveKeys = [
+        'abilityCooldown',
+        'abilityRange',
+        'abilityDuration',
+        'abilityRadius',
+        'cameraZoom',
+        'pickupRadiusMul',
+        'globalFireRateMul',
+        'projectileSpeedMul',
+        'velocityDamageMul',
+        'aimAssistAngle',
+        'aimAssistRange',
+        'laserSplitAngle',
+        'laserSplitDamageMul',
+        'hackDuration',
+        'armingTime',
+        'triggerRadius',
+        'shrapnelDamage',
+        'ricochetRange',
+        'ricochetDamageMul'
+    ];
+    for (const key of positiveKeys) {
+        if (stats[key] !== undefined && !positiveNumber(stats[key])) {
+            throw new TypeError(`part ${libraryId} must have a positive ${key}`);
+        }
+    }
+
+    const positiveIntegerKeys = [
+        'laserSplitCount',
+        'velocityPierceAdd',
+        'shrapnelCount',
+        'ricochetCount',
+        'baseChainCount'
+    ];
+    for (const key of positiveIntegerKeys) {
+        if (stats[key] !== undefined && !positiveInteger(stats[key])) {
+            throw new TypeError(`part ${libraryId} must have a positive integer ${key}`);
+        }
+    }
+
+    if (stats.activeAbility !== undefined && (
+        typeof stats.activeAbility !== 'string' ||
+        stats.activeAbility.trim().length === 0
+    )) {
+        throw new TypeError(`part ${libraryId} must have a valid activeAbility`);
     }
 }
 

@@ -2,6 +2,7 @@ import '../../tests/setup.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Ship } from './Ship.js';
+import { PartsLibrary } from '../parts/Part.js';
 
 test('ship placement rejects inherited and unknown part ids without throwing', () => {
     const ship = new Ship();
@@ -136,4 +137,91 @@ test('null aim holds a slow ship heading and keeps velocity-facing fallback', ()
 
     assert.ok(moving.rotation > 0);
     assert.ok(moving.rotation < Math.PI / 2);
+});
+
+test('passive modules aggregate with safe defaults and remove cleanly', () => {
+    const specs = {
+        test_captain_a: { cameraZoom: 0.48 },
+        test_captain_b: { cameraZoom: 0.55 },
+        test_magnet: { pickupRadiusMul: 2 },
+        test_magnet_b: { pickupRadiusMul: 1.5 },
+        test_coolant: { globalFireRateMul: 1.08 },
+        test_range: { projectileSpeedMul: 1.2 },
+        test_fmj: { velocityDamageMul: 1.1, velocityPierceAdd: 1 },
+        test_aim: { aimAssistAngle: 0.2, aimAssistRange: 400 },
+        test_aim_b: { aimAssistAngle: 0.3, aimAssistRange: 750 },
+        test_prism: {
+            laserSplitCount: 2,
+            laserSplitAngle: 0.14,
+            laserSplitDamageMul: 0.45
+        }
+    };
+    for (const [id, stats] of Object.entries(specs)) {
+        PartsLibrary[id] = {
+            id,
+            type: 'utility',
+            width: 1,
+            height: 1,
+            stats: { hp: 10, mass: 1, ...stats }
+        };
+    }
+
+    const ship = new Ship();
+    ship.parts.clear();
+    assert.equal(ship.addPart(0, 0, 'core'), true);
+    let x = 1;
+    for (const id of Object.keys(specs)) {
+        assert.equal(ship.addPart(x++, 0, id), true);
+    }
+
+    assert.equal(ship.stats.cameraZoom, 0.48);
+    assert.equal(ship.stats.pickupRadiusMul, 3);
+    assert.equal(ship.stats.globalFireRateMul, 1.08);
+    assert.equal(ship.stats.projectileSpeedMul, 1.2);
+    assert.equal(ship.stats.velocityDamageMul, 1.1);
+    assert.equal(ship.stats.velocityPierceAdd, 1);
+    assert.equal(ship.stats.aimAssistAngle, 0.3);
+    assert.equal(ship.stats.aimAssistRange, 750);
+    assert.equal(ship.stats.laserSplitCount, 2);
+    assert.equal(ship.stats.laserSplitAngle, 0.14);
+    assert.equal(ship.stats.laserSplitDamageMul, 0.45);
+
+    ship.removePart(1, 0);
+    ship.removePart(2, 0);
+    assert.equal(ship.stats.cameraZoom, 0.6);
+    ship.removePart(3, 0);
+    assert.equal(ship.stats.pickupRadiusMul, 1.5);
+
+    const empty = new Ship();
+    empty.parts.clear();
+    empty.recalculateStats();
+    assert.deepEqual(
+        Object.fromEntries(Object.entries(empty.stats).filter(([key]) => (
+            key.includes('Mul') || key.includes('Zoom') ||
+            key.includes('Assist') || key.includes('Split') ||
+            key.includes('Pierce')
+        ))),
+        {
+            cameraZoom: 0.6,
+            pickupRadiusMul: 1,
+            globalFireRateMul: 1,
+            projectileSpeedMul: 1,
+            velocityDamageMul: 1,
+            velocityPierceAdd: 0,
+            aimAssistAngle: 0,
+            aimAssistRange: 0,
+            laserSplitCount: 0,
+            laserSplitAngle: 0,
+            laserSplitDamageMul: 1
+        }
+    );
+});
+
+test('positive damage breaks stealth while zero damage does not', () => {
+    const ship = new Ship();
+    ship.stealthTimer = 4;
+    ship.takeDamage(0);
+    assert.equal(ship.stealthTimer, 4);
+    ship.takeDamage(1);
+    assert.equal(ship.stealthTimer, 0);
 });

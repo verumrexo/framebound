@@ -37,7 +37,8 @@ const ACTION_TYPES = new Set([
     'level_up',
     'ship_edit',
     'transition',
-    'sweep'
+    'sweep',
+    'ability'
 ]);
 const EVENT_TYPES = new Set([
     'spawn',
@@ -333,6 +334,21 @@ function sanitizeAction(action, payload) {
     }
 
     if (action === 'sweep') return {};
+
+    if (action === 'ability') {
+        const aimAngle = normalizeAngle(payload.aimAngle);
+        if (
+            typeof payload.abilityId !== 'string' ||
+            !['blink', 'decoy', 'stealth', 'emp'].includes(payload.abilityId) ||
+            aimAngle === null
+        ) {
+            return null;
+        }
+        return {
+            abilityId: payload.abilityId,
+            aimAngle
+        };
+    }
 
     if (!Array.isArray(payload.parts)) return null;
     if (

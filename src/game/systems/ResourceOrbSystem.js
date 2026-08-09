@@ -20,7 +20,12 @@ export class ResourceOrbSystem {
             if (roomCleared) orb.forced = true;
 
             const target = this.nearestLivingPlayer(orb);
-            if (!target || !orb.update(dt, target.x, target.y)) continue;
+            if (!target || !orb.update(
+                dt,
+                target.x,
+                target.y,
+                this.pickupRadiusMultiplier(target)
+            )) continue;
 
             game.xp += orb.value;
             game.audio.play('xp_pickup', {
@@ -54,7 +59,12 @@ export class ResourceOrbSystem {
             if (roomCleared) orb.forced = true;
 
             const target = this.nearestLivingPlayer(orb);
-            if (!target || !orb.update(dt, target.x, target.y)) continue;
+            if (!target || !orb.update(
+                dt,
+                target.x,
+                target.y,
+                this.pickupRadiusMultiplier(target)
+            )) continue;
 
             game.gold += orb.value;
             game.audio.play('gold_pickup', {
@@ -73,7 +83,12 @@ export class ResourceOrbSystem {
             if (roomCleared) orb.forced = true;
 
             const target = this.nearestLivingPlayer(orb);
-            if (!target || !orb.update(dt, target.x, target.y)) continue;
+            if (!target || !orb.update(
+                dt,
+                target.x,
+                target.y,
+                this.pickupRadiusMultiplier(target)
+            )) continue;
 
             const ship = target.ship;
             const missingHp = ship.maxHp - ship.hp;
@@ -120,5 +135,10 @@ export class ResourceOrbSystem {
             nearestDistance = distance;
         }
         return nearest;
+    }
+
+    pickupRadiusMultiplier(target) {
+        const value = target?.ship?.stats?.pickupRadiusMul;
+        return Number.isFinite(value) && value >= 0 ? value : 1;
     }
 }

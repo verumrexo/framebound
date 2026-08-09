@@ -125,6 +125,10 @@ export class EnemyLifecycleSystem {
     }
 
     targetFor(enemy) {
+        if (isHackedEnemy(enemy)) {
+            return this.nearestHackedTarget(enemy);
+        }
+
         const targets = this.livingTargets();
         if (targets.length === 0) return null;
 
@@ -164,18 +168,59 @@ export class EnemyLifecycleSystem {
 
     livingTargets() {
         const game = this.game;
+        let players;
         if (game.peerNetwork?.isHost) {
-            return game.peerNetwork.simulation?.getPickupPlayers?.() || [];
-        }
-        if (game.playerShip && !game.playerShip.isDead) {
-            return [{
+            players = game.peerNetwork.simulation?.getPickupPlayers?.() || [];
+        } else if (game.playerShip && !game.playerShip.isDead) {
+            players = [{
                 id: 'host',
                 ship: game.playerShip,
                 x: game.x,
                 y: game.y
             }];
+        } else {
+            players = [];
         }
-        return [];
+
+        const visiblePlayers = players.filter(player => (
+            !player?.isDead &&
+            !player?.ship?.isDead && !(player?.ship?.stealthTimer > 0)
+        ));
+        const decoys = (game.decoys || [])
+            .filter(decoy => (
+                !decoy.isDead &&
+                (!Number.isFinite(decoy.life) || decoy.life > 0)
+            ))
+            .map(decoy => ({
+                id: decoy.id || `decoy_${decoy.x}_${decoy.y}`,
+                x: decoy.x,
+                y: decoy.y,
+                decoy
+            }));
+        return [...visiblePlayers, ...decoys];
+    }
+
+    nearestHackedTarget(enemy) {
+        const game = this.game;
+        const candidates = [
+            ...(game.enemies || []),
+            ...(game.bosses || [])
+        ].filter(target => (
+            target !== enemy &&
+            !target.isDead &&
+            !isHackedEnemy(target)
+        ));
+        let nearest = null;
+        let nearestDistance = Infinity;
+        for (const target of candidates) {
+            const dx = target.x - enemy.x;
+            const dy = target.y - enemy.y;
+            const distance = dx * dx + dy * dy;
+            if (distance >= nearestDistance) continue;
+            nearest = target;
+            nearestDistance = distance;
+        }
+        return nearest;
     }
 
     removeDeadBosses() {
@@ -262,4 +307,13 @@ function isOrbitingEnemy(enemy) {
     return enemy.type === 'circler' ||
         enemy.behavior === 'orbiter' ||
         enemy.behavior === 'flanker';
+}
+
+function isHackedEnemy(enemy) {
+    return Boolean(
+        enemy &&
+        enemy.hackTimer > 0 &&
+        enemy.hackedByPlayerId !== null &&
+        enemy.hackedByPlayerId !== undefined
+    );
 }

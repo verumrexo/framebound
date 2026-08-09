@@ -32,7 +32,7 @@ function partItem(partId = 'railgun', overrides = {}) {
         data: {
             type: 'part',
             name: PartsLibrary[partId].name,
-            description: 'weapon',
+            description: PartsLibrary[partId].description,
             price: 40,
             ...overrides
         }
@@ -42,11 +42,14 @@ function partItem(partId = 'railgun', overrides = {}) {
 test('shop presentation classifies repair and weapon-family offers', () => {
     const heal = healItem();
     const railgun = partItem();
+    const utility = partItem('warp_gate');
 
     assert.equal(getShopCategory(heal), 'frame service');
     assert.equal(getShopCategory(railgun), 'laser weapon');
     assert.equal(getShopAccent(heal), '#55ffc2');
     assert.equal(getShopAccent(railgun), '#35f2ff');
+    assert.equal(getShopCategory(utility), 'utility system');
+    assert.match(utility.data.description, /select with q/);
 });
 
 test('shop stat rows expose useful compact repair and part telemetry', () => {

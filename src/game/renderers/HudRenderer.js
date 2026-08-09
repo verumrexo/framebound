@@ -129,6 +129,7 @@ export class HudRenderer {
         }
         this.drawSalvageSweepStatus();
         this.drawVaultStatus();
+        this.drawActiveAbilityStatus();
 
         const frameTime = this.now();
         game.frameCount++;
@@ -192,6 +193,36 @@ export class HudRenderer {
             ctx.fillText('contract complete', x + width - 14, y + 20);
         }
         ctx.restore();
+    }
+
+    drawActiveAbilityStatus() {
+        const game = this.game;
+        const abilitySystem = game.abilitySystem;
+        const selected = abilitySystem?.selectedAbility?.(game.playerShip);
+        if (!selected) return;
+
+        const ctx = game.renderer.ctx;
+        const x = 440;
+        const y = game.renderer.height - 48;
+        const width = 390;
+        const cooldown = abilitySystem.snapshotShipState?.(
+            game.playerShip
+        )?.cooldowns?.[selected.id] || 0;
+        const ready = cooldown <= 0;
+        const accent = ready ? UI_COLORS.cyan : UI_COLORS.amber;
+
+        drawUiPanel(ctx, x, y, width, 30, accent);
+        ctx.font = UI_FONTS.tiny;
+        ctx.textAlign = 'left';
+        ctx.fillStyle = accent;
+        ctx.fillText(
+            `${String(selected.label).toLowerCase()} // ${ready ? 'ready' : `${cooldown.toFixed(1)}s`}`,
+            x + 13,
+            y + 19
+        );
+        ctx.textAlign = 'right';
+        ctx.fillStyle = UI_COLORS.muted;
+        ctx.fillText('q // cycle   rmb // activate', x + width - 13, y + 19);
     }
 
     drawNotifications() {

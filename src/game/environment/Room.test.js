@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 const { Room } = await import('./Room.js');
 const { RoomType } = await import('./RoomType.js');
 const { selectEnemyType } = await import('../../shared/enemies/EnemyRoster.js');
+const { PartsLibrary } = await import('../../shared/parts/Part.js');
 
 test('room-clear checkpoint includes the clear score instead of losing it', () => {
     const calls = [];
@@ -57,6 +58,9 @@ test('shop entry creates its original four items synchronously and once', () => 
     assert.equal(room.shopItems.length, 4);
     assert.equal(game.shopItems.length, 4);
     assert.equal(room.shopItems[0].data.type, 'heal');
+    for (const item of room.shopItems.slice(1)) {
+        assert.equal(item.data.description, PartsLibrary[item.data.partId].description);
+    }
     assert.deepEqual(
         room.shopItems.map(item => item.x),
         [2820, 2940, 3060, 3180]

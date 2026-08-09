@@ -8,19 +8,42 @@ approval before code changes.
 
 - [x] freezer - slows/freezes enemies
 - [x] cluster grenade - multi-split explosive
-- [ ] warp gate - teleportation utility
-- [ ] mine placer - deploys proximity mines
-- [ ] drone maker - spawns combat drones
-- [ ] captain seat - passive command buffs
-- [ ] beam sword - melee energy weapon
-- [ ] shrapnel grenade - scattering explosive
-- [ ] decoy - distraction device
-- [ ] stealth - cloaking device
-- [ ] hack dart - disable/control enemies
-- [ ] auto aim - targeting assistance
-- [ ] prism - beam splitter
-- [ ] emp - area disable
-- [ ] fmj - armor piercing rounds
+- [x] warp gate - short cursor-directed blink
+- [x] mine placer - deploys proximity mines
+- [x] drone maker - spawns combat drones
+- [x] captain seat - wider camera view
+- [x] beam sword - melee energy weapon
+- [x] shrapnel grenade - scattering explosive
+- [x] decoy - distraction device
+- [x] stealth - cloaking device
+- [x] hack dart - temporarily converts enemies
+- [x] auto aim - targeting assistance
+- [x] prism - beam splitter
+- [x] emp - area disable
+- [x] fmj - armor piercing rounds
+
+### bonus arsenal
+
+- [x] patch plate
+- [x] keel beam
+- [x] bulkhead
+- [x] coffin hull
+- [x] glasswing
+- [x] engine brace
+- [x] salvage magnet
+- [x] coolant loop
+- [x] gyro ring
+- [x] rangefinder
+- [x] needler
+- [x] twin dart
+- [x] heavy slugger
+- [x] burst cannon
+- [x] ricochet cannon
+- [x] arc welder
+- [x] pulse lance
+- [x] lightning rod
+- [x] micro missile pod
+- [x] torpedo tube
 
 ## core gameplay
 

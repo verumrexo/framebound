@@ -8,8 +8,64 @@ import { DRONE_PART_SPECS_TORCH_LANCE } from './drone/DronePartBatchTorchLance.j
 import { DRONE_PART_SPECS_BOMBARD_FLAK } from './drone/DronePartBatchBombardFlak.js';
 import { DRONE_PART_SPECS_BASTION_REPAIR } from './drone/DronePartBatchBastionRepair.js';
 import { DRONE_PART_SPECS_RAM_STORM } from './drone/DronePartBatchRamStorm.js';
+import { REQUESTED_ARSENAL_PART_SPECS } from './arsenal/RequestedArsenalParts.js';
+import { EXTRA_SUPPORT_PART_SPECS } from './arsenal/ExtraSupportParts.js';
+import { EXTRA_WEAPON_PART_SPECS } from './arsenal/ExtraWeaponParts.js';
+import { PART_DESCRIPTIONS } from './PartDescriptions.js';
 
 export { PartDef, PartType, TILE_SIZE };
+
+/**
+ * Convert a compact authored raster into the Sprite shape used by the game.
+ * Arsenal workers own the art data; this adapter owns the runtime wiring.
+ *
+ * @param {ReadonlyArray<string>} rows
+ * @returns {Sprite}
+ */
+function createArsenalSprite(rows) {
+    const width = rows[0]?.length || 0;
+    const height = rows.length;
+    return new Sprite(
+        rows.flatMap(row => [...row].map(Number)),
+        width,
+        height,
+        4,
+        { 1: '#26d426', 2: '#333333' }
+    );
+}
+
+/**
+ * @param {{ id: string, name: string, type: string, width: number, height: number, stats: object, spriteRows: ReadonlyArray<string> }} spec
+ * @returns {PartDef}
+ */
+function createArsenalPartDefinition(spec) {
+    if (!Object.values(PartType).includes(spec.type)) {
+        throw new TypeError(`arsenal part ${spec.id} has an unknown type`);
+    }
+    const sprite = createArsenalSprite(spec.spriteRows);
+    const definition = new PartDef(
+        spec.id,
+        spec.name,
+        spec.type,
+        sprite,
+        spec.stats,
+        spec.width,
+        spec.height
+    );
+    definition.baseSprite = sprite;
+    if (spec.type === PartType.WEAPON) definition.drawTurretInInventory = true;
+    return definition;
+}
+
+/**
+ * @param {ReadonlyArray<object>} specs
+ * @returns {Record<string, PartDef>}
+ */
+function createArsenalPartCatalog(specs) {
+    return Object.fromEntries(
+        specs.map(spec => [spec.id, createArsenalPartDefinition(spec)])
+    );
+}
 
 export const PartsLibrary = {
     // --- Core Parts ---
@@ -230,5 +286,18 @@ const droneCatalog = createDronePartCatalog([
     ...Object.values(DRONE_PART_SPECS_RAM_STORM)
 ], []);
 Object.assign(PartsLibrary, droneCatalog.parts);
+
+Object.assign(
+    PartsLibrary,
+    createArsenalPartCatalog(REQUESTED_ARSENAL_PART_SPECS),
+    createArsenalPartCatalog(EXTRA_SUPPORT_PART_SPECS),
+    createArsenalPartCatalog(EXTRA_WEAPON_PART_SPECS)
+);
+
+for (const [id, definition] of Object.entries(PartsLibrary)) {
+    const description = PART_DESCRIPTIONS[id];
+    if (!description) throw new TypeError(`part ${id} has no plain-English description`);
+    definition.description = description;
+}
 
 validatePartsLibrary(PartsLibrary);

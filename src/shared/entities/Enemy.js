@@ -18,6 +18,9 @@ export class Enemy {
         this.freezeMeter = 0;
         this.frozenTimer = 0;
         this.lastFreezeTick = 0;
+        this.empTimer = 0;
+        this.hackTimer = 0;
+        this.hackedByPlayerId = undefined;
 
         this.isWarpingIn = true;
         this.warpTimer = 1.0 + (this.random() * 1.0);
@@ -85,6 +88,7 @@ export class Enemy {
     }
 
     interpolate(dt, playerX, playerY) {
+        this.tickStatuses(dt);
         const renderTime = Date.now() - this.INTERPOLATION_DELAY;
 
         // Calculate Aim Angle (Visual)
@@ -140,12 +144,6 @@ export class Enemy {
 
         this.hp = fromNode.hp; // HP usually discrete, stick to older state or latest known
 
-        // Update Timers (Visuals)
-        if (this.frozenTimer > 0) this.frozenTimer -= dt;
-        if (this.freezeMeter > 0) {
-            this.freezeMeter -= dt * 0.5;
-            if (this.freezeMeter < 0) this.freezeMeter = 0;
-        }
     }
 
     takeDamage(amount, sourceProjectileType = null) {
@@ -172,6 +170,45 @@ export class Enemy {
             this.hp = 0;
             this.isDead = true;
         }
+    }
+
+    tickStatuses(dt) {
+        if (!Number.isFinite(dt) || dt <= 0) return;
+        if (this.frozenTimer > 0) {
+            this.frozenTimer = Math.max(0, this.frozenTimer - dt);
+        }
+        if (this.freezeMeter > 0) {
+            this.freezeMeter = Math.max(0, this.freezeMeter - dt * 0.5);
+        }
+        if (this.empTimer > 0) {
+            this.empTimer = Math.max(0, this.empTimer - dt);
+        }
+        if (this.hackTimer > 0) {
+            this.hackTimer = Math.max(0, this.hackTimer - dt);
+            if (this.hackTimer === 0) this.hackedByPlayerId = undefined;
+        } else if (this.hackedByPlayerId !== undefined) {
+            this.hackedByPlayerId = undefined;
+        }
+    }
+
+    spawnProjectile(projectiles, x, y, angle, type, speed, damage, lifetime = null) {
+        const hacked = this.hackTimer > 0 &&
+            this.hackedByPlayerId !== null &&
+            this.hackedByPlayerId !== undefined;
+        const projectile = new Projectile(
+            x,
+            y,
+            angle,
+            type,
+            speed,
+            hacked ? 'player' : 'enemy',
+            damage,
+            lifetime,
+            this.random
+        );
+        if (hacked) projectile.sourcePlayerId = this.hackedByPlayerId;
+        projectiles.push(projectile);
+        return projectile;
     }
 
     /**
@@ -278,6 +315,8 @@ export class Enemy {
     update(dt, playerX, playerY, projectiles, asteroids = [], lootCrates = [], allEnemies = [], room = null) {
         if (this.isDead) return;
 
+        this.tickStatuses(dt);
+
         if (this.warpTimer > 0) {
             this.warpTimer -= dt;
             if (this.warpTimer > 0) {
@@ -302,15 +341,11 @@ export class Enemy {
 
         // Frozen Logic
         if (this.frozenTimer > 0) {
-            this.frozenTimer -= dt;
             return;
         }
         if (this.supportPulseTimer > 0) this.supportPulseTimer -= dt;
 
-        if (this.freezeMeter > 0) {
-            this.freezeMeter -= dt * 0.5; // Decays
-            if (this.freezeMeter < 0) this.freezeMeter = 0;
-        }
+        if (this.empTimer > 0) return;
 
         // Calculate vector to player
         const dx = playerX - this.x;
@@ -585,7 +620,7 @@ export class Enemy {
                     const baseDamage = burst.def.stats.damage || 5;
                     const finalDamage = baseDamage * (this.damageMultiplier || 1);
 
-                    projectiles.push(new Projectile(worldX, worldY, angleToPlayer + spread, pType, pSpeed, 'enemy', finalDamage, null, this.random));
+                    this.spawnProjectile(projectiles, worldX, worldY, angleToPlayer + spread, pType, pSpeed, finalDamage);
 
                     burst.count--;
                     if (burst.count <= 0) {
@@ -660,7 +695,7 @@ export class Enemy {
                         // Use locked angle (or current if something failed)
                         const fireAngle = (wep.lockedAngle !== null ? wep.lockedAngle : currentAngleToPlayer) + spread;
 
-                        projectiles.push(new Projectile(worldX, worldY, fireAngle, pType, pSpeed, 'enemy', finalDamage, null, this.random));
+                        this.spawnProjectile(projectiles, worldX, worldY, fireAngle, pType, pSpeed, finalDamage);
 
                         // Reset
                         wep.cooldown = wep.def.stats.cooldown || 2;
@@ -707,7 +742,7 @@ export class Enemy {
                         const baseDamage = wep.def.stats.damage || 5;
                         const finalDamage = baseDamage * (this.damageMultiplier || 1);
 
-                        projectiles.push(new Projectile(worldX, worldY, angleToPlayer + spread, pType, pSpeed, 'enemy', finalDamage, null, this.random));
+                        this.spawnProjectile(projectiles, worldX, worldY, angleToPlayer + spread, pType, pSpeed, finalDamage);
                         wep.cooldown = wep.def.stats.cooldown || 2;
                     }
                 }
@@ -718,7 +753,7 @@ export class Enemy {
                 this.shootCooldown -= dt;
                 if (this.shootCooldown <= 0) {
                     const pSpeed = this.projectileType === 'laser' ? 800 : 400;
-                    projectiles.push(new Projectile(this.x, this.y, this.rotation, this.projectileType, pSpeed, 'enemy', 10, null, this.random));
+                    this.spawnProjectile(projectiles, this.x, this.y, this.rotation, this.projectileType, pSpeed, 10);
                     this.shootCooldown = this.shootRate;
                 }
             }

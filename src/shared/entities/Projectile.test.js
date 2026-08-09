@@ -72,3 +72,37 @@ test('same injected sequence produces identical erratic projectile state', () =>
         }
     );
 });
+
+test('new beam types keep their restrained ranges and lifetimes', () => {
+    const sword = new Projectile(0, 0, 0, 'beam_sword', 0, 'player', 28);
+    const welder = new Projectile(0, 0, 0, 'arc_welder', 0, 'player', 3.5);
+
+    assert.equal(sword.isBeam, true);
+    assert.equal(sword.beamLength, 120);
+    assert.equal(sword.life, 0.08);
+    assert.equal(welder.isBeam, true);
+    assert.equal(welder.beamLength, 140);
+    assert.equal(welder.life, 0.06);
+});
+
+test('proximity mines arm on a simulation timer and expire without a stray explosion', () => {
+    const mine = new Projectile(0, 0, 0, 'proximity_mine', 0, 'player', 18);
+    mine.armingTimeRemaining = 0.65;
+
+    mine.update(0.64);
+    assert.equal(mine.armed, false);
+    mine.update(0.01);
+    assert.equal(mine.armed, true);
+    mine.update(17.35);
+
+    assert.equal(mine.isDead, true);
+    assert.equal(mine.shouldExplode, false);
+});
+
+test('legacy laser constructors keep their fixed speed contract', () => {
+    const projectile = new Projectile(0, 0, Math.PI / 2, 'laser', 900, 'player', 10);
+
+    assert.ok(Math.abs(projectile.vx) < 1e-9);
+    assert.equal(projectile.vy, 1500);
+    assert.equal(projectile.speed, 1500);
+});

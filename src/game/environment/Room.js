@@ -160,7 +160,7 @@ export class Room {
                 type: 'part',
                 name: part.def.name || part.id,
                 partId: part.id,
-                description: part.def.type || 'Part',
+                description: part.def.description,
                 price: Math.floor(
                     (part.def.stats?.hp || 10) * 2 +
                     (part.def.stats?.mass || 1) * 5

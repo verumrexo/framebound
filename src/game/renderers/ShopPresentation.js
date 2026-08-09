@@ -10,6 +10,7 @@ const TYPE_ACCENTS = Object.freeze({
     [PartType.ROCKET_BAY]: UI_COLORS.orange,
     [PartType.BOOSTER]: UI_COLORS.greenBright,
     [PartType.DRONE]: '#57d8ff',
+    [PartType.UTILITY]: '#d6b3ff',
     [PartType.SHIELD]: '#a58cff',
     [PartType.CORE]: '#7cf7ff'
 });
@@ -22,6 +23,7 @@ const TYPE_LABELS = Object.freeze({
     [PartType.ROCKET_BAY]: 'missile bay',
     [PartType.BOOSTER]: 'booster',
     [PartType.DRONE]: 'drone system',
+    [PartType.UTILITY]: 'utility system',
     [PartType.SHIELD]: 'shield system',
     [PartType.CORE]: 'core module'
 });

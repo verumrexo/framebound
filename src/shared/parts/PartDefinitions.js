@@ -15,6 +15,7 @@ export const PartType = {
     ROCKET_BAY: 'rocket_bay',
     BOOSTER: 'booster',
     DRONE: 'drone',
+    UTILITY: 'utility',
     CORE: 'core',
     SHIELD: 'shield'
 };
@@ -61,6 +62,33 @@ export const PartType = {
  * @property {number} [shieldRadiusScale]
  * @property {number} [soundPitch]
  * @property {number} [soundVolume]
+ * @property {string} [activeAbility]
+ * @property {number} [abilityCooldown]
+ * @property {number} [abilityRange]
+ * @property {number} [abilityDuration]
+ * @property {number} [abilityRadius]
+ * @property {number} [cameraZoom]
+ * @property {number} [pickupRadiusMul]
+ * @property {number} [globalFireRateMul]
+ * @property {number} [projectileSpeedMul]
+ * @property {number} [velocityDamageMul]
+ * @property {number} [velocityPierceAdd]
+ * @property {number} [aimAssistAngle]
+ * @property {number} [aimAssistRange]
+ * @property {number} [laserSplitCount]
+ * @property {number} [laserSplitAngle]
+ * @property {number} [laserSplitDamageMul]
+ * @property {number} [decoyHp]
+ * @property {number} [bossDuration]
+ * @property {number} [hackDuration]
+ * @property {number} [armingTime]
+ * @property {number} [triggerRadius]
+ * @property {number} [shrapnelCount]
+ * @property {number} [shrapnelDamage]
+ * @property {number} [ricochetCount]
+ * @property {number} [ricochetRange]
+ * @property {number} [ricochetDamageMul]
+ * @property {number} [baseChainCount]
  */
 
 export class PartDef {
@@ -81,6 +109,7 @@ export class PartDef {
         this.width = width;
         this.height = height;
         this.baseSprite = null; // Optional custom base frame
+        this.description = ''; // Plain-English explanation shown in the UI
         this.rotationOffset = 0; // Optional rotation offset for turrets
         this.turretDrawOffset = 0; // Optional positional offset for turrets (along aim vector)
 

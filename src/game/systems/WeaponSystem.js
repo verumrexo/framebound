@@ -17,6 +17,20 @@ function playPartEvent(audio, partId, slot, fallbackName, options) {
     return audio.play(fallbackName, options);
 }
 
+function finitePositive(value, fallback = 1) {
+    return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function finiteNumber(value, fallback = 0) {
+    return Number.isFinite(value) ? value : fallback;
+}
+
+function wrapAngle(angle) {
+    while (angle <= -Math.PI) angle += Math.PI * 2;
+    while (angle > Math.PI) angle -= Math.PI * 2;
+    return angle;
+}
+
 export class WeaponSystem {
     constructor(game, {
         ProjectileClass = Projectile,
@@ -31,6 +45,9 @@ export class WeaponSystem {
     update(dt, state) {
         const game = this.game;
         let { isMouseDown, worldMouseX, worldMouseY, levelBonus } = state;
+        levelBonus = finitePositive(levelBonus);
+
+        const shipStats = game.playerShip?.stats || {};
 
         const accelerantBonus = 1 + (game.playerShip.stats.accelerantCount || 0) * 0.05;
 
@@ -80,6 +97,7 @@ export class WeaponSystem {
                 game.playerShip,
                 def.stats.weaponGroup
             );
+            currentFireRateMul *= finitePositive(shipStats.globalFireRateMul);
             if (def.stats.weaponGroup === 'laser') {
                 currentFireRateMul *= accelerantBonus;
             }
@@ -246,7 +264,7 @@ export class WeaponSystem {
 
             partRef.burstLeft--;
             let interval = def.stats.burstInterval || 0.1;
-            if (def.stats.weaponGroup === 'rocket' && game.playerShip.stats.rocketBayCount > 0) {
+            if (def.stats.weaponGroup === 'rocket' && (game.playerShip.stats?.rocketBayCount || 0) > 0) {
                 interval /= 1 + game.playerShip.stats.rocketBayCount;
             }
             partRef.burstTimer = interval;
@@ -275,7 +293,8 @@ export class WeaponSystem {
             finalY += Math.sin(baseAngle) * bpx + Math.cos(baseAngle) * bpy;
         }
 
-        const angle = Math.atan2(worldMouseY - finalY, worldMouseX - finalX);
+        const rawAngle = Math.atan2(worldMouseY - finalY, worldMouseX - finalX);
+        const angle = this.getAssistedAimAngle(rawAngle, finalX, finalY);
         let turretX = finalX;
         let turretY = finalY;
 
@@ -327,7 +346,8 @@ export class WeaponSystem {
             finalY += Math.sin(baseAngle) * bpx + Math.cos(baseAngle) * bpy;
         }
 
-        const angle = Math.atan2(worldMouseY - finalY, worldMouseX - finalX);
+        const rawAngle = Math.atan2(worldMouseY - finalY, worldMouseX - finalX);
+        const angle = this.getAssistedAimAngle(rawAngle, finalX, finalY);
         let fireX = finalX;
         let fireY = finalY;
 
@@ -348,11 +368,48 @@ export class WeaponSystem {
         return { fireX, fireY, angle };
     }
 
+    getAssistedAimAngle(angle, originX, originY) {
+        const stats = this.game.playerShip?.stats || {};
+        const cone = finiteNumber(stats.aimAssistAngle);
+        const range = finitePositive(stats.aimAssistRange, 0);
+        if (cone <= 0 || range <= 0) return angle;
+
+        let closest = null;
+        let closestDistanceSq = range * range;
+        const candidates = [
+            ...(this.game.enemies || []),
+            ...(this.game.bosses || [])
+        ];
+        for (const target of candidates) {
+            if (!target || target.isDead) continue;
+            if (target.hackTimer > 0 && target.hackedByPlayerId) continue;
+            const dx = target.x - originX;
+            const dy = target.y - originY;
+            const distanceSq = dx * dx + dy * dy;
+            if (distanceSq > closestDistanceSq) continue;
+            const targetAngle = Math.atan2(dy, dx);
+            if (Math.abs(wrapAngle(targetAngle - angle)) > cone) continue;
+            closestDistanceSq = distanceSq;
+            closest = target;
+        }
+        return closest
+            ? Math.atan2(closest.y - originY, closest.x - originX)
+            : angle;
+    }
+
     spawnProjectile(def, fireX, fireY, angle, partRef = null) {
         const game = this.game;
         const projectileCount = def.stats.pelletCount || 1;
         const spread = def.stats.spread || 0;
         const pelletInterval = def.stats.pelletInterval || 0;
+        const shipStats = game.playerShip?.stats || {};
+        const permanent = game.playerShip?.permanentStats || {};
+        const splitCount = Math.max(0, Math.floor(finiteNumber(shipStats.laserSplitCount)));
+        const splitAngle = finiteNumber(shipStats.laserSplitAngle);
+        const splitDamageMul = finitePositive(shipStats.laserSplitDamageMul);
+        const canSplit = def.stats.weaponGroup === 'laser' &&
+            splitCount > 0 && splitAngle > 0;
+        let spawnedProjectile = false;
 
         for (let i = 0; i < projectileCount; i++) {
             const finalAngle = angle + (this.random() - 0.5) * spread;
@@ -368,63 +425,109 @@ export class WeaponSystem {
             }
 
             let speed = def.stats.projectileSpeed || 600;
+            speed *= finitePositive(shipStats.projectileSpeedMul);
             if (def.stats.weaponGroup === 'rocket' && game.playerShip) {
-                speed *= game.playerShip.permanentStats.missileSpeedMul || 1.0;
+                speed *= finitePositive(permanent.missileSpeedMul);
             }
 
             const family = def.stats.weaponGroup;
-            const projectile = new this.ProjectileClass(
-                projectileX,
-                projectileY,
-                finalAngle,
-                def.stats.projectileType || 'bullet',
-                speed,
-                'player',
-                (def.stats.damage || 10) * getFamilyDamageMultiplier(
-                    game.playerShip,
-                    family
-                ),
-                def.stats.lifetime
-            );
-            projectile.weaponFamily = family;
-            projectile.sourcePartId = def.id;
-            projectile.sourcePartKey = partRef
-                ? `${def.id}@${partRef.x},${partRef.y}`
-                : def.id;
-            projectile.sourcePartName = String(def.name || def.id).toLowerCase();
-            projectile.sourcePlayerId = game.sourcePlayerId ||
-                game.peerNetwork?.replicator?.selfId ||
-                'host';
-
-            const permanent = game.playerShip?.permanentStats || {};
-            if (family === 'velocity') {
-                projectile.remainingPierces = Math.floor(
-                    permanent.velocityPierce || 0
-                );
-            } else if (family === 'laser') {
-                projectile.chainCount = Math.floor(permanent.laserChain || 0);
-            } else if (family === 'rocket') {
-                projectile.blastRadiusMul = permanent.rocketBlastMul || 1;
-            }
-
-            if (def.stats.projectileType === 'railgun' ||
-                def.stats.projectileType === 'beam_freeze') {
-                projectile.isBeam = true;
-            }
-
-            if (def.stats.projectileType === 'beam_freeze' && partRef) {
-                partRef.shotCount = (partRef.shotCount || 0) + 1;
-                if (partRef.shotCount % 5 !== 0) {
-                    projectile.isVisualOnly = true;
+            const splitAngles = [finalAngle];
+            if (canSplit) {
+                for (let splitIndex = 0; splitIndex < splitCount; splitIndex++) {
+                    const side = splitIndex % 2 === 0 ? -1 : 1;
+                    const rank = Math.floor((splitIndex + 1) / 2);
+                    splitAngles.push(finalAngle + side * splitAngle * Math.max(1, rank));
                 }
             }
 
-            projectile.delay = i * pelletInterval * (0.5 + this.random());
-            game.projectiles.push(projectile);
+            for (let splitIndex = 0; splitIndex < splitAngles.length; splitIndex++) {
+                const splitDamage = splitIndex === 0 ? 1 : splitDamageMul;
+                const projectile = new this.ProjectileClass(
+                    projectileX,
+                    projectileY,
+                    splitAngles[splitIndex],
+                    def.stats.projectileType || 'bullet',
+                    speed,
+                    'player',
+                    (def.stats.damage || 10) * getFamilyDamageMultiplier(
+                        game.playerShip,
+                        family
+                    ) * (family === 'velocity' ? finitePositive(shipStats.velocityDamageMul) : 1) * splitDamage,
+                    def.stats.lifetime
+                );
+                projectile.weaponFamily = family;
+                projectile.sourcePartId = def.id;
+                projectile.sourcePartKey = partRef
+                    ? `${def.id}@${partRef.x},${partRef.y}`
+                    : def.id;
+                projectile.sourcePartName = String(def.name || def.id).toLowerCase();
+                projectile.sourcePlayerId = game.sourcePlayerId ||
+                    game.peerNetwork?.replicator?.selfId ||
+                    'host';
+                projectile.prismChild = splitIndex > 0;
+
+                if (family === 'velocity') {
+                    projectile.remainingPierces = Math.floor(
+                        finiteNumber(permanent.velocityPierce) + finiteNumber(shipStats.velocityPierceAdd)
+                    );
+                } else if (family === 'laser') {
+                    projectile.chainCount = Math.floor(
+                        finiteNumber(permanent.laserChain) + finiteNumber(def.stats.baseChainCount)
+                    );
+                } else if (family === 'rocket') {
+                    projectile.blastRadiusMul = finitePositive(permanent.rocketBlastMul);
+                }
+
+                const projectileType = def.stats.projectileType;
+                if (projectileType === 'railgun' ||
+                    projectileType === 'beam_freeze' ||
+                    projectileType === 'beam_sword' ||
+                    projectileType === 'arc_welder') {
+                    projectile.isBeam = true;
+                }
+                if (projectileType === 'laser' || projectileType === 'small_laser') {
+                    const laserBaseSpeed = projectileType === 'laser' ? 1500 : 1800;
+                    const laserSpeed = laserBaseSpeed * finitePositive(shipStats.projectileSpeedMul);
+                    projectile.speed = laserSpeed;
+                    projectile.vx = Math.cos(splitAngles[splitIndex]) * laserSpeed;
+                    projectile.vy = Math.sin(splitAngles[splitIndex]) * laserSpeed;
+                }
+                if (def.stats.range) projectile.beamLength = def.stats.range;
+                if (def.stats.armingTime !== undefined) {
+                    projectile.armingTime = def.stats.armingTime;
+                    projectile.armingTimeRemaining = def.stats.armingTime;
+                }
+                if (def.stats.triggerRadius !== undefined) projectile.triggerRadius = def.stats.triggerRadius;
+                if (def.stats.aoeRadius !== undefined) {
+                    projectile.blastRadius = def.stats.aoeRadius;
+                    projectile.explosionDamage = def.stats.damage;
+                }
+                if (def.stats.shrapnelCount !== undefined) projectile.shrapnelCount = def.stats.shrapnelCount;
+                if (def.stats.shrapnelDamage !== undefined) projectile.shrapnelDamage = def.stats.shrapnelDamage;
+                if (def.stats.hackDuration !== undefined) projectile.hackDuration = def.stats.hackDuration;
+                if (def.stats.ricochetCount !== undefined) projectile.ricochetCount = def.stats.ricochetCount;
+                if (def.stats.ricochetRange !== undefined) projectile.ricochetRange = def.stats.ricochetRange;
+                if (def.stats.ricochetDamageMul !== undefined) projectile.ricochetDamageMul = def.stats.ricochetDamageMul;
+
+                if (projectileType === 'beam_freeze' && partRef) {
+                    partRef.shotCount = (partRef.shotCount || 0) + 1;
+                    if (partRef.shotCount % 5 !== 0) {
+                        projectile.isVisualOnly = true;
+                    }
+                }
+
+                projectile.delay = i * pelletInterval * (0.5 + this.random());
+                game.projectiles.push(projectile);
+                spawnedProjectile = true;
+            }
 
             if (partRef && def.stats.weaponGroup === 'velocity') {
                 partRef.recoil = 5.0;
             }
+        }
+
+        if (spawnedProjectile && game.playerShip) {
+            game.playerShip.stealthTimer = 0;
         }
 
         const sound = getPartFireDefault(def.id);

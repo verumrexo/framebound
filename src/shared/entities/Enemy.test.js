@@ -68,3 +68,67 @@ test('repair tenders heal the most damaged nearby ally on a cooldown', () => {
     assert.equal(tender.supportCooldown, 3);
     assert.ok(tender.supportPulseTimer > 0);
 });
+
+test('emp freezes movement and firing while its timer still ticks', () => {
+    const enemy = new Enemy(0, 0, 'basic', 1, () => 0.5, 'emp_test');
+    enemy.warpTimer = 0;
+    enemy.isWarpingIn = false;
+    enemy.spotted = true;
+    enemy.empTimer = 1;
+    enemy.weaponCooldowns = [{
+        part: { x: 0, y: 0, rotation: 0 },
+        def: {
+            width: 1,
+            height: 1,
+            stats: {
+                projectileType: 'bullet',
+                projectileSpeed: 400,
+                damage: 5,
+                cooldown: 2
+            }
+        },
+        cooldown: 0
+    }];
+    const before = [enemy.x, enemy.y];
+    const projectiles = [];
+
+    enemy.update(0.25, 100, 0, projectiles);
+
+    assert.equal(enemy.empTimer, 0.75);
+    assert.deepEqual([enemy.x, enemy.y], before);
+    assert.equal(projectiles.length, 0);
+});
+
+test('hacked enemies fire allied projectiles and ownership expires cleanly', () => {
+    const enemy = new Enemy(0, 0, 'basic', 1, () => 0.5, 'hacked_test');
+    enemy.warpTimer = 0;
+    enemy.isWarpingIn = false;
+    enemy.spotted = true;
+    enemy.hackTimer = 1;
+    enemy.hackedByPlayerId = 'guest_1';
+    enemy.weaponCooldowns = [{
+        part: { x: 0, y: 0, rotation: 0 },
+        def: {
+            width: 1,
+            height: 1,
+            stats: {
+                projectileType: 'bullet',
+                projectileSpeed: 400,
+                damage: 5,
+                cooldown: 2
+            }
+        },
+        cooldown: 0
+    }];
+    const projectiles = [];
+
+    enemy.update(0.1, 100, 0, projectiles);
+
+    assert.equal(projectiles.length, 1);
+    assert.equal(projectiles[0].owner, 'player');
+    assert.equal(projectiles[0].sourcePlayerId, 'guest_1');
+
+    enemy.tickStatuses(1);
+    assert.equal(enemy.hackTimer, 0);
+    assert.equal(enemy.hackedByPlayerId, undefined);
+});

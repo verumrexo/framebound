@@ -68,6 +68,30 @@ test('salvage sweep requests carry no client-authored damage or targets', () => 
     assert.deepEqual(action.payload, {});
 });
 
+test('ability requests carry only a bounded id and aim angle', () => {
+    const action = decodePeerMessage(createAction(7, 'ability', {
+        abilityId: 'blink',
+        aimAngle: Math.PI * 3,
+        x: 999,
+        y: 999
+    }), { direction: 'client' });
+
+    assert.deepEqual(action.payload, {
+        abilityId: 'blink',
+        aimAngle: -Math.PI
+    });
+    assert.equal(Object.hasOwn(action.payload, 'x'), false);
+    assert.equal(Object.hasOwn(action.payload, 'y'), false);
+    assert.equal(decodePeerMessage(
+        encodePeerMessage('action', {
+            sequence: 8,
+            action: 'ability',
+            payload: { abilityId: 'blink', aimAngle: Infinity }
+        }),
+        { direction: 'client' }
+    ), null);
+});
+
 test('wrong versions, directions, malformed state, and huge packets are rejected', () => {
     assert.equal(decodePeerMessage(JSON.stringify({
         version: 999,

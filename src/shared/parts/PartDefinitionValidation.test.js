@@ -1,3 +1,4 @@
+import '../../tests/setup.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { PartType } from './PartDefinitions.js';
@@ -6,10 +7,13 @@ import {
     validatePartsLibrary
 } from './PartDefinitionValidation.js';
 
+const { PartsLibrary } = await import('./Part.js');
+
 function makePart(overrides = {}) {
     return {
         id: 'test_part',
         name: 'test part',
+        description: 'a test part with a plain-English description.',
         type: PartType.HULL,
         width: 1,
         height: 1,
@@ -41,6 +45,17 @@ test('part definitions reject mismatched ids and corrupt numeric state', () => {
             stats: { hp: Number.NaN, mass: 1 }
         })),
         /non-finite hp/
+    );
+});
+
+test('part definitions require a non-empty plain-English description', () => {
+    assert.throws(
+        () => validatePartDefinition('test_part', makePart({ description: '' })),
+        /non-empty description/
+    );
+    assert.throws(
+        () => validatePartDefinition('test_part', makePart({ description: undefined })),
+        /non-empty description/
     );
 });
 
@@ -118,4 +133,53 @@ test('repair drone carriers allow zero damage but keep the other runtime guards'
         }),
         /must have a droneType/
     );
+});
+
+test('new utility stats reject impossible values while accepting the catalog shape', () => {
+    const utility = makePart({
+        type: PartType.UTILITY,
+        stats: {
+            hp: 18,
+            mass: 2,
+            activeAbility: 'blink',
+            abilityCooldown: 7,
+            abilityRange: 260,
+            laserSplitCount: 2,
+            laserSplitAngle: 0.13,
+            laserSplitDamageMul: 0.45,
+            velocityPierceAdd: 1
+        }
+    });
+
+    assert.equal(validatePartDefinition('test_part', utility), true);
+    assert.throws(
+        () => validatePartDefinition('test_part', {
+            ...utility,
+            stats: { ...utility.stats, abilityCooldown: 0 }
+        }),
+        /positive abilityCooldown/
+    );
+    assert.throws(
+        () => validatePartDefinition('test_part', {
+            ...utility,
+            stats: { ...utility.stats, laserSplitCount: 1.5 }
+        }),
+        /positive integer laserSplitCount/
+    );
+    assert.throws(
+        () => validatePartDefinition('test_part', {
+            ...utility,
+            stats: { ...utility.stats, activeAbility: '' }
+        }),
+        /valid activeAbility/
+    );
+});
+
+test('the integrated arsenal keeps the complete 72-part catalog described', () => {
+    assert.equal(Object.keys(PartsLibrary).length, 72);
+    for (const [id, definition] of Object.entries(PartsLibrary)) {
+        assert.equal(definition.id, id);
+        assert.equal(typeof definition.description, 'string');
+        assert.notEqual(definition.description.trim(), '');
+    }
 });

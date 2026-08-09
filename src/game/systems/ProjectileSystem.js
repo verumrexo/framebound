@@ -44,9 +44,19 @@ export class ProjectileSystem {
 }
 
 function updateProjectiles(dt, random) {
+    this.projectileClock = (this.projectileClock || 0) + dt;
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
         const p = this.projectiles[i];
         p.update(dt, this);
+
+        if (p.type === 'proximity_mine' && p.armed && !p.isDead) {
+            const trigger = findNearestHostile(this, p.x, p.y, p.triggerRadius || 80, p);
+            if (trigger) {
+                p.triggered = true;
+                p.isDead = true;
+                p.shouldExplode = true;
+            }
+        }
 
         if (p.owner === 'player') {
             if (!p.isVisualOnly) { // High-rate visual beams don't do collision
@@ -54,6 +64,8 @@ function updateProjectiles(dt, random) {
                 for (const enemy of this.enemies) {
                     if (p.isDead && !p.isBeam) break;
                     if (enemy.isDead) continue;
+                    if (isHackedAlly(enemy) && p.type !== 'hack_dart') continue;
+                    if (p.type === 'proximity_mine' || p.type === 'shrapnel_grenade') continue;
                     if (hasHitTarget(p, enemy)) continue;
 
                     // Check shields first (non-beam projectiles only)
@@ -71,9 +83,12 @@ function updateProjectiles(dt, random) {
 
                     if (p.isBeam) {
                         if (Collision.beamCircle(p.x, p.y, p.angle, p.beamLength, p.radius || 10, enemy.x, enemy.y, enemy.radius || 20)) {
-                            const now = Date.now();
-                            const lastHit = p.targetHits.get(enemy) || 0;
-                            if (now - lastHit > 100) {
+                            const now = this.projectileClock;
+                            const lastHit = p.targetHits.get(enemy);
+                            if (lastHit === undefined || now - lastHit > 0.1) {
+                                if (p.type === 'hack_dart') {
+                                    applyHack(enemy, p);
+                                }
                                 enemy.takeDamage(p.damage, p.type);
                                 applyEnergyChain(this, p, enemy);
                                 const dist = Math.hypot(enemy.x - p.x, enemy.y - p.y);
@@ -101,6 +116,9 @@ function updateProjectiles(dt, random) {
                         // Per-part collision check
                         const hitResult = enemy.checkPartHit(p.x, p.y, p.radius || 4);
                         if (hitResult.hit) {
+                            if (p.type === 'hack_dart') {
+                                applyHack(enemy, p);
+                            }
                             enemy.takeDamage(p.damage, p.type);
                             applyEnergyChain(this, p, enemy);
                             this.spawnDamageNumber(
@@ -111,7 +129,7 @@ function updateProjectiles(dt, random) {
                                 damageSourceFromProjectile(p)
                             );
                             playProjectileEvent(this.audio, p, 'impact', 'hit', { volume: 0.5, pitch: 1.3, randomizePitch: 0.1 });
-                            consumeDirectHit(p, enemy);
+                            consumeDirectHit(p, enemy, this);
                             markExplosion(p);
 
                             // Sync Hit
@@ -126,6 +144,7 @@ function updateProjectiles(dt, random) {
                 for (const boss of this.bosses) {
                     if (p.isDead && !p.isBeam) break;
                     if (boss.isDead) continue;
+                    if (p.type === 'proximity_mine' || p.type === 'shrapnel_grenade') continue;
                     if (hasHitTarget(p, boss)) continue;
                     if (p.isBeam) {
                         const tdx = boss.x - p.x;
@@ -134,11 +153,13 @@ function updateProjectiles(dt, random) {
                         const by = tdx * Math.sin(-p.angle) + tdy * Math.cos(-p.angle);
                         const hitRange = (p.radius || 10) + (boss.radius || 60);
                         if (bx > 0 && bx < p.beamLength && Math.abs(by) < hitRange) {
-                            const now = Date.now();
-                            const lastHit = p.targetHits.get(boss) || 0;
-                            if (now - lastHit > 100) {
-                                boss.takeDamage(p.damage, p.type);
-                                applyEnergyChain(this, p, boss);
+                            const now = this.projectileClock;
+                            const lastHit = p.targetHits.get(boss);
+                            if (lastHit === undefined || now - lastHit > 0.1) {
+                                if (p.type !== 'hack_dart') {
+                                    boss.takeDamage(p.damage, p.type);
+                                    applyEnergyChain(this, p, boss);
+                                }
                                 const hX = p.x + Math.cos(p.angle) * bx;
                                 const hY = p.y + Math.sin(p.angle) * bx;
                                 this.spawnDamageNumber(
@@ -166,8 +187,10 @@ function updateProjectiles(dt, random) {
 
                         const hitResult = boss.checkPartHit(p.x, p.y, p.radius || 4);
                         if (hitResult.hit) {
-                            boss.takeDamage(p.damage, p.type);
-                            applyEnergyChain(this, p, boss);
+                            if (p.type !== 'hack_dart') {
+                                boss.takeDamage(p.damage, p.type);
+                                applyEnergyChain(this, p, boss);
+                            }
                             this.spawnDamageNumber(
                                 p.x,
                                 p.y,
@@ -176,7 +199,7 @@ function updateProjectiles(dt, random) {
                                 damageSourceFromProjectile(p)
                             );
                             playProjectileEvent(this.audio, p, 'impact', 'hit', { volume: 0.8, pitch: 0.8 });
-                            consumeDirectHit(p, boss);
+                            consumeDirectHit(p, boss, this);
                             markExplosion(p);
                             if (p.isDead) break;
                         }
@@ -196,9 +219,9 @@ function updateProjectiles(dt, random) {
                     if (p.isBeam) {
                         // Beam vs Wreck parts
                         if (Collision.beamCircle(p.x, p.y, p.angle, p.beamLength, p.radius || 10, wreck.x, wreck.y, wreck.radius || 60)) {
-                            const now = Date.now();
-                            const lastHit = p.targetHits.get(wreck) || 0;
-                            if (now - lastHit > 100) {
+                            const now = this.projectileClock;
+                            const lastHit = p.targetHits.get(wreck);
+                            if (lastHit === undefined || now - lastHit > 0.1) {
                                 const hitResult = wreck.takeDamage(p.damage, wreck.x, wreck.y);
                                 p.targetHits.set(wreck, now);
                                 const isFreeze = p.type === 'beam_freeze';
@@ -233,9 +256,9 @@ function updateProjectiles(dt, random) {
                     if (!p.isBeam && hasHitTarget(p, asteroid)) continue;
                     if (p.isBeam) {
                         if (Collision.beamCircle(p.x, p.y, p.angle, p.beamLength, p.radius || 10, asteroid.x, asteroid.y, asteroid.radius)) {
-                            const now = Date.now();
-                            const lastHit = p.targetHits.get(asteroid) || 0;
-                            if (now - lastHit > 100) {
+                            const now = this.projectileClock;
+                            const lastHit = p.targetHits.get(asteroid);
+                            if (lastHit === undefined || now - lastHit > 0.1) {
                                 if (asteroid.takeDamage(p.damage)) this.spawnAsteroidLoot(asteroid);
                                 p.targetHits.set(asteroid, now);
                                 const isFreeze = p.type === 'beam_freeze';
@@ -269,9 +292,9 @@ function updateProjectiles(dt, random) {
                         const by = tdx * Math.sin(-p.angle) + tdy * Math.cos(-p.angle);
                         const hitRange = (p.radius || 10) + crate.radius;
                         if (bx > 0 && bx < p.beamLength && Math.abs(by) < hitRange) {
-                            const now = Date.now();
-                            const lastHit = p.targetHits.get(crate) || 0;
-                            if (now - lastHit > 100) {
+                            const now = this.projectileClock;
+                            const lastHit = p.targetHits.get(crate);
+                            if (lastHit === undefined || now - lastHit > 0.1) {
                                 if (crate.takeDamage(p.damage)) this.spawnCrateLoot(crate);
                                 p.targetHits.set(crate, now);
                                 const isFreeze = p.type === 'beam_freeze';
@@ -306,9 +329,9 @@ function updateProjectiles(dt, random) {
                         const by = tdx * Math.sin(-p.angle) + tdy * Math.cos(-p.angle);
                         const hitRange = (p.radius || 10) + (drone.radius || 8);
                         if (bx > 0 && bx < p.beamLength && Math.abs(by) < hitRange) {
-                            const now = Date.now();
-                            const lastHit = p.targetHits.get(drone) || 0;
-                            if (now - lastHit > 100) {
+                            const now = this.projectileClock;
+                            const lastHit = p.targetHits.get(drone);
+                            if (lastHit === undefined || now - lastHit > 0.1) {
                                 drone.takeDamage(p.damage);
                                 p.targetHits.set(drone, now);
                                 const isFreeze = p.type === 'beam_freeze';
@@ -345,6 +368,69 @@ function updateProjectiles(dt, random) {
                     if (p.type === 'rocket' || p.type === 'mini_grenade' || p.type === 'cluster_grenade') p.shouldExplode = true;
                     playProjectileEvent(this.audio, p, 'impact', 'hit', { volume: 0.2, pitch: 1.8 });
                     break; // One projectile hits one drone
+                }
+            }
+
+            // Decoys intercept enemy fire before it can reach player ships.
+            if (!p.isDead) {
+                for (const decoy of this.decoys || []) {
+                    if (!decoy || decoy.isDead) continue;
+
+                    if (p.isBeam) {
+                        if (!Collision.beamCircle(
+                            p.x,
+                            p.y,
+                            p.angle,
+                            p.beamLength,
+                            p.radius || 10,
+                            decoy.x,
+                            decoy.y,
+                            decoy.radius || 22
+                        )) continue;
+
+                        if (!p.targetHits) p.targetHits = new Map();
+                        const now = this.projectileClock;
+                        const lastHit = p.targetHits.get(decoy);
+                        if (lastHit !== undefined && now - lastHit <= 0.15) continue;
+
+                        const damage = p.damage || 5;
+                        decoy.takeDamage?.(damage);
+                        p.targetHits.set(decoy, now);
+                        this.spawnDamageNumber(
+                            decoy.x,
+                            decoy.y,
+                            damage,
+                            true
+                        );
+                        playProjectileEvent(this.audio, p, 'impact', 'hit', {
+                            volume: 0.8,
+                            pitch: 0.7,
+                            randomizePitch: 0.1
+                        });
+                        continue;
+                    }
+
+                    const dx = decoy.x - p.x;
+                    const dy = decoy.y - p.y;
+                    const hitDistance = (p.radius || 4) + (decoy.radius || 22);
+                    if (dx * dx + dy * dy >= hitDistance * hitDistance) continue;
+
+                    const damage = p.damage || 5;
+                    decoy.takeDamage?.(damage);
+                    this.spawnDamageNumber(
+                        decoy.x,
+                        decoy.y,
+                        damage,
+                        true
+                    );
+                    playProjectileEvent(this.audio, p, 'impact', 'hit', {
+                        volume: 0.8,
+                        pitch: 0.7,
+                        randomizePitch: 0.1
+                    });
+                    markExplosion(p);
+                    p.isDead = true;
+                    break;
                 }
             }
 
@@ -426,22 +512,28 @@ function updateProjectiles(dt, random) {
         if (p.isDead) {
             if (p.shouldExplode) {
                 // --- AOE Damage (Respect Ownership) ---
-                const baseRadius = p.type === 'ggbm' ? 60 : (p.type === 'cluster_grenade' ? 50 : (p.type === 'mini_grenade' ? 25 : 40));
+                const baseRadius = p.blastRadius ||
+                    (p.type === 'ggbm' ? 60 :
+                        (p.type === 'cluster_grenade' ? 50 :
+                            (p.type === 'mini_grenade' ? 25 : 40)));
                 const radius = baseRadius * (p.blastRadiusMul || 1);
                 const life = p.type === 'ggbm' ? 0.6 : 0.4;
-                const color = (p.type === 'cluster_grenade' || p.type === 'mini_grenade') ? '#44ff44' : '#ffaa00';
+                const color = p.type === 'proximity_mine' ? '#ffdd55' :
+                    (p.type === 'shrapnel_grenade' ? '#ffd166' :
+                        ((p.type === 'cluster_grenade' || p.type === 'mini_grenade') ? '#44ff44' : '#ffaa00'));
                 this.spawnExplosion(p.x, p.y, radius, life, color);
                 playProjectileEvent(this.audio, p, 'detonate', 'explosion', { volume: 0.3, pitch: 1.2 });
 
-                if (p.owner === 'player') {
+                const isShrapnelBurst = p.type === 'shrapnel_grenade';
+                if (p.owner === 'player' && !isShrapnelBurst) {
                     // AOE Damage to Enemies
                     for (const enemy of this.enemies) {
-                        if (enemy.isDead) continue;
+                        if (enemy.isDead || isHackedAlly(enemy)) continue;
                         const dx = p.x - enemy.x;
                         const dy = p.y - enemy.y;
                         const distSq = dx * dx + dy * dy;
                         if (distSq < (radius + (enemy.radius || 20)) ** 2) {
-                            const aoeDmg = Math.ceil(p.damage * 0.5);
+                            const aoeDmg = p.explosionDamage ?? Math.ceil(p.damage * 0.5);
                             enemy.takeDamage(aoeDmg, p.type);
                             this.spawnDamageNumber(
                                 enemy.x,
@@ -460,7 +552,7 @@ function updateProjectiles(dt, random) {
                         const dy = p.y - boss.y;
                         const distSq = dx * dx + dy * dy;
                         if (distSq < (radius + (boss.radius || 60)) ** 2) {
-                            const aoeDmg = Math.ceil(p.damage * 0.5);
+                            const aoeDmg = p.explosionDamage ?? Math.ceil(p.damage * 0.5);
                             boss.takeDamage(aoeDmg, p.type);
                             this.spawnDamageNumber(
                                 boss.x,
@@ -472,7 +564,7 @@ function updateProjectiles(dt, random) {
                             if (!boss.isDead) boss.flash = 5;
                         }
                     }
-                } else {
+                } else if (p.owner !== 'player') {
                     // Enemy projectile AOE vs every host-owned player.
                     for (const target of getPlayerTargets(this)) {
                         const dx = p.x - target.x;
@@ -520,6 +612,30 @@ function updateProjectiles(dt, random) {
                     }
                     playProjectileEvent(this.audio, p, 'detonate', 'explosion', { volume: 0.5, pitch: 0.8 });
                 }
+
+                if (p.type === 'shrapnel_grenade') {
+                    const fragmentCount = p.shrapnelCount || 10;
+                    for (let c = 0; c < fragmentCount; c++) {
+                        const childAngle = p.angle + (c / fragmentCount) * Math.PI * 2;
+                        const fragment = new Projectile(
+                            p.x,
+                            p.y,
+                            childAngle,
+                            'shrapnel_fragment',
+                            460,
+                            p.owner,
+                            p.shrapnelDamage ?? 3.5,
+                            0.8,
+                            random
+                        );
+                        fragment.weaponFamily = p.weaponFamily;
+                        fragment.sourcePartId = p.sourcePartId;
+                        fragment.sourcePartKey = p.sourcePartKey;
+                        fragment.sourcePartName = p.sourcePartName;
+                        fragment.sourcePlayerId = p.sourcePlayerId;
+                        this.projectiles.push(fragment);
+                    }
+                }
             }
             this.projectiles.splice(i, 1);
         }
@@ -546,7 +662,10 @@ const EXPLOSIVE_PROJECTILES = new Set([
     'ggbm',
     'cluster_grenade',
     'mini_grenade',
-    'tiny_grenade'
+    'tiny_grenade',
+    'proximity_mine',
+    'shrapnel_grenade',
+    'torpedo'
 ]);
 
 function markExplosion(projectile) {
@@ -559,9 +678,33 @@ function hasHitTarget(projectile, target) {
     return projectile.hitTargets?.has(target) || false;
 }
 
-function consumeDirectHit(projectile, target) {
+function consumeDirectHit(projectile, target, game = null) {
     if (!projectile.hitTargets) projectile.hitTargets = new Set();
     projectile.hitTargets.add(target);
+
+    if (projectile.type === 'ricochet_slug' && game && projectile.ricochetCount > 0) {
+        const next = findNearestHostile(
+            game,
+            target.x,
+            target.y,
+            projectile.ricochetRange || 320,
+            projectile
+        );
+        if (next) {
+            projectile.ricochetCount--;
+            projectile.damage *= projectile.ricochetDamageMul || 0.7;
+            projectile.x = target.x;
+            projectile.y = target.y;
+            projectile.angle = Math.atan2(next.y - target.y, next.x - target.x);
+            const speed = projectile.speed || Math.hypot(projectile.vx || 0, projectile.vy || 0) || 800;
+            projectile.speed = speed;
+            projectile.vx = Math.cos(projectile.angle) * speed;
+            projectile.vy = Math.sin(projectile.angle) * speed;
+            projectile.isDead = false;
+            return;
+        }
+    }
+
     if (
         !EXPLOSIVE_PROJECTILES.has(projectile.type) &&
         projectile.remainingPierces > 0
@@ -570,6 +713,35 @@ function consumeDirectHit(projectile, target) {
         return;
     }
     projectile.isDead = true;
+}
+
+function isHackedAlly(target) {
+    return target?.hackTimer > 0 &&
+        target?.hackedByPlayerId !== undefined &&
+        target?.hackedByPlayerId !== null;
+}
+
+function applyHack(enemy, projectile) {
+    enemy.hackTimer = projectile.hackDuration || 8;
+    enemy.hackedByPlayerId = projectile.sourcePlayerId;
+}
+
+function findNearestHostile(game, x, y, range, projectile = null) {
+    const rangeSq = range * range;
+    let nearest = null;
+    let nearestSq = rangeSq;
+    for (const target of [...(game.enemies || []), ...(game.bosses || [])]) {
+        if (!target || target.isDead || isHackedAlly(target)) continue;
+        if (projectile && hasHitTarget(projectile, target)) continue;
+        const dx = target.x - x;
+        const dy = target.y - y;
+        const distanceSq = dx * dx + dy * dy;
+        if (distanceSq < nearestSq) {
+            nearest = target;
+            nearestSq = distanceSq;
+        }
+    }
+    return nearest;
 }
 
 function applyEnergyChain(game, projectile, primaryTarget) {
@@ -588,7 +760,7 @@ function applyEnergyChain(game, projectile, primaryTarget) {
         let next = null;
         let nearestSq = 260 * 260;
         for (const candidate of candidates) {
-            if (candidate.isDead || hit.has(candidate)) continue;
+            if (candidate.isDead || hit.has(candidate) || isHackedAlly(candidate)) continue;
             const dx = candidate.x - source.x;
             const dy = candidate.y - source.y;
             const distanceSq = dx * dx + dy * dy;
@@ -688,10 +860,10 @@ function collideEnemyProjectileWithShip(game, projectile, target) {
                 beamX < projectile.beamLength &&
                 Math.abs(beamY) < effectiveRadius + projectileRadius
             ) {
-                const now = Date.now();
+                const now = game.projectileClock || 0;
                 const hitKey = `${target.id}:${key}`;
-                const lastHit = projectile.targetHits.get(hitKey) || 0;
-                if (now - lastHit > 150) {
+                const lastHit = projectile.targetHits.get(hitKey);
+                if (lastHit === undefined || now - lastHit > 0.15) {
                     hit = true;
                     projectile.targetHits.set(hitKey, now);
                 }

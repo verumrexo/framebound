@@ -24,64 +24,75 @@ export class EntityRenderer {
             ? ship.getUniqueParts()
             : ship.parts?.values();
         const parts = getShipAssemblyParts(partsIter, PartsLibrary);
-        drawShipAssembly(ctx, ship, parts, { rotation, visualTint: ship.visualTint || ship.tint || null });
+        const stealthOpacity = Number.isFinite(ship.stealthTimer) &&
+            ship.stealthTimer > 0 ? 0.42 : 1;
 
-        for (const part of parts) {
-            const { def, partRef } = part;
-            const world = localToWorld(ship, part.localX, part.localY, rotation);
+        ctx.save();
+        ctx.globalAlpha = (Number.isFinite(ctx.globalAlpha)
+            ? ctx.globalAlpha
+            : 1) * stealthOpacity;
+        try {
+            drawShipAssembly(ctx, ship, parts, { rotation, visualTint: ship.visualTint || ship.tint || null });
 
-            if (def.type === 'weapon') {
-                const angle = Math.atan2(targetY - world.y, targetX - world.x);
-                const baseAngle = rotation + part.rotation * (Math.PI / 2);
-                const offset = getMountedTurretPosition(part, baseAngle, angle, partRef.recoil);
-                def.sprite.draw(
-                    ctx,
-                    world.x + offset.offsetX,
-                    world.y + offset.offsetY,
-                    angle + (def.rotationOffset || 0),
-                    null,
-                    null,
-                    'rgba(255,255,255,0.4)'
-                );
+            for (const part of parts) {
+                const { def, partRef } = part;
+                const world = localToWorld(ship, part.localX, part.localY, rotation);
 
-                if ((partRef.chargeLeft > 0 || partRef.chargeReady) &&
-                    (def.stats.projectileType === 'railgun' || def.stats.projectileType === 'saber')) {
-                    const pct = partRef.chargeReady ? 1 : 1 - (partRef.chargeLeft / def.stats.chargeTime);
-                    const tip = getChargeTip(part, world.x, world.y, angle);
-                    const baseRadius = def.stats.projectileType === 'saber' ? 5 : 15;
-                    const radius = 5 + pct * baseRadius + Math.sin(Date.now() * 0.01) * 2;
+                if (def.type === 'weapon') {
+                    const angle = Math.atan2(targetY - world.y, targetX - world.x);
+                    const baseAngle = rotation + part.rotation * (Math.PI / 2);
+                    const offset = getMountedTurretPosition(part, baseAngle, angle, partRef.recoil);
+                    def.sprite.draw(
+                        ctx,
+                        world.x + offset.offsetX,
+                        world.y + offset.offsetY,
+                        angle + (def.rotationOffset || 0),
+                        null,
+                        null,
+                        'rgba(255,255,255,0.4)'
+                    );
+
+                    if ((partRef.chargeLeft > 0 || partRef.chargeReady) &&
+                        (def.stats.projectileType === 'railgun' || def.stats.projectileType === 'saber')) {
+                        const pct = partRef.chargeReady ? 1 : 1 - (partRef.chargeLeft / def.stats.chargeTime);
+                        const tip = getChargeTip(part, world.x, world.y, angle);
+                        const baseRadius = def.stats.projectileType === 'saber' ? 5 : 15;
+                        const radius = 5 + pct * baseRadius + Math.sin(Date.now() * 0.01) * 2;
+                        ctx.save();
+                        ctx.globalAlpha = 0.5 + Math.random() * 0.3;
+                        ctx.beginPath();
+                        ctx.arc(tip.x, tip.y, radius, 0, Math.PI * 2);
+                        ctx.fillStyle = '#00ffff';
+                        ctx.fill();
+                        ctx.globalAlpha = 0.8;
+                        ctx.beginPath();
+                        ctx.arc(tip.x, tip.y, radius * 0.5, 0, Math.PI * 2);
+                        ctx.fillStyle = '#ffffff';
+                        ctx.fill();
+                        ctx.restore();
+                    }
+                }
+
+                if (def.type === 'shield' && (!partRef.shieldCooldown || partRef.shieldCooldown <= 0)) {
+                    const pulse = 1 + Math.sin(Date.now() * 0.005) * 0.1;
+                    const radius = (TILE_SIZE / 2) * (def.stats.shieldRadiusScale || 1.4) * pulse;
                     ctx.save();
-                    ctx.globalAlpha = 0.5 + Math.random() * 0.3;
+                    ctx.fillStyle = 'rgba(0, 200, 255, 0.15)';
+                    ctx.strokeStyle = 'rgba(0, 255, 255, 0.4)';
+                    ctx.lineWidth = 2;
                     ctx.beginPath();
-                    ctx.arc(tip.x, tip.y, radius, 0, Math.PI * 2);
-                    ctx.fillStyle = '#00ffff';
+                    ctx.arc(world.x, world.y, radius, 0, Math.PI * 2);
                     ctx.fill();
-                    ctx.globalAlpha = 0.8;
-                    ctx.beginPath();
-                    ctx.arc(tip.x, tip.y, radius * 0.5, 0, Math.PI * 2);
-                    ctx.fillStyle = '#ffffff';
-                    ctx.fill();
+                    ctx.stroke();
                     ctx.restore();
                 }
-            }
 
-            if (def.type === 'shield' && (!partRef.shieldCooldown || partRef.shieldCooldown <= 0)) {
-                const pulse = 1 + Math.sin(Date.now() * 0.005) * 0.1;
-                const radius = (TILE_SIZE / 2) * (def.stats.shieldRadiusScale || 1.4) * pulse;
-                ctx.save();
-                ctx.fillStyle = 'rgba(0, 200, 255, 0.15)';
-                ctx.strokeStyle = 'rgba(0, 255, 255, 0.4)';
-                ctx.lineWidth = 2;
-                ctx.beginPath();
-                ctx.arc(world.x, world.y, radius, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.stroke();
-                ctx.restore();
+                if (def.id === 'core' && def.coreEffectSprite) {
+                    def.coreEffectSprite.draw(ctx, world.x, world.y, rotation + ((Date.now() % 10000) * 0.003));
+                }
             }
-
-            if (def.id === 'core' && def.coreEffectSprite) {
-                def.coreEffectSprite.draw(ctx, world.x, world.y, rotation + ((Date.now() % 10000) * 0.003));
-            }
+        } finally {
+            ctx.restore();
         }
     }
 
@@ -96,6 +107,10 @@ export class EntityRenderer {
         // Enemy logic stripped, so we check properties if they exist
         const frozenTimer = enemy.frozenTimer || 0;
         const freezeMeter = enemy.freezeMeter || 0;
+        const isHacked = enemy.hackTimer > 0 &&
+            enemy.hackedByPlayerId !== null &&
+            enemy.hackedByPlayerId !== undefined;
+        const empTimer = enemy.empTimer || 0;
 
         if (enemy.isWarpingIn) {
             renderer.ctx.save();
@@ -108,7 +123,9 @@ export class EntityRenderer {
         if (enemy.shipParts && enemy.shipParts.length > 0) {
             const ctx = renderer.ctx;
             const rotation = enemy.rotation + (enemy.rotationOffset || 0);
-            const enemyColor = frozenTimer > 0 ? '#00ffff' : '#ff6666';
+            const enemyColor = isHacked
+                ? '#66ffff'
+                : (frozenTimer > 0 ? '#00ffff' : '#ff6666');
             const parts = getShipAssemblyParts(enemy.shipParts, PartsLibrary);
             ctx.save();
 
@@ -239,8 +256,51 @@ export class EntityRenderer {
             }
         } else if (enemy.sprite) {
              // Fallback sprite
-             const color = (frozenTimer > 0) ? '#00ffff' : undefined;
-             enemy.sprite.draw(renderer.ctx, enemy.x, enemy.y, enemy.rotation + (enemy.rotationOffset || 0), 0.5, 0.5, null, color);
+            const color = (isHacked || frozenTimer > 0) ? '#00ffff' : undefined;
+            enemy.sprite.draw(renderer.ctx, enemy.x, enemy.y, enemy.rotation + (enemy.rotationOffset || 0), 0.5, 0.5, null, color);
+        }
+
+        if (isHacked) {
+            const ctx = renderer.ctx;
+            ctx.save();
+            ctx.strokeStyle = 'rgba(80, 255, 255, 0.9)';
+            ctx.shadowColor = '#00ffff';
+            ctx.shadowBlur = 12;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(enemy.x, enemy.y, (enemy.radius || 20) + 10, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.restore();
+        }
+
+        if (empTimer > 0) {
+            const ctx = renderer.ctx;
+            const pulse = 1 + Math.sin(Date.now() * 0.012) * 0.08;
+            const radius = ((enemy.radius || 20) + 22) * pulse;
+            ctx.save();
+            ctx.strokeStyle = 'rgba(76, 191, 255, 0.95)';
+            ctx.shadowColor = '#32aaff';
+            ctx.shadowBlur = 16;
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.arc(enemy.x, enemy.y, radius, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            for (let i = 0; i < 4; i++) {
+                const angle = Date.now() * 0.004 + i * Math.PI / 2;
+                const inner = radius * 0.68;
+                const outer = radius * 1.16;
+                ctx.moveTo(
+                    enemy.x + Math.cos(angle) * inner,
+                    enemy.y + Math.sin(angle) * inner
+                );
+                ctx.lineTo(
+                    enemy.x + Math.cos(angle + 0.12) * outer,
+                    enemy.y + Math.sin(angle + 0.12) * outer
+                );
+            }
+            ctx.stroke();
+            ctx.restore();
         }
 
         if (enemy.isWarpingIn) {

@@ -24,7 +24,18 @@ export class Ship {
             droneCount: 0,
             boosterCount: 0,
             boosterPartId: null,
-            turnSpeed: 0
+            turnSpeed: 0,
+            cameraZoom: 0.6,
+            pickupRadiusMul: 1,
+            globalFireRateMul: 1,
+            projectileSpeedMul: 1,
+            velocityDamageMul: 1,
+            velocityPierceAdd: 0,
+            aimAssistAngle: 0,
+            aimAssistRange: 0,
+            laserSplitCount: 0,
+            laserSplitAngle: 0,
+            laserSplitDamageMul: 1
         };
 
         // Permanent Upgrades (Level Up System)
@@ -186,6 +197,9 @@ export class Ship {
 
     takeDamage(amount) {
         if (this.isDead || this.godMode) return;
+        if (Number.isFinite(amount) && amount > 0) {
+            this.stealthTimer = 0;
+        }
         this.hp -= amount;
         if (this.hp <= 0) {
             this.hp = 0;
@@ -364,9 +378,21 @@ export class Ship {
             droneCount: 0,
             turnSpeed: 0,
             boosterCount: 0,
-            boosterPartId: null
+            boosterPartId: null,
+            cameraZoom: 0.6,
+            pickupRadiusMul: 1,
+            globalFireRateMul: 1,
+            projectileSpeedMul: 1,
+            velocityDamageMul: 1,
+            velocityPierceAdd: 0,
+            aimAssistAngle: 0,
+            aimAssistRange: 0,
+            laserSplitCount: 0,
+            laserSplitAngle: 0,
+            laserSplitDamageMul: 1
         };
 
+        let hasLaserSplitDamageMultiplier = false;
         for (const part of this.getUniqueParts()) {
             const def = PartsLibrary[part.partId];
             if (!def) continue;
@@ -377,6 +403,46 @@ export class Ship {
                 if (def.stats.thrust) this.stats.thrust += def.stats.thrust;
                 if (def.stats.turnSpeed) this.stats.turnSpeed += def.stats.turnSpeed;
                 if (def.stats.regen) this.stats.regen += def.stats.regen;
+
+                const stats = def.stats;
+                if (Number.isFinite(stats.cameraZoom) && stats.cameraZoom > 0) {
+                    this.stats.cameraZoom = Math.min(
+                        this.stats.cameraZoom,
+                        stats.cameraZoom
+                    );
+                }
+                for (const key of [
+                    'pickupRadiusMul',
+                    'globalFireRateMul',
+                    'projectileSpeedMul',
+                    'velocityDamageMul'
+                ]) {
+                    if (Number.isFinite(stats[key]) && stats[key] > 0) {
+                        this.stats[key] *= stats[key];
+                    }
+                }
+                if (Number.isFinite(stats.velocityPierceAdd)) {
+                    this.stats.velocityPierceAdd += stats.velocityPierceAdd;
+                }
+                for (const key of [
+                    'aimAssistAngle',
+                    'aimAssistRange',
+                    'laserSplitCount',
+                    'laserSplitAngle'
+                ]) {
+                    if (Number.isFinite(stats[key])) {
+                        this.stats[key] = Math.max(this.stats[key], stats[key]);
+                    }
+                }
+                if (Number.isFinite(stats.laserSplitDamageMul)) {
+                    this.stats.laserSplitDamageMul = hasLaserSplitDamageMultiplier
+                        ? Math.max(
+                            this.stats.laserSplitDamageMul,
+                            stats.laserSplitDamageMul
+                        )
+                        : stats.laserSplitDamageMul;
+                    hasLaserSplitDamageMultiplier = true;
+                }
             }
             if (def.type === PartType.ACCELERANT) this.stats.accelerantCount++;
             if (def.type === 'weapon') {

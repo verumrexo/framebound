@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 const { ProjectileSystem } = await import('./ProjectileSystem.js');
+const { Decoy } = await import('../../shared/entities/Decoy.js');
 
 function createGame(projectiles = [], overrides = {}, systemOptions = {}) {
     const events = [];
@@ -10,6 +11,7 @@ function createGame(projectiles = [], overrides = {}, systemOptions = {}) {
         projectiles,
         enemies: [],
         bosses: [],
+        decoys: [],
         shipwrecks: [],
         asteroids: [],
         lootCrates: [],
@@ -322,6 +324,69 @@ test('host authority applies direct enemy projectile damage to guests', () => {
     assert.deepEqual(game.projectiles, []);
 });
 
+test('enemy bullets hit and consume on a decoy before reaching the player ship', () => {
+    let playerDamage = 0;
+    const decoy = new Decoy('decoy-front', 0, 0, 'host', { hp: 7 });
+    const projectile = {
+        owner: 'enemy',
+        type: 'bullet',
+        x: 0,
+        y: 0,
+        radius: 4,
+        damage: 7,
+        isBeam: false,
+        isDead: false,
+        shouldExplode: false,
+        update() {}
+    };
+    const { game, system } = createGame([projectile], {
+        decoys: [decoy],
+        playerShip: {
+            parts: new Map([['0,0', { partId: 'core' }]]),
+            takeDamage: () => { playerDamage++; }
+        }
+    });
+
+    system.update(0.016);
+
+    assert.equal(decoy.hp, 0);
+    assert.equal(decoy.isDead, true);
+    assert.equal(playerDamage, 0);
+    assert.deepEqual(game.projectiles, []);
+});
+
+test('enemy beams damage a decoy on the same deterministic throttle as other targets', () => {
+    const decoy = new Decoy('beam-decoy', 50, 0, 'host', { hp: 20 });
+    const projectile = {
+        owner: 'enemy',
+        type: 'railgun',
+        x: 0,
+        y: 0,
+        angle: 0,
+        beamLength: 100,
+        radius: 6,
+        damage: 5,
+        isBeam: true,
+        isDead: false,
+        shouldExplode: false,
+        targetHits: new Map(),
+        update() {}
+    };
+    const { game, system } = createGame([projectile], {
+        x: 200,
+        decoys: [decoy]
+    });
+
+    system.update(0.016);
+    assert.equal(decoy.hp, 15);
+
+    system.update(0.05);
+    assert.equal(decoy.hp, 15);
+
+    system.update(0.1);
+    assert.equal(decoy.hp, 10);
+});
+
 test('host authority applies enemy explosion damage to every nearby guest', () => {
     const damage = [];
     const guestShip = {
@@ -513,4 +578,164 @@ test('cluster child scatter and fuse use the injected random source', () => {
     assert.ok(Math.abs(game.projectiles[0].angle - 0.15) < 0.000001);
     assert.equal(game.projectiles[0].life, 1);
     assert.equal(values.length, 0);
+});
+
+test('proximity mines arm, trigger inside 80, and deal their full 90-radius damage', () => {
+    const damage = [];
+    const explosions = [];
+    const enemy = {
+        id: 'mine-target',
+        x: 70,
+        y: 0,
+        radius: 10,
+        isDead: false,
+        takeDamage: amount => damage.push(amount)
+    };
+    const mine = {
+        owner: 'player',
+        type: 'proximity_mine',
+        x: 0,
+        y: 0,
+        damage: 18,
+        explosionDamage: 18,
+        blastRadius: 90,
+        triggerRadius: 80,
+        armed: true,
+        isDead: false,
+        shouldExplode: false,
+        update() {}
+    };
+    const { game, system } = createGame([mine], {
+        enemies: [enemy],
+        spawnExplosion: (...args) => explosions.push(args)
+    });
+
+    system.update(0.016);
+
+    assert.deepEqual(damage, [18]);
+    assert.equal(explosions[0][2], 90);
+    assert.deepEqual(game.projectiles, []);
+});
+
+test('shrapnel grenades fuse into ten deterministic fragments at 3.5 damage', () => {
+    const grenade = {
+        owner: 'player',
+        type: 'shrapnel_grenade',
+        x: 10,
+        y: 20,
+        angle: 0,
+        damage: 12,
+        shrapnelCount: 10,
+        shrapnelDamage: 3.5,
+        blastRadius: 70,
+        isVisualOnly: false,
+        isBeam: false,
+        isDead: false,
+        shouldExplode: true,
+        update() {
+            this.isDead = true;
+        }
+    };
+    const { game, system } = createGame([grenade]);
+
+    system.update(0.016);
+
+    assert.equal(game.projectiles.length, 10);
+    assert.ok(game.projectiles.every(fragment => fragment.type === 'shrapnel_fragment'));
+    assert.ok(game.projectiles.every(fragment => fragment.damage === 3.5));
+    assert.equal(game.projectiles[0].angle, 0);
+    assert.ok(Math.abs(game.projectiles[5].angle - Math.PI) < 1e-12);
+});
+
+test('hack darts convert normal enemies, while later player shots ignore hacked allies', () => {
+    const damage = [];
+    const enemy = {
+        id: 'hack-target',
+        x: 0,
+        y: 0,
+        radius: 10,
+        isDead: false,
+        checkShieldHit: () => ({ hit: false }),
+        checkPartHit: () => ({ hit: true }),
+        takeDamage: amount => damage.push(amount)
+    };
+    const dart = {
+        owner: 'player',
+        sourcePlayerId: 'player-1',
+        type: 'hack_dart',
+        x: 0,
+        y: 0,
+        radius: 4,
+        damage: 1,
+        isBeam: false,
+        isDead: false,
+        update() {}
+    };
+    const { game, system } = createGame([dart], { enemies: [enemy] });
+
+    system.update(0.016);
+
+    assert.deepEqual(damage, [1]);
+    assert.equal(enemy.hackTimer, 8);
+    assert.equal(enemy.hackedByPlayerId, 'player-1');
+
+    const followUp = {
+        owner: 'player',
+        type: 'bullet',
+        x: 0,
+        y: 0,
+        radius: 4,
+        damage: 10,
+        isBeam: false,
+        isDead: false,
+        update() {}
+    };
+    game.projectiles.push(followUp);
+    system.update(0.016);
+
+    assert.deepEqual(damage, [1]);
+    assert.deepEqual(game.projectiles, [followUp]);
+});
+
+test('ricochet slugs bounce once to the nearest unhit hostile for 70 percent damage', () => {
+    const damage = [];
+    const makeEnemy = (id, x) => ({
+        id,
+        x,
+        y: 0,
+        radius: 10,
+        isDead: false,
+        checkShieldHit: () => ({ hit: false }),
+        checkPartHit: () => ({ hit: true }),
+        takeDamage: amount => damage.push([id, amount])
+    });
+    const projectile = {
+        owner: 'player',
+        type: 'ricochet_slug',
+        x: 0,
+        y: 0,
+        angle: 0,
+        speed: 500,
+        vx: 500,
+        vy: 0,
+        radius: 4,
+        damage: 8,
+        ricochetCount: 1,
+        ricochetRange: 320,
+        ricochetDamageMul: 0.7,
+        isBeam: false,
+        isDead: false,
+        update(dt) {
+            this.x += this.vx * dt;
+            this.y += this.vy * dt;
+        }
+    };
+    const { game, system } = createGame([projectile], {
+        enemies: [makeEnemy('first', 0), makeEnemy('second', 70)]
+    });
+
+    for (let i = 0; i < 20 && game.projectiles.length; i++) system.update(0.016);
+
+    assert.deepEqual(damage, [['first', 8], ['second', 5.6]]);
+    assert.deepEqual(game.projectiles, []);
 });

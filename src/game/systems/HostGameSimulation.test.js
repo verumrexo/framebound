@@ -69,6 +69,7 @@ function createGame() {
         enemies: [],
         bosses: [],
         drones: [],
+        decoys: [],
         xpOrbs: [],
         goldOrbs: [],
         hpOrbs: [],
@@ -148,6 +149,25 @@ test('host simulates guest movement and firing intent with shared ship logic', (
     assert.equal(peer.runtime.weaponSystem.calls[0][1].isMouseDown, true);
 });
 
+test('guest weapon runtimes read the live authoritative enemy and boss arrays', () => {
+    const game = createGame();
+    const simulation = new HostGameSimulation(game, {
+        ShipClass: ShipStub,
+        WeaponSystemClass: WeaponSystemStub
+    });
+    const { playerId } = simulation.addPeer('connection-a', {
+        displayName: 'ace'
+    });
+    const runtime = simulation.peers.get(playerId).runtime;
+
+    assert.equal(runtime.context.enemies, game.enemies);
+    assert.equal(runtime.context.bosses, game.bosses);
+    game.enemies = [{ id: 'host-enemy' }];
+    game.bosses = [{ id: 'host-boss' }];
+    assert.deepEqual(runtime.context.enemies, game.enemies);
+    assert.deepEqual(runtime.context.bosses, game.bosses);
+});
+
 test('guest claims for interaction, transitions, and ship edits remain rejected', () => {
     const simulation = new HostGameSimulation(createGame(), {
         ShipClass: ShipStub,
@@ -197,6 +217,30 @@ test('host validates and triggers a guest salvage sweep from server position', (
     assert.equal(triggeringPlayer.id, playerId);
     assert.equal(triggeringPlayer.x, 100);
     assert.equal(triggeringPlayer.y, 200);
+});
+
+test('host derives active ability effects from the peer ship and returns world state', () => {
+    const game = createGame();
+    const simulation = new HostGameSimulation(game, {
+        ShipClass: ShipStub,
+        WeaponSystemClass: WeaponSystemStub
+    });
+    const { playerId } = simulation.addPeer('connection-a', {
+        displayName: 'ace'
+    });
+    const peer = simulation.peers.get(playerId);
+    peer.ship.parts = [{ x: 0, y: 0, partId: 'decoy', rotation: 0 }];
+
+    const event = simulation.requestAction(playerId, 'ability', {
+        abilityId: 'decoy',
+        aimAngle: 0
+    });
+
+    assert.equal(event.type, 'room_state');
+    assert.equal(event.payload.playerId, playerId);
+    assert.equal(event.payload.activeWorld.decoys.length, 1);
+    assert.equal(game.decoys[0].ownerPlayerId, playerId);
+    assert.equal(Object.hasOwn(event.payload, 'x'), false);
 });
 
 test('full resync identifies the local guest and includes authoritative run state', () => {

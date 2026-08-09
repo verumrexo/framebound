@@ -56,6 +56,10 @@ export class PlayerControlSystem {
     applyMovement(dt, mouse, axes) {
         const game = this.game;
         const { inputX, inputY } = axes;
+        const requestedZoom = game.playerShip?.stats?.cameraZoom;
+        game.camera.zoom = Number.isFinite(requestedZoom) && requestedZoom > 0
+            ? requestedZoom
+            : 0.6;
         const inputState = {
             up: game.input.isKeyDown('KeyW') ||
                 game.input.isKeyDown('ArrowUp') ||

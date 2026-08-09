@@ -259,6 +259,26 @@ test('missing chest sprites retain their original fallback borders', () => {
     );
 });
 
+test('stealth fades the complete ship draw and restores canvas state', () => {
+    const { calls, renderer } = createRenderer();
+    EntityRenderer.drawShip(renderer, {
+        x: 10,
+        y: 20,
+        rotation: 0,
+        stealthTimer: 2,
+        isDead: false,
+        getUniqueParts: () => []
+    }, 0, 0);
+
+    assert.equal(calls.filter(([method]) => method === 'save').length, 1);
+    assert.equal(calls.filter(([method]) => method === 'restore').length, 1);
+    assert.ok(calls.some(call => (
+        call[0] === 'set' &&
+        call[1] === 'globalAlpha' &&
+        call[2] === 0.42
+    )));
+});
+
 test('charged enemy weapons keep their long tracking telegraph', () => {
     const { calls, renderer } = createRenderer();
     EntityRenderer.drawEnemy(renderer, {
@@ -287,4 +307,29 @@ test('charged enemy weapons keep their long tracking telegraph', () => {
     assert.ok(calls.some(call => (
         call[0] === 'lineTo' && Math.abs(call[1]) >= 1900
     )));
+});
+
+test('hacked enemies render cyan and emp emits a ring with sparks', () => {
+    const { calls, renderer } = createRenderer();
+    const spriteCalls = [];
+    EntityRenderer.drawEnemy(renderer, {
+        isDead: false,
+        isWarpingIn: false,
+        x: 20,
+        y: 30,
+        radius: 20,
+        rotation: 0,
+        hackTimer: 2,
+        hackedByPlayerId: 'host',
+        empTimer: 2,
+        sprite: {
+            draw(...args) {
+                spriteCalls.push(args);
+            }
+        }
+    });
+
+    assert.equal(spriteCalls.at(-1).at(-1), '#00ffff');
+    assert.ok(calls.filter(([method]) => method === 'arc').length >= 2);
+    assert.ok(calls.filter(([method]) => method === 'lineTo').length >= 4);
 });

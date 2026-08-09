@@ -40,7 +40,7 @@ function createHarness({
         xpToNext,
         level,
         gold,
-        playerShip: { hp, maxHp },
+        playerShip: { hp, maxHp, stats: { pickupRadiusMul: 1 } },
         xpOrbs,
         goldOrbs,
         hpOrbs,
@@ -77,7 +77,7 @@ test('cleared rooms force every resource orb toward the player', () => {
 
     for (const orb of [xpOrb, goldOrb, hpOrb]) {
         assert.equal(orb.forced, true);
-        assert.deepEqual(orb.updates, [[0.25, 20, 30]]);
+        assert.deepEqual(orb.updates, [[0.25, 20, 30, 1]]);
     }
 });
 
@@ -116,8 +116,8 @@ test('gold collection iterates backward without skipping adjacent orbs', () => {
     assert.equal(game.gold, 10);
     assert.deepEqual(game.goldOrbs, []);
     assert.equal(calls.length, 2);
-    assert.deepEqual(second.updates, [[0.1, 20, 30]]);
-    assert.deepEqual(first.updates, [[0.1, 20, 30]]);
+    assert.deepEqual(second.updates, [[0.1, 20, 30, 1]]);
+    assert.deepEqual(first.updates, [[0.1, 20, 30, 1]]);
 });
 
 test('hp collection keeps the five-percent missing-health formula', () => {
@@ -162,7 +162,7 @@ test('shared gold flies to the nearest guest but credits one team wallet', () =>
 
     system.update(0.1);
 
-    assert.deepEqual(orb.updates, [[0.1, 310, 305]]);
+    assert.deepEqual(orb.updates, [[0.1, 310, 305, 1]]);
     assert.equal(game.gold, 9);
 });
 
@@ -201,11 +201,31 @@ test('hp orbs heal the living player who actually collects them', () => {
 
     system.update(0.1);
 
-    assert.deepEqual(orb.updates, [[0.1, 305, 305]]);
+    assert.deepEqual(orb.updates, [[0.1, 305, 305, 1]]);
     assert.equal(guestShip.hp, 48);
     assert.equal(game.playerShip.hp, 10);
     assert.equal(
         calls.some(call => call[0] === 'notification'),
         false
     );
+});
+
+test('resource orbs pass the selected player magnet multiplier', () => {
+    const orb = createOrb('gold', { collected: false });
+    const { game, system } = createHarness({ goldOrbs: [orb] });
+    game.peerNetwork = {
+        isHost: true,
+        simulation: {
+            getPickupPlayers: () => [{
+                id: 'guest_1',
+                x: 40,
+                y: 50,
+                ship: { stats: { pickupRadiusMul: 2 } }
+            }]
+        }
+    };
+
+    system.update(0.1);
+
+    assert.deepEqual(orb.updates, [[0.1, 40, 50, 2]]);
 });

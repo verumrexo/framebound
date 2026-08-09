@@ -158,6 +158,7 @@ test('guest sends movement and deduplicated fire intent without legacy shot data
     manager.sendInput({ right: true });
     manager.sendFireIntent(true, 0.5);
     manager.sendFireIntent(true, 0.5);
+    manager.sendAbility('blink', 1.25);
     manager.sendShoot({
         x: 999,
         y: 999,
@@ -169,7 +170,8 @@ test('guest sends movement and deduplicated fire intent without legacy shot data
         ['input', { right: true }]
     ]);
     assert.deepEqual(calls.filter(call => call[0] === 'action'), [
-        ['action', 'shoot', { active: true, aimAngle: 0.5 }]
+        ['action', 'shoot', { active: true, aimAngle: 0.5 }],
+        ['action', 'ability', { abilityId: 'blink', aimAngle: 1.25 }]
     ]);
 });
 

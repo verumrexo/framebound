@@ -14,6 +14,7 @@ const RUN_SCOPED_COLLECTIONS = [
     'projectiles',
     'enemies',
     'drones',
+    'decoys',
     'bosses',
     'portals',
     'explosions',
@@ -39,7 +40,8 @@ const PART_RUNTIME_KEYS = [
     'chargeReady',
     'burstLeft',
     'burstTimer',
-    'shieldCooldown'
+    'shieldCooldown',
+    'abilityCooldown'
 ];
 
 export class GameSessionSystem {
@@ -117,6 +119,7 @@ export class GameSessionSystem {
         }
         game.combatTelemetry?.reset?.();
         game.salvageSweep?.reset?.();
+        game.abilitySystem?.reset?.();
 
         game.running = false;
         game.playerShip = null;
@@ -310,6 +313,10 @@ export class GameSessionSystem {
             game.playerShip.maxHp
         );
         game.playerShip.isDead = false;
+        game.abilitySystem?.restoreShipState(
+            game.playerShip,
+            save.playerAbilityState || { cooldowns: {}, stealthTimer: 0 }
+        );
 
         game.hangar.inventory = { ...save.inventory };
         game.hangar.updateUI();
