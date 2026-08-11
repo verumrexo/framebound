@@ -6,6 +6,14 @@ export class FrameRuntimeSystem {
     update(dt) {
         const game = this.game;
 
+        // Part Lab owns the combat slice while it is open. Keeping this branch
+        // before the normal frame pipeline guarantees the dedicated simulation
+        // pipeline owns the frame exactly once.
+        if (game.partLabSimulation?.active) {
+            game.partLabSimulation.update(dt, { frameRuntime: this });
+            return;
+        }
+
         if (!game.running || !game.playerShip) return;
 
         let isMouseDown = game.input.isMouseDown();
@@ -114,6 +122,73 @@ export class FrameRuntimeSystem {
         game.mouseDownLastFrame = isMouseDown;
         game.input.clearPressed();
         game.networkManager?.update(dt);
+    }
+
+    /**
+     * Run one local gameplay frame for Part Lab. The lab intentionally skips
+     * menus, room transitions, and network replication, but keeps the real
+     * input, ship movement, ability, weapon, projectile, drone, enemy,
+     * physics, effects, and camera order. The simulation adapter gets one
+     * hook after enemy movement so it can add its deterministic test dart.
+     */
+    updatePartLabFrame(dt, { afterEnemyUpdate = null } = {}) {
+        const game = this.game;
+        if (!game.running || !game.playerShip) return null;
+
+        let isMouseDown = game.input.isMouseDown();
+        const mouse = game.input.getMousePos();
+
+        game.effects.updateDamageNumbers(dt);
+        game.playerStateGuard.repairNonFiniteState();
+        game.abilitySystem?.update?.(dt);
+
+        const levelBonus = 1 + (game.level - 1) * 0.01;
+        game.playerControls.updateDash(dt);
+        const movementAxes = game.playerControls.sampleMovementAxes();
+        const { worldMouseX, worldMouseY } = game.playerControls.applyMovement(
+            dt,
+            mouse,
+            movementAxes,
+            { sendNetwork: false }
+        );
+
+        this.handleActiveAbilityInput(worldMouseX, worldMouseY, false);
+        game.coreSpinAngle += Math.PI * 2 * dt;
+
+        const weaponUpdate = game.weaponSystem.update(dt, {
+            isMouseDown,
+            worldMouseX,
+            worldMouseY,
+            levelBonus
+        });
+        isMouseDown = weaponUpdate.isMouseDown;
+        if (weaponUpdate.blockedFrame) {
+            game.mouseDownLastFrame = isMouseDown;
+            game.input.clearPressed();
+            return { blockedFrame: true };
+        }
+
+        game.projectileSystem.update(dt);
+        game.effects.updateExplosions(dt);
+        game.droneSystem.update(dt);
+        game.enemyLifecycle.update(dt);
+        afterEnemyUpdate?.();
+        game.resourceOrbs?.update?.(dt);
+        game.playerRecovery.update(dt, levelBonus);
+        game.physicsSystem.update(dt);
+        game.effects.updateNotifications(dt);
+
+        game.camera.follow({ x: game.x, y: game.y });
+        game.camera.update(dt);
+        game.mouseDownLastFrame = isMouseDown;
+        game.input.clearPressed();
+
+        return {
+            worldMouseX,
+            worldMouseY,
+            isMouseDown,
+            camera: game.camera
+        };
     }
 
     updateSpectatorFrame(dt, isMouseDown) {

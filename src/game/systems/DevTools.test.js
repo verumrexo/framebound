@@ -1,7 +1,13 @@
 import '../../tests/setup.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DevTools } from './DevTools.js';
+import { DevTools, shouldShowPartLabButton } from './DevTools.js';
+
+test('authenticated devtools remain available while part lab stays dev-only', () => {
+    assert.equal(shouldShowPartLabButton({ isDevelopment: true }), true);
+    assert.equal(shouldShowPartLabButton({ isDevelopment: false }), false);
+    assert.equal(shouldShowPartLabButton({}), false);
+});
 
 test('devtools authentication storage fails closed without crashing startup', (t) => {
     const originalStorage = globalThis.localStorage;

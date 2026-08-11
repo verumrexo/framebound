@@ -1,6 +1,9 @@
 import './style.css'
 import { Game } from './engine/Game.js'
 import { SaveManager } from './game/systems/SaveManager.js'
+import { PartsLibrary } from './shared/parts/Part.js'
+import { loadPromotedPartLabManifest, applyPartLabManifest } from './game/dev/PartLabManifest.js'
+import { resolvePartLabDevelopmentFlag } from './game/dev/PartLabEnvironment.js'
 
 async function boot() {
   await SaveManager.hydrateDesktopBackup();
@@ -52,7 +55,17 @@ async function boot() {
       renderVisualGallery(canvas);
     });
   } else {
-    const game = new Game(canvas);
+    let partLabManifest = null;
+    try {
+      partLabManifest = await loadPromotedPartLabManifest();
+      if (partLabManifest) applyPartLabManifest(partLabManifest, PartsLibrary);
+    } catch (error) {
+      console.warn('[Boot] promoted part lab manifest ignored:', error);
+    }
+    const game = new Game(canvas, {
+      partLabManifest,
+      isDevelopment: resolvePartLabDevelopmentFlag({ viteDev: import.meta.env?.DEV === true })
+    });
     window.game = game;
     game.start();
   }

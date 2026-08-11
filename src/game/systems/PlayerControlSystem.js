@@ -53,7 +53,7 @@ export class PlayerControlSystem {
         return { inputX, inputY };
     }
 
-    applyMovement(dt, mouse, axes) {
+    applyMovement(dt, mouse, axes, { sendNetwork = true } = {}) {
         const game = this.game;
         const { inputX, inputY } = axes;
         const requestedZoom = game.playerShip?.stats?.cameraZoom;
@@ -114,7 +114,7 @@ export class PlayerControlSystem {
         game.vy = game.playerShip.vy;
         game.rotation = game.playerShip.rotation;
 
-        if (game.network && game.network.isConnected) {
+        if (sendNetwork && !game.partLabSimulation?.active && game.network && game.network.isConnected) {
             game.network.sendInput(inputState);
         }
 

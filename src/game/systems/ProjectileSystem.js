@@ -107,7 +107,7 @@ function updateProjectiles(dt, random) {
                                 playProjectileEvent(this.audio, p, 'impact', 'hit', { volume: hitVol, pitch: 1.3, randomizePitch: 0.1, isSpammy: isFreeze });
 
                                 // Sync Hit
-                                if (this.network && this.network.isConnected) {
+                                if (!this.partLabSimulation?.active && this.network && this.network.isConnected) {
                                     this.network.sendEnemyHit(enemy.id, p.damage, enemy.isDead);
                                 }
                             }
@@ -133,7 +133,7 @@ function updateProjectiles(dt, random) {
                             markExplosion(p);
 
                             // Sync Hit
-                            if (this.network && this.network.isConnected) {
+                            if (!this.partLabSimulation?.active && this.network && this.network.isConnected) {
                                 this.network.sendEnemyHit(enemy.id, p.damage, enemy.isDead);
                             }
                         }
@@ -780,7 +780,7 @@ function applyEnergyChain(game, projectile, primaryTarget) {
             damageSourceFromProjectile(projectile)
         );
         game.spawnExplosion(next.x, next.y, 8, 0.18, '#35f2ff');
-        if (game.network?.isConnected && next.id !== undefined) {
+        if (!game.partLabSimulation?.active && game.network?.isConnected && next.id !== undefined) {
             game.network.sendEnemyHit(next.id, damage, next.isDead);
         }
         hit.add(next);
@@ -799,7 +799,7 @@ function getPlayerTargets(game) {
             rotation: game.rotation
         });
     }
-    if (!game.peerNetwork?.isHost) return targets;
+    if (game.partLabSimulation?.active || !game.peerNetwork?.isHost) return targets;
 
     for (const [id, ship] of game.peerNetwork.otherPlayers) {
         if (!ship?.isDead) {

@@ -10,6 +10,10 @@ import { PartsLibrary } from '../../shared/parts/Part.js';
 import { Shipwreck } from '../../shared/entities/Shipwreck.js';
 import { SignalForgeWindow } from '../dev/SignalForgeWindow.js';
 
+export function shouldShowPartLabButton(game) {
+    return game?.isDevelopment === true;
+}
+
 export class DevTools {
     constructor(game) {
         this.game = game;
@@ -288,6 +292,13 @@ export class DevTools {
             this.ui.style.display = 'none';
             this.signalForge.open();
         }, '#55f6ff', false);
+        if (shouldShowPartLabButton(this.game)) {
+            createBtn('🧩 part lab', () => {
+                this.active = false;
+                this.ui.style.display = 'none';
+                this.game.partLabWindow?.open();
+            }, '#55ffc2', false);
+        }
         createBtn('🛠️ ship editor', () => this.openShipEditor(), '#00ffff', false);
         createBtn('📐 designer', () => this.openDesigner(), '#ff00ff', false);
         createBtn('🚫 disable devtools', () => this.logout(), '#ff4444', false);

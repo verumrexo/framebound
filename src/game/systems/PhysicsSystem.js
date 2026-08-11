@@ -243,7 +243,7 @@ export class PhysicsSystem {
                 isHost: true
             });
         }
-        if (!game.peerNetwork?.isHost) return targets;
+        if (game.partLabSimulation?.active || !game.peerNetwork?.isHost) return targets;
         for (const [id, peer] of game.peerNetwork.simulation?.peers || []) {
             if (peer.suspended) continue;
             targets.push({

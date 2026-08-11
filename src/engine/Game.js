@@ -54,9 +54,11 @@ import { CombatTelemetry } from '../game/systems/CombatTelemetry.js';
 import { SalvageSweepSystem } from '../game/systems/SalvageSweepSystem.js';
 import { SignalForgeRuntime } from '../game/audio/SignalForgeRuntime.js';
 import { AbilitySystem } from '../game/systems/AbilitySystem.js';
+import { PartLabWindow } from '../game/dev/PartLabWindow.js';
+import { applyPartLabSoundOverrides } from '../game/dev/PartLabManifest.js';
 
 export class Game {
-    constructor(canvas) {
+    constructor(canvas, { partLabManifest = null, isDevelopment = false } = {}) {
         // Graphics Settings
         this.graphics = {
             gridOpacity: 0.15,
@@ -82,7 +84,11 @@ export class Game {
         this.signalForge = new SignalForgeRuntime(this.audio);
         this.mainMenu = new MainMenu(this);
         this.loadingPromise = loadGameSounds(this.audio)
-            .then(() => this.signalForge.initialize());
+            .then(() => this.signalForge.initialize())
+            .then(() => {
+                if (partLabManifest) applyPartLabSoundOverrides(partLabManifest, this.audio);
+                return this;
+            });
         this.projectiles = [];
         this.explosions = [];
         this.notifications = [];
@@ -127,6 +133,7 @@ export class Game {
         this.dashPower = 4000;
         this.version = VERSION;
         this.versionName = VERSION_NAME;
+        this.isDevelopment = isDevelopment === true;
 
         // Player Stats
         this.score = 0;
@@ -184,6 +191,7 @@ export class Game {
 
         // Dev Tools
         this.devTools = new DevTools(this);
+        this.partLabWindow = this.isDevelopment ? new PartLabWindow(this) : null;
         this.gameSettings = new GameSettings(this);
         this.pauseOverlay = null;
         this.showPauseSettings = false;

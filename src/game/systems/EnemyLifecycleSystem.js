@@ -27,7 +27,7 @@ export class EnemyLifecycleSystem {
 
     updateEnemies(dt) {
         const game = this.game;
-        const isConnected = (
+        const isConnected = !game.partLabSimulation?.active && (
             game.networkManager
             && game.networkManager.isConnected
         );
@@ -39,7 +39,7 @@ export class EnemyLifecycleSystem {
                 if (enemy.isDead) anyDead = true;
                 continue;
             }
-            if (!(game.devTools && game.devTools.freezeEnemies)) {
+            if (game.partLabSimulation?.active || !(game.devTools && game.devTools.freezeEnemies)) {
                 if (!isConnected) {
                     enemy.update(
                         dt,
@@ -169,7 +169,7 @@ export class EnemyLifecycleSystem {
     livingTargets() {
         const game = this.game;
         let players;
-        if (game.peerNetwork?.isHost) {
+        if (!game.partLabSimulation?.active && game.peerNetwork?.isHost) {
             players = game.peerNetwork.simulation?.getPickupPlayers?.() || [];
         } else if (game.playerShip && !game.playerShip.isDead) {
             players = [{

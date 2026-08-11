@@ -111,7 +111,9 @@ export class ResourceOrbSystem {
 
     nearestLivingPlayer(orb) {
         const game = this.game;
-        const simulation = game.peerNetwork?.isHost
+        const simulation = game.partLabSimulation?.active
+            ? null
+            : game.peerNetwork?.isHost
             ? game.peerNetwork.simulation
             : null;
         const players = simulation?.getPickupPlayers?.() || (

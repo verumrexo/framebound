@@ -268,6 +268,7 @@ export class AbilitySystem {
     controlledShips() {
         const ships = [];
         if (this.game.playerShip) ships.push(this.game.playerShip);
+        if (this.game.partLabSimulation?.active) return ships;
         for (const peer of this.game.peerNetwork?.simulation?.peers?.values?.() || []) {
             if (peer.ship) ships.push(peer.ship);
         }

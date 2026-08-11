@@ -1,5 +1,11 @@
 # framebound part mechanics
 
+## part lab
+
+in the desktop development build, unlock dev tools and open `part lab`. the catalog shows every part with search and type filters. use `visual` to edit its raster and aim/fire preview, `sound` to pick the two relevant sounds, and `simulate` to test the live combat behavior. `p` moves to the next part during simulation; `shift+p` moves back. review notes and drafts autosave locally.
+
+`save` in an editor only stages a draft. `save all` is the only source-promotion action: in the desktop dev build it atomically writes `public/generated-parts/part-lab-overrides.json` and promotes Signal Forge audio. browser dev can download the manifest, but future builds only see source changes after desktop promotion.
+
 status: architecture contract for future part work; individual mechanics remain
 unapproved until designed with the user
 

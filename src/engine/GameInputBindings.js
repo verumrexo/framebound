@@ -81,7 +81,7 @@ export class GameInputBindings {
     onDevKey(event) {
         if (event.code === 'KeyL') {
             if (this.game.nameEntryActive) return;
-            this.game.devTools.toggle();
+            this.game.devTools?.toggle?.();
         }
     }
 

@@ -129,7 +129,9 @@ export class DroneSystem {
     }
 
     getFriendlyPlayers() {
-        const simulation = this.game.peerNetwork?.simulation;
+        const simulation = this.game.partLabSimulation?.active
+            ? null
+            : this.game.peerNetwork?.simulation;
         if (simulation?.getPickupPlayers) {
             return simulation.getPickupPlayers();
         }

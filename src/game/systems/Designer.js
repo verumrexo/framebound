@@ -13,8 +13,173 @@ const COLORS = { 1: '#26d426', 2: '#333' };
 const TYPE_LABELS = [
     ['hull', 'hull'], ['weapon', 'weapon'], ['thruster', 'thruster'],
     ['accelerant', 'accelerant'], ['rocket_bay', 'rocket bay'],
-    ['booster', 'booster'], ['shield', 'shield']
+    ['booster', 'booster'], ['drone', 'drone'], ['shield', 'shield'],
+    ['utility', 'utility'], ['core', 'core']
 ];
+
+const DESIGN_DOCUMENT_TYPES = new Set([
+    PartType.HULL,
+    PartType.WEAPON,
+    PartType.THRUSTER,
+    PartType.ACCELERANT,
+    PartType.ROCKET_BAY,
+    PartType.BOOSTER,
+    PartType.DRONE,
+    PartType.SHIELD
+]);
+const PART_ID_PATTERN = /^[a-zA-Z0-9_-]{1,80}$/;
+
+/**
+ * Turn a runtime part definition back into the serializable document used by
+ * the designer. This deliberately copies every pixel and stat value instead
+ * of reconstructing a prettier approximation.
+ */
+export function partDefinitionToDesign(partId, definition) {
+    assertStablePartId(partId);
+    if (!definition || typeof definition !== 'object') {
+        throw new Error(`part definition is missing: ${partId}`);
+    }
+
+    const width = definition.width;
+    const height = definition.height;
+    const grid = gridDimensions(width, height);
+    const isWeapon = definition.type === PartType.WEAPON;
+    const turretSprite = isWeapon ? definition.sprite : null;
+    const baseSprite = isWeapon
+        ? (definition.baseSprite || fallbackWeaponBaseSprite(width, height))
+        : definition.sprite;
+
+    const design = createBlankPartDesign({
+        name: definition.name || partId,
+        type: DESIGN_DOCUMENT_TYPES.has(definition.type) ? definition.type : PartType.HULL,
+        width,
+        height
+    });
+    design.partId = partId;
+    design.partType = definition.type;
+    design.layers.base = spritePixels(baseSprite, grid, 'base');
+    design.layers.turret = turretSprite
+        ? spritePixels(turretSprite, grid, 'turret')
+        : null;
+    design.anchors.base = spriteAnchor(baseSprite, grid);
+    design.anchors.turret = turretSprite ? spriteAnchor(turretSprite, grid) : null;
+    design.rawAnchors = {
+        base: rawSpriteAnchor(baseSprite, grid),
+        turret: turretSprite ? rawSpriteAnchor(turretSprite, grid) : null
+    };
+    design.rotationOffset = Number.isFinite(definition.rotationOffset)
+        ? definition.rotationOffset
+        : 0;
+    design.stats = cloneSerializable(definition.stats || {});
+
+    const barrelPosition = definition.stats?.barrelPosition;
+    if (turretSprite && barrelPosition && Number.isFinite(barrelPosition.x) && Number.isFinite(barrelPosition.y)) {
+        const pivot = design.anchors.turret || { x: grid.width / 2, y: grid.height / 2 };
+        const scale = Number.isFinite(turretSprite.scale) && turretSprite.scale > 0 ? turretSprite.scale : 1;
+        const rawPivot = design.rawAnchors.turret || pivot;
+        const rawBarrel = {
+            x: rawPivot.x + Number(barrelPosition.x) / scale,
+            y: rawPivot.y + Number(barrelPosition.y) / scale
+        };
+        design.barrel = snapDesignPoint(rawBarrel, grid);
+        design.rawBarrel = rawBarrel;
+    }
+
+    return design;
+}
+
+/**
+ * Validate a staged document while retaining the stable id metadata needed by
+ * a dev tool. `serializePartDesign` remains the schema authority; the extra
+ * fields are intentionally restored after its canonical validation pass.
+ */
+export function validateStagedDesignDocument(design, partId = design?.partId) {
+    const stablePartId = partId === null || partId === undefined ? null : assertStablePartId(partId);
+    if (design?.partId && stablePartId && design.partId !== stablePartId) {
+        throw new Error('staged design part id does not match the open part');
+    }
+    const validated = parsePartDesign(serializePartDesign(design));
+    if (stablePartId) validated.partId = stablePartId;
+    if (design?.partType !== undefined) {
+        if (!Object.values(PartType).includes(design.partType)) {
+            throw new Error(`unsupported part type: ${design.partType}`);
+        }
+        validated.partType = design.partType;
+    }
+    if (design?.rawAnchors !== undefined) {
+        validated.rawAnchors = normalizeRawAnchors(design.rawAnchors, validated.grid);
+    }
+    if (design?.rawBarrel !== undefined) {
+        validated.rawBarrel = normalizeRawPoint(design.rawBarrel, validated.grid, 'raw barrel');
+    }
+    return validated;
+}
+
+function assertStablePartId(partId) {
+    if (typeof partId !== 'string' || !PART_ID_PATTERN.test(partId)) {
+        throw new Error(`invalid part id: ${partId}`);
+    }
+    return partId;
+}
+
+function cloneSerializable(value) {
+    return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
+}
+
+function spritePixels(sprite, grid, label) {
+    if (!sprite || !Array.isArray(sprite.data) || sprite.width !== grid.width || sprite.height !== grid.height) {
+        throw new Error(`${label} sprite does not match the part footprint`);
+    }
+    // A few legacy definitions contain short/long arrays. Sprite.generate only
+    // consumes the footprint-sized prefix, so mirror that runtime behavior and
+    // make missing cells transparent for the stricter design document schema.
+    return Array.from({ length: grid.width * grid.height }, (_, index) => {
+        const pixel = sprite.data[index];
+        return Number.isInteger(pixel) && pixel >= 0 && pixel <= 2 ? pixel : 0;
+    });
+}
+
+function spriteAnchor(sprite, grid) {
+    return snapDesignPoint(rawSpriteAnchor(sprite, grid), grid);
+}
+
+function rawSpriteAnchor(sprite, grid) {
+    if (!sprite || !Number.isFinite(sprite.anchorX) || !Number.isFinite(sprite.anchorY)) return null;
+    return { x: sprite.anchorX * grid.width, y: sprite.anchorY * grid.height };
+}
+
+function snapDesignPoint(point, grid) {
+    if (!point) return null;
+    return {
+        x: Math.max(0, Math.min(grid.width, Math.round(point.x * 2) / 2)),
+        y: Math.max(0, Math.min(grid.height, Math.round(point.y * 2) / 2))
+    };
+}
+
+function normalizeRawAnchors(value, grid) {
+    if (!value || typeof value !== 'object') throw new Error('raw anchors must be an object');
+    return {
+        base: normalizeRawPoint(value.base, grid, 'raw base anchor'),
+        turret: normalizeRawPoint(value.turret, grid, 'raw turret anchor')
+    };
+}
+
+function normalizeRawPoint(value, grid, label) {
+    if (value === null || value === undefined) return null;
+    if (!Number.isFinite(value.x) || !Number.isFinite(value.y) ||
+        value.x < 0 || value.y < 0 || value.x > grid.width || value.y > grid.height) {
+        throw new Error(`${label} is outside the design grid`);
+    }
+    return { x: Number(value.x), y: Number(value.y) };
+}
+
+function fallbackWeaponBaseSprite(width, height) {
+    const expected = gridDimensions(width, height);
+    const fallback = width === 1 && height === 2 ? Assets.LongHull : Assets.PlayerBase;
+    return fallback?.width === expected.width && fallback?.height === expected.height
+        ? fallback
+        : { data: new Array(expected.width * expected.height).fill(0), width: expected.width, height: expected.height, scale: 1, anchorX: .5, anchorY: .5 };
+}
 
 export class Designer {
     constructor(game) {
@@ -26,12 +191,23 @@ export class Designer {
         this.gridData = new Array(64).fill(0);
         this.turretGridData = new Array(64).fill(0);
         this.importedStats = {};
+        this.currentPartId = null;
+        this.currentPartType = PartType.HULL;
+        this.stagedSaveCallback = null;
+        this.nextPartCallback = null;
+        this.draftChangeCallback = null;
+        this.closeCallback = null;
+        this.rawAnchors = { base: null, turret: null };
+        this.rawBarrel = null;
         this.basePivot = null;
         this.turretPivot = null;
         this.barrelPos = null;
         this.pivotMode = false;
         this.barrelMode = false;
         this.turretMode = false;
+        this.previewAim = { x: 236, y: 105 };
+        this.previewFire = null;
+        this.previewAnimationFrame = null;
         this.buildUI();
         this.bindEvents();
         this.resizeCanvases();
@@ -75,7 +251,9 @@ export class Designer {
                     <canvas id="turretCanvas" aria-label="turret art canvas" style="${canvasStyle('#ff9944')}"></canvas></div>
                 <div><div style="color:#aabbff;margin-bottom:4px">ship mount preview</div>
                     <canvas id="mount-preview" width="280" height="210" aria-label="ship mount preview" style="${canvasStyle('#aabbff')};width:280px;height:210px"></canvas>
-                    <div style="color:#8899bb;font-size:9px;margin-top:5px">exact pixels, anchors, size, and attachment</div></div>
+                    <div style="color:#8899bb;font-size:9px;margin-top:5px">move over preview to aim · click fire test</div>
+                    <button id="btn-fire-test" style="${buttonStyle('#8b4cc7')}">fire test</button>
+                </div>
             </div>
             <textarea id="design-notes" maxlength="2000" placeholder="describe what this part should do. mechanics, projectile, weird behavior, whatever." aria-label="part mechanics and notes" style="${fieldStyle()};box-sizing:border-box;width:min(760px,90%);height:58px;margin-top:10px;resize:vertical"></textarea>
             <div id="import-panel" style="display:none;margin:10px auto;padding:10px;max-width:760px;background:#10182c;border:1px solid #4a9eff">
@@ -87,6 +265,7 @@ export class Designer {
             <div id="designer-status" role="status" style="height:14px;color:#88ffbb;font-size:9px;margin:9px 0"></div>
             <div style="display:flex;gap:7px;justify-content:center;flex-wrap:wrap">
                 <button id="btn-save" style="${buttonStyle('#20a066')}">add to hangar</button>
+                <button id="btn-next" style="${buttonStyle('#2b7dbd')};display:none">save &amp; next</button>
                 <button id="btn-copy" style="${buttonStyle('#007bff')}">copy design</button>
                 <button id="btn-download" style="${buttonStyle('#6950cc')}">download design</button>
                 <button id="btn-import" style="${buttonStyle('#a56b00')}">import design</button>
@@ -101,6 +280,9 @@ export class Designer {
         this.turretCtx = this.turretCanvas.getContext('2d');
         this.previewCanvas = this.ui.querySelector('#mount-preview');
         this.previewCtx = this.previewCanvas.getContext('2d');
+        this.fireTestButton = this.ui.querySelector('#btn-fire-test');
+        this.saveButton = this.ui.querySelector('#btn-save');
+        this.nextButton = this.ui.querySelector('#btn-next');
         this.nameInput = this.ui.querySelector('#design-name');
         this.typeSelect = this.ui.querySelector('#design-type');
         this.sizeSelect = this.ui.querySelector('#design-size');
@@ -116,25 +298,35 @@ export class Designer {
 
     bindEvents() {
         this.ui.querySelector('#btn-save').onclick = () => this.save();
+        this.ui.querySelector('#btn-next').onclick = () => this.saveAndNext();
+        this.ui.querySelector('#btn-fire-test').onclick = () => this.fireTest();
         this.ui.querySelector('#btn-copy').onclick = () => this.copyDesign();
         this.ui.querySelector('#btn-download').onclick = () => this.downloadDesign();
         this.ui.querySelector('#btn-import').onclick = () => this.showImport(true);
         this.ui.querySelector('#btn-apply-import').onclick = () => this.applyImport();
         this.ui.querySelector('#btn-close-import').onclick = () => this.showImport(false);
         this.ui.querySelector('#btn-cancel').onclick = () => this.close();
-        this.sizeSelect.onchange = () => this.resizeGrid();
-        this.typeSelect.onchange = () => this.syncTypeAndTurret('type');
-        this.turretModeCheckbox.onchange = () => this.syncTypeAndTurret('turret');
-        this.facingSelect.onchange = () => this.drawGrid();
-        this.nameInput.oninput = () => this.drawPreview();
-        this.notesInput.oninput = () => this.clearStatus();
+        this.sizeSelect.onchange = () => { this.resizeGrid(); this.notifyDraftChange(); };
+        this.typeSelect.onchange = () => { this.syncTypeAndTurret('type'); this.notifyDraftChange(); };
+        this.turretModeCheckbox.onchange = () => { this.syncTypeAndTurret('turret'); this.notifyDraftChange(); };
+        this.facingSelect.onchange = () => { this.drawGrid(); this.notifyDraftChange(); };
+        this.nameInput.oninput = () => { this.drawPreview(); this.notifyDraftChange(); };
+        this.notesInput.oninput = () => { this.clearStatus(); this.notifyDraftChange(); };
+        this.previewCanvas.onmousemove = event => this.updatePreviewAim(event);
+        this.previewCanvas.onmouseleave = () => {
+            this.previewAim = null;
+            this.drawPreview();
+        };
+        this.previewCanvas.onclick = () => this.fireTest();
         this.pivotModeCheckbox.onchange = () => {
             this.pivotMode = this.pivotModeCheckbox.checked;
             this.barrelMode = false; this.barrelModeCheckbox.checked = false;
+            this.notifyDraftChange();
         };
         this.barrelModeCheckbox.onchange = () => {
             this.barrelMode = this.barrelModeCheckbox.checked;
             this.pivotMode = false; this.pivotModeCheckbox.checked = false;
+            this.notifyDraftChange();
         };
         this.bindCanvas(this.canvas, false);
         this.bindCanvas(this.turretCanvas, true);
@@ -149,9 +341,16 @@ export class Designer {
             const rawY = (event.clientY - rect.top) / rect.height * this.gridHeight;
             if (this.pivotMode && event.type === 'mousedown') {
                 const point = snapPoint(rawX, rawY, this.gridWidth, this.gridHeight);
-                if (isTurret) this.turretPivot = point; else this.basePivot = point;
+                if (isTurret) {
+                    this.turretPivot = point;
+                    this.rawAnchors.turret = null;
+                } else {
+                    this.basePivot = point;
+                    this.rawAnchors.base = null;
+                }
             } else if (this.barrelMode && isTurret && event.type === 'mousedown') {
                 this.barrelPos = snapPoint(rawX, rawY, this.gridWidth, this.gridHeight);
+                this.rawBarrel = null;
             } else {
                 const x = Math.floor(rawX); const y = Math.floor(rawY);
                 if (x < 0 || y < 0 || x >= this.gridWidth || y >= this.gridHeight) return;
@@ -159,7 +358,7 @@ export class Designer {
                 const data = isTurret ? this.turretGridData : this.gridData;
                 data[y * this.gridWidth + x] = event.buttons === 1 ? 1 : 0;
             }
-            this.clearStatus(); this.drawGrid();
+            this.clearStatus(); this.drawGrid(); this.notifyDraftChange();
         };
         canvas.onmousedown = event => { drawing = true; handle(event); };
         canvas.onmousemove = event => { if (drawing && !this.pivotMode && !this.barrelMode) handle(event); };
@@ -167,22 +366,79 @@ export class Designer {
         window.addEventListener('mouseup', () => { drawing = false; });
     }
 
-    open() {
+    /**
+     * Open a blank designer (legacy behavior) or preload a stable library id.
+     * Callbacks are intentionally per-open so normal dev-menu use cannot keep
+     * a stale part-lab callback alive.
+     */
+    open(partId = null, options = {}) {
+        if (typeof partId === 'object' && partId !== null) {
+            options = partId;
+            partId = null;
+        }
+        this.configureCallbacks(options || {});
+        if (partId !== null && partId !== undefined) {
+            if (options?.draft) this.loadDesign(validateStagedDesignDocument(options.draft, partId));
+            else this.loadPart(partId);
+        } else {
+            this.loadDesign(createBlankPartDesign({
+                name: 'my part',
+                type: PartType.HULL,
+                width: 1,
+                height: 1
+            }));
+        }
+        this.showImport(false);
         this.active = true;
         this.ui.style.display = 'block';
         this.resizeCanvases();
-        this.game.input.active = false;
+        if (this.game?.input) this.game.input.active = false;
+        return this;
+    }
+
+    openPart(partId, options = {}) {
+        return this.open(partId, options);
+    }
+
+    configureCallbacks({ onStagedSave, onSave, onNext, onNextPart, onDraftChange, onClose } = {}) {
+        this.stagedSaveCallback = onStagedSave || onSave || null;
+        this.nextPartCallback = onNext || onNextPart || null;
+        this.draftChangeCallback = onDraftChange || null;
+        this.closeCallback = onClose || null;
+        if (this.saveButton) {
+            this.saveButton.textContent = this.stagedSaveCallback ? 'save changes' : 'add to hangar';
+        }
+        if (this.nextButton) {
+            this.nextButton.style.display = this.nextPartCallback ? 'inline-block' : 'none';
+        }
+        this.updateFireTestControl();
+    }
+
+    loadPart(partId, partsLibrary = PartsLibrary) {
+        assertStablePartId(partId);
+        const definition = partsLibrary?.[partId];
+        if (!definition) throw new Error(`unknown part id: ${partId}`);
+        this.loadDesign(partDefinitionToDesign(partId, definition));
+        return this;
     }
 
     close() {
+        const wasActive = this.active;
+        const closedPartId = this.currentPartId;
         this.active = false;
         this.ui.style.display = 'none';
-        this.game.input.active = true;
+        this.stopPreviewAnimation();
+        this.previewFire = null;
+        this.showImport(false);
+        if (this.game?.input) this.game.input.active = true;
+        if (wasActive) this.closeCallback?.(closedPartId);
+        this.currentPartId = null;
     }
 
     syncTypeAndTurret(source) {
         if (source === 'type') this.turretModeCheckbox.checked = this.typeSelect.value === PartType.WEAPON;
         if (source === 'turret') this.typeSelect.value = this.turretModeCheckbox.checked ? PartType.WEAPON : PartType.HULL;
+        this.currentPartType = this.typeSelect.value || PartType.HULL;
         this.turretMode = this.turretModeCheckbox.checked;
         this.ui.querySelector('#turret-canvas-wrapper').style.display = this.turretMode ? 'block' : 'none';
         this.facingSelect.style.display = this.turretMode ? 'inline-block' : 'none';
@@ -201,6 +457,8 @@ export class Designer {
         this.gridData = new Array(this.gridWidth * this.gridHeight).fill(0);
         this.turretGridData = new Array(this.gridWidth * this.gridHeight).fill(0);
         this.basePivot = null; this.turretPivot = null; this.barrelPos = null;
+        this.rawAnchors = { base: null, turret: null };
+        this.rawBarrel = null;
         this.importedStats = {};
         this.resizeCanvases();
     }
@@ -220,17 +478,25 @@ export class Designer {
     }
 
     toDesignDocument() {
+        const partType = this.typeSelect.value || this.currentPartType || PartType.HULL;
         const design = createBlankPartDesign({
             name: this.nameInput.value,
-            type: this.typeSelect.value,
+            type: DESIGN_DOCUMENT_TYPES.has(partType) ? partType : PartType.HULL,
             width: this.currentSize[0],
             height: this.currentSize[1]
         });
+        design.partType = partType;
+        if (this.currentPartId) design.partId = this.currentPartId;
         design.layers.base = [...this.gridData];
         design.layers.turret = this.turretMode ? [...this.turretGridData] : null;
-        design.anchors.base = this.basePivot ? { ...this.basePivot } : null;
-        design.anchors.turret = this.turretMode && this.turretPivot ? { ...this.turretPivot } : null;
-        design.barrel = this.turretMode && this.barrelPos ? { ...this.barrelPos } : null;
+        design.anchors.base = snapDesignPoint(this.basePivot, design.grid);
+        design.anchors.turret = this.turretMode ? snapDesignPoint(this.turretPivot, design.grid) : null;
+        design.barrel = this.turretMode ? snapDesignPoint(this.barrelPos, design.grid) : null;
+        design.rawAnchors = {
+            base: this.rawAnchors?.base ? { ...this.rawAnchors.base } : null,
+            turret: this.turretMode && this.rawAnchors?.turret ? { ...this.rawAnchors.turret } : null
+        };
+        design.rawBarrel = this.turretMode && this.rawBarrel ? { ...this.rawBarrel } : null;
         design.rotationOffset = this.turretMode ? Number(this.facingSelect.value) : 0;
         design.stats = { ...this.importedStats };
         design.notes = this.notesInput.value;
@@ -238,8 +504,14 @@ export class Designer {
     }
 
     loadDesign(design) {
+        this.currentPartId = design.partId || null;
+        this.currentPartType = design.partType || design.type;
         this.nameInput.value = design.name;
-        this.typeSelect.value = design.type;
+        this.typeSelect.value = this.currentPartType;
+        if (!this.typeSelect.value) {
+            this.currentPartType = PartType.HULL;
+            this.typeSelect.value = PartType.HULL;
+        }
         this.sizeSelect.value = `${design.footprint.width}x${design.footprint.height}`;
         this.currentSize = [design.footprint.width, design.footprint.height];
         this.gridWidth = design.grid.width; this.gridHeight = design.grid.height;
@@ -247,11 +519,16 @@ export class Designer {
         this.turretGridData = design.layers.turret ? [...design.layers.turret] : new Array(this.gridWidth * this.gridHeight).fill(0);
         this.turretModeCheckbox.checked = Boolean(design.layers.turret);
         this.turretMode = Boolean(design.layers.turret);
-        this.basePivot = design.anchors.base ? { ...design.anchors.base } : null;
-        this.turretPivot = design.anchors.turret ? { ...design.anchors.turret } : null;
-        this.barrelPos = design.barrel ? { ...design.barrel } : null;
+        this.rawAnchors = {
+            base: design.rawAnchors?.base ? { ...design.rawAnchors.base } : null,
+            turret: design.rawAnchors?.turret ? { ...design.rawAnchors.turret } : null
+        };
+        this.rawBarrel = design.rawBarrel ? { ...design.rawBarrel } : null;
+        this.basePivot = this.rawAnchors.base || (design.anchors.base ? { ...design.anchors.base } : null);
+        this.turretPivot = this.rawAnchors.turret || (design.anchors.turret ? { ...design.anchors.turret } : null);
+        this.barrelPos = this.rawBarrel || (design.barrel ? { ...design.barrel } : null);
         this.importedStats = { ...design.stats };
-        this.notesInput.value = design.notes;
+        this.notesInput.value = design.notes || '';
         this.facingSelect.value = closestFacing(design.rotationOffset);
         this.syncTypeAndTurret('type');
     }
@@ -301,9 +578,50 @@ export class Designer {
         }
     }
 
+    getValidatedDesignDocument() {
+        return validateStagedDesignDocument(this.toDesignDocument(), this.currentPartId);
+    }
+
+    /** Stage the current design for the part lab without mutating the library. */
+    stageSave() {
+        const design = this.getValidatedDesignDocument();
+        if (this.stagedSaveCallback) this.stagedSaveCallback(design);
+        return design;
+    }
+
+    notifyDraftChange() {
+        if (!this.draftChangeCallback || !this.currentPartId) return;
+        try {
+            this.draftChangeCallback(this.getValidatedDesignDocument());
+        } catch {
+            // incomplete fields are normal while typing in the designer
+        }
+    }
+
+    saveAndNext() {
+        try {
+            const design = this.getValidatedDesignDocument();
+            if (this.stagedSaveCallback) this.stagedSaveCallback(design);
+            if (this.nextPartCallback) this.nextPartCallback(design, design.partId || null);
+            else this.setStatus('next part is not available', true);
+            return design;
+        } catch (error) {
+            console.error(error);
+            this.setStatus(error.message || 'could not stage design', true);
+            return null;
+        }
+    }
+
     save() {
         try {
-            const design = parsePartDesign(serializePartDesign(this.toDesignDocument()));
+            if (this.stagedSaveCallback) {
+                const design = this.stageSave();
+                this.setStatus('changes staged');
+                this.close();
+                return design;
+            }
+
+            const design = this.getValidatedDesignDocument();
             const id = `custom_${Date.now()}`;
             const definition = this.createDefinition(id, design);
             PartsLibrary[id] = definition;
@@ -332,14 +650,29 @@ export class Designer {
             mass: 2 * design.footprint.width * design.footprint.height,
             ...design.stats
         };
-        if (design.barrel) {
-            const pivot = design.anchors.turret || { x: design.grid.width / 2, y: design.grid.height / 2 };
-            stats.barrelPosition = { x: (design.barrel.x - pivot.x) * 4, y: (design.barrel.y - pivot.y) * 4 };
+        if (design.barrel || design.rawBarrel) {
+            const pivot = design.rawAnchors?.turret || design.anchors.turret || { x: design.grid.width / 2, y: design.grid.height / 2 };
+            const barrel = design.rawBarrel || design.barrel;
+            stats.barrelPosition = { x: (barrel.x - pivot.x) * 4, y: (barrel.y - pivot.y) * 4 };
         }
-        const sprite = makeSprite(design.layers.turret || design.layers.base, design.anchors.turret || design.anchors.base);
-        const definition = new PartDef(id, design.name, design.type, sprite, stats, design.footprint.width, design.footprint.height);
+        const sprite = makeSprite(
+            design.layers.turret || design.layers.base,
+            design.rawAnchors?.turret || design.anchors.turret || design.rawAnchors?.base || design.anchors.base
+        );
+        const definition = new PartDef(
+            id,
+            design.name,
+            design.partType || design.type,
+            sprite,
+            stats,
+            design.footprint.width,
+            design.footprint.height
+        );
         if (design.layers.turret) {
-            definition.baseSprite = makeSprite(design.layers.base, design.anchors.base);
+            definition.baseSprite = makeSprite(
+                design.layers.base,
+                design.rawAnchors?.base || design.anchors.base
+            );
             definition.drawTurretInInventory = true;
             definition.rotationOffset = design.rotationOffset;
             definition.turretDrawOffset = 0;
@@ -369,6 +702,7 @@ export class Designer {
 
     drawPreview() {
         const ctx = this.previewCtx;
+        const now = nowMs();
         ctx.fillStyle = '#080b14'; ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
         const width = this.currentSize[0]; const height = this.currentSize[1];
         const coreX = 54; const coreY = ctx.canvas.height / 2;
@@ -381,15 +715,111 @@ export class Designer {
         }
         Assets.PlayerBase.draw(ctx, coreX, coreY, 0, .5, .5);
         const design = this.toDesignDocument();
+        let definition = null;
         try {
-            const definition = this.createDefinition('preview', design);
+            definition = this.createDefinition('preview', design);
             if (definition.baseSprite) definition.baseSprite.draw(ctx, partX, partY, 0, .5, .5);
-            definition.sprite.draw(ctx, partX, partY, definition.rotationOffset || 0, null, null);
+            const followsAim = definition.type === PartType.WEAPON;
+            const aim = this.previewAim || { x: partX + TILE_SIZE * 2, y: partY };
+            const aimAngle = Math.atan2(aim.y - partY, aim.x - partX);
+            definition.sprite.draw(
+                ctx,
+                partX,
+                partY,
+                followsAim ? aimAngle + (definition.rotationOffset || 0) : 0,
+                null,
+                null
+            );
+            if (followsAim) {
+                drawAimGuide(ctx, partX, partY, aim, aimAngle);
+                this.drawPreviewFire(ctx, definition, partX, partY, aimAngle, now);
+            }
         } catch { /* incomplete text fields are allowed while typing */ }
         ctx.strokeStyle = '#44ff88'; ctx.lineWidth = 3; ctx.beginPath();
         ctx.moveTo(coreX + TILE_SIZE / 2, coreY); ctx.lineTo(coreX + TILE_SIZE / 2 + 8, coreY); ctx.stroke();
         ctx.fillStyle = '#8899bb'; ctx.font = '9px monospace'; ctx.textAlign = 'center';
         ctx.fillText('core', coreX, coreY + 28); ctx.fillText(`${width}x${height} mount`, partX, ctx.canvas.height - 9);
+        this.updateFireTestControl(definition);
+    }
+
+    updatePreviewAim(event) {
+        const rect = this.previewCanvas.getBoundingClientRect();
+        const scaleX = this.previewCanvas.width / Math.max(1, rect.width);
+        const scaleY = this.previewCanvas.height / Math.max(1, rect.height);
+        this.previewAim = {
+            x: clamp((event.clientX - rect.left) * scaleX, 0, this.previewCanvas.width),
+            y: clamp((event.clientY - rect.top) * scaleY, 0, this.previewCanvas.height)
+        };
+        this.drawPreview();
+    }
+
+    updateFireTestControl(definition = null) {
+        if (!this.fireTestButton) return;
+        const isWeapon = (definition?.type || this.currentPartType) === PartType.WEAPON;
+        this.fireTestButton.disabled = !isWeapon;
+        this.fireTestButton.textContent = isWeapon ? 'fire test' : 'fire test (n/a)';
+        this.fireTestButton.style.opacity = isWeapon ? '1' : '.55';
+        this.fireTestButton.style.cursor = isWeapon ? 'pointer' : 'not-allowed';
+    }
+
+    fireTest() {
+        if (this.currentPartType !== PartType.WEAPON) {
+            this.setStatus('fire test is not applicable to this part');
+            return false;
+        }
+        const aim = this.previewAim || { x: this.previewCanvas.width - 24, y: this.previewCanvas.height / 2 };
+        const width = this.currentSize[0];
+        const height = this.currentSize[1];
+        const partX = 54 + (1 + (width - 1) / 2) * TILE_SIZE;
+        const partY = this.previewCanvas.height / 2 + (-Math.floor((height - 1) / 2) + (height - 1) / 2) * TILE_SIZE;
+        const aimAngle = Math.atan2(aim.y - partY, aim.x - partX);
+        this.previewFire = { startedAt: nowMs(), partX, partY, aimAngle };
+        this.setStatus('preview fire test — game state untouched');
+        this.startPreviewAnimation();
+        this.drawPreview();
+        return true;
+    }
+
+    drawPreviewFire(ctx, definition, partX, partY, aimAngle, now) {
+        if (!this.previewFire) return;
+        const elapsed = now - this.previewFire.startedAt;
+        if (elapsed > 900) {
+            this.previewFire = null;
+            return;
+        }
+        const barrel = previewMuzzle(definition, partX, partY, aimAngle);
+        const travel = Math.min(300, Math.max(0, elapsed * 1.2));
+        const endX = barrel.x + Math.cos(aimAngle) * travel;
+        const endY = barrel.y + Math.sin(aimAngle) * travel;
+        ctx.save();
+        ctx.globalAlpha = Math.max(0, 1 - elapsed / 900);
+        ctx.strokeStyle = '#ffe58a';
+        ctx.shadowColor = '#ff9d2e';
+        ctx.shadowBlur = 10;
+        ctx.lineWidth = 3;
+        ctx.beginPath(); ctx.moveTo(barrel.x, barrel.y); ctx.lineTo(endX, endY); ctx.stroke();
+        if (elapsed < 180) {
+            ctx.fillStyle = '#fff5b0';
+            ctx.beginPath(); ctx.arc(barrel.x, barrel.y, 7 + (180 - elapsed) / 12, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.restore();
+    }
+
+    startPreviewAnimation() {
+        if (this.previewAnimationFrame !== null) return;
+        const tick = () => {
+            this.previewAnimationFrame = null;
+            if (!this.active || !this.previewFire) return;
+            this.drawPreview();
+            this.previewAnimationFrame = requestPreviewFrame(tick);
+        };
+        this.previewAnimationFrame = requestPreviewFrame(tick);
+    }
+
+    stopPreviewAnimation() {
+        if (this.previewAnimationFrame === null) return;
+        cancelPreviewFrame(this.previewAnimationFrame);
+        this.previewAnimationFrame = null;
     }
 
     setStatus(message, isError = false) { this.status.style.color = isError ? '#ff6677' : '#88ffbb'; this.status.textContent = message; }
@@ -403,6 +833,43 @@ function safeName(value) { return (value || 'part').trim().toLowerCase().replace
 function closestFacing(value) { return [0, 1.5708, 3.1416, 4.7124].reduce((best, option) => Math.abs(option - value) < Math.abs(best - value) ? option : best, 0).toString(); }
 function facingArrow(rotation) { if (rotation > 4.7) return '↑'; if (rotation > 3.1) return '←'; if (rotation > 1.5) return '↓'; return '→'; }
 function snapPoint(x, y, maxX, maxY) { return { x: Math.max(0, Math.min(maxX, Math.round(x * 2) / 2)), y: Math.max(0, Math.min(maxY, Math.round(y * 2) / 2)) }; }
+function nowMs() { return globalThis.performance?.now?.() ?? Date.now(); }
+function clamp(value, min, max) { return Math.max(min, Math.min(max, value)); }
+function requestPreviewFrame(callback) {
+    if (typeof globalThis.requestAnimationFrame === 'function') return globalThis.requestAnimationFrame(callback);
+    return globalThis.setTimeout(callback, 16);
+}
+function cancelPreviewFrame(handle) {
+    if (typeof globalThis.cancelAnimationFrame === 'function') globalThis.cancelAnimationFrame(handle);
+    else globalThis.clearTimeout(handle);
+}
+function drawAimGuide(ctx, partX, partY, aim, angle) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(170, 204, 255, .45)';
+    ctx.setLineDash?.([4, 4]);
+    ctx.beginPath(); ctx.moveTo(partX, partY); ctx.lineTo(aim.x, aim.y); ctx.stroke();
+    ctx.setLineDash?.([]);
+    ctx.strokeStyle = '#d9e5ff'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(aim.x - 6, aim.y); ctx.lineTo(aim.x + 6, aim.y);
+    ctx.moveTo(aim.x, aim.y - 6); ctx.lineTo(aim.x, aim.y + 6);
+    ctx.stroke();
+    ctx.fillStyle = '#d9e5ff'; ctx.font = '9px monospace'; ctx.textAlign = 'left';
+    ctx.fillText(facingArrow((angle + Math.PI * 2) % (Math.PI * 2)), aim.x + 8, aim.y - 7);
+    ctx.restore();
+}
+function previewMuzzle(definition, partX, partY, angle) {
+    const height = definition.height || 1;
+    const barrel = definition.stats?.barrelPosition;
+    if (barrel) {
+        return {
+            x: partX + Math.cos(angle) * (barrel.x || 0) - Math.sin(angle) * (barrel.y || 0),
+            y: partY + Math.sin(angle) * (barrel.x || 0) + Math.cos(angle) * (barrel.y || 0)
+        };
+    }
+    const length = height > 1.5 ? TILE_SIZE * 1.3 : TILE_SIZE * .6;
+    return { x: partX + Math.cos(angle) * length, y: partY + Math.sin(angle) * length };
+}
 function drawMarker(ctx, point, scale, color) {
     const x = point.x * scale; const y = point.y * scale;
     ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2;

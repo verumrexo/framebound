@@ -1,5 +1,8 @@
+#[cfg(debug_assertions)]
 use base64::engine::general_purpose::STANDARD as BASE64;
+#[cfg(debug_assertions)]
 use base64::Engine;
+#[cfg(debug_assertions)]
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::fs::File;
@@ -10,11 +13,18 @@ use tauri::Manager;
 
 const MAX_SAVE_BYTES: usize = 8 * 1024 * 1024;
 const MAX_SIGNAL_FORGE_PACK_BYTES: usize = 48 * 1024 * 1024;
+#[cfg(debug_assertions)]
+const MAX_PART_LAB_MANIFEST_BYTES: usize = 8 * 1024 * 1024;
+#[cfg(debug_assertions)]
+const MAX_PART_LAB_ENTRIES: usize = 256;
+#[cfg(debug_assertions)]
+const MAX_PART_LAB_PIXELS: usize = 512;
 const MAX_SMOKE_REPORT_BYTES: usize = 64 * 1024;
 const SAVE_FILE_NAME: &str = "run-save-v2.json";
 const SIGNAL_FORGE_PACK_FILE_NAME: &str = "signal-forge-pack-v1.json";
 const DEV_SERVER_PORT: u16 = 5173;
 
+#[cfg(debug_assertions)]
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PromotionPack {
@@ -24,6 +34,7 @@ struct PromotionPack {
     bindings: Vec<PromotionBinding>,
 }
 
+#[cfg(debug_assertions)]
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PromotionSound {
@@ -41,6 +52,7 @@ struct PromotionSound {
     modified_at: String,
 }
 
+#[cfg(debug_assertions)]
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct PromotionBinding {
@@ -48,6 +60,7 @@ struct PromotionBinding {
     sound_id: String,
 }
 
+#[cfg(debug_assertions)]
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct PromotedManifest {
@@ -57,6 +70,7 @@ struct PromotedManifest {
     bindings: Vec<PromotionBinding>,
 }
 
+#[cfg(debug_assertions)]
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct PromotedSound {
@@ -72,6 +86,114 @@ struct PromotedSound {
     peak: f64,
     created_at: String,
     modified_at: String,
+}
+
+#[cfg(debug_assertions)]
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PartLabManifest {
+    schema_version: u32,
+    version: u32,
+    modified_at: String,
+    visuals: Vec<PartLabVisual>,
+    sounds: Vec<PartLabSound>,
+    reviews: Vec<PartLabReview>,
+}
+
+#[cfg(debug_assertions)]
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PartLabVisual {
+    part_id: String,
+    design: PartLabDesign,
+}
+
+#[cfg(debug_assertions)]
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PartLabDesign {
+    format: String,
+    version: u32,
+    name: String,
+    #[serde(rename = "type")]
+    part_type: String,
+    footprint: PartLabSize,
+    grid: PartLabSize,
+    layers: PartLabLayers,
+    anchors: PartLabAnchors,
+    barrel: Option<PartLabPoint>,
+    rotation_offset: f64,
+    stats: serde_json::Value,
+    notes: String,
+    #[serde(default)]
+    raw_anchors: Option<PartLabAnchors>,
+    #[serde(default)]
+    raw_barrel: Option<PartLabPoint>,
+}
+
+#[cfg(debug_assertions)]
+#[derive(Deserialize)]
+struct PartLabSize {
+    width: usize,
+    height: usize,
+}
+
+#[cfg(debug_assertions)]
+#[derive(Deserialize)]
+struct PartLabPoint {
+    x: f64,
+    y: f64,
+}
+
+#[cfg(debug_assertions)]
+#[derive(Deserialize)]
+struct PartLabAnchors {
+    base: Option<PartLabPoint>,
+    turret: Option<PartLabPoint>,
+}
+
+#[cfg(debug_assertions)]
+#[derive(Deserialize)]
+struct PartLabLayers {
+    base: Vec<u8>,
+    turret: Option<Vec<u8>>,
+}
+
+#[cfg(debug_assertions)]
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PartLabSound {
+    part_id: String,
+    slots: Vec<PartLabSoundSlot>,
+}
+
+#[cfg(debug_assertions)]
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PartLabSoundSlot {
+    id: String,
+    event_key: String,
+    fallback: String,
+    optional: bool,
+    assignment: Option<PartLabAssignment>,
+}
+
+#[cfg(debug_assertions)]
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PartLabAssignment {
+    source: String,
+    event_id: Option<String>,
+    sound_id: Option<String>,
+}
+
+#[cfg(debug_assertions)]
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PartLabReview {
+    part_id: String,
+    status: String,
+    notes: String,
 }
 
 fn is_allowed_navigation(url: &tauri::Url, development: bool) -> bool {
@@ -153,6 +275,7 @@ fn write_signal_forge_pack(
     )
 }
 
+#[cfg(debug_assertions)]
 #[tauri::command]
 fn promote_signal_forge_pack(raw: String) -> Result<String, String> {
     if !cfg!(debug_assertions) {
@@ -167,6 +290,7 @@ fn promote_signal_forge_pack(raw: String) -> Result<String, String> {
     Ok(source_root.to_string_lossy().into_owned())
 }
 
+#[cfg(debug_assertions)]
 fn promote_signal_forge_pack_to(root: &Path, raw: &str) -> Result<(), String> {
     if raw.len() > MAX_SIGNAL_FORGE_PACK_BYTES {
         return Err("signal forge pack exceeds size limit".into());
@@ -237,6 +361,159 @@ fn promote_signal_forge_pack_to(root: &Path, raw: &str) -> Result<(), String> {
     )
 }
 
+#[cfg(debug_assertions)]
+#[tauri::command]
+fn promote_part_lab_manifest(raw: String) -> Result<String, String> {
+    let source_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .ok_or_else(|| "project source root is missing".to_string())?
+        .join("public")
+        .join("generated-parts");
+    promote_part_lab_manifest_to(&source_root, &raw)?;
+    Ok(source_root.to_string_lossy().into_owned())
+}
+
+#[cfg(debug_assertions)]
+fn promote_part_lab_manifest_to(root: &Path, raw: &str) -> Result<(), String> {
+    if raw.len() > MAX_PART_LAB_MANIFEST_BYTES {
+        return Err("part lab manifest exceeds size limit".into());
+    }
+    let manifest: PartLabManifest = serde_json::from_str(raw)
+        .map_err(|error| format!("invalid part lab manifest: {error}"))?;
+    validate_part_lab_manifest(&manifest)?;
+    fs::create_dir_all(root).map_err(|error| error.to_string())?;
+    write_bounded_file(
+        &root.join("part-lab-overrides.json"),
+        raw,
+        MAX_PART_LAB_MANIFEST_BYTES,
+        "part lab manifest",
+    )?;
+    Ok(())
+}
+
+#[cfg(debug_assertions)]
+fn validate_part_lab_manifest(manifest: &PartLabManifest) -> Result<(), String> {
+    if manifest.schema_version != 1 || manifest.version == 0 || manifest.modified_at.is_empty() || manifest.modified_at.len() > 64 {
+        return Err("unsupported part lab manifest header".into());
+    }
+    if manifest.visuals.len() > MAX_PART_LAB_ENTRIES || manifest.sounds.len() > MAX_PART_LAB_ENTRIES || manifest.reviews.len() > MAX_PART_LAB_ENTRIES {
+        return Err("part lab manifest has too many entries".into());
+    }
+
+    let mut visual_ids = std::collections::HashSet::new();
+    for visual in &manifest.visuals {
+        if !is_safe_part_lab_id(&visual.part_id) || !visual_ids.insert(visual.part_id.as_str()) {
+            return Err("part lab manifest contains an invalid or duplicate visual id".into());
+        }
+        validate_part_lab_design(&visual.part_id, &visual.design)?;
+    }
+
+    let mut sound_ids = std::collections::HashSet::new();
+    for sound in &manifest.sounds {
+        if !is_safe_part_lab_id(&sound.part_id) || !sound_ids.insert(sound.part_id.as_str()) {
+            return Err("part lab manifest contains an invalid or duplicate sound id".into());
+        }
+        if sound.slots.len() > 2 {
+            return Err("part lab sound override has too many slots".into());
+        }
+        let mut slot_ids = std::collections::HashSet::new();
+        for slot in &sound.slots {
+            let _ = slot.optional;
+            if !is_safe_part_lab_id(&slot.id) || !slot_ids.insert(slot.id.as_str()) || slot.fallback.len() > 64 {
+                return Err("part lab sound slot is invalid".into());
+            }
+            let event_slot = slot.event_key.rsplit(':').next().unwrap_or_default();
+            if !is_safe_part_lab_id(event_slot) || slot.event_key != format!("part:{}:{}", sound.part_id, event_slot) {
+                return Err("part lab sound event key is invalid".into());
+            }
+            if let Some(assignment) = &slot.assignment {
+                match assignment.source.as_str() {
+                    "runtime" if assignment.event_id.as_deref().is_some_and(is_safe_sound_id) && assignment.sound_id.is_none() => {}
+                    "signal-forge" if assignment.sound_id.as_deref().is_some_and(is_safe_sound_id) && assignment.event_id.is_none() => {}
+                    _ => return Err("part lab sound assignment is invalid".into()),
+                }
+            }
+        }
+    }
+
+    let mut review_ids = std::collections::HashSet::new();
+    for review in &manifest.reviews {
+        if !is_safe_part_lab_id(&review.part_id) || !review_ids.insert(review.part_id.as_str()) || !matches!(review.status.as_str(), "untested" | "good" | "needs-work") || review.notes.len() > 240 {
+            return Err("part lab review is invalid".into());
+        }
+    }
+    Ok(())
+}
+
+#[cfg(debug_assertions)]
+fn validate_part_lab_design(part_id: &str, design: &PartLabDesign) -> Result<(), String> {
+    if design.format != "framebound-part-design" || design.version != 1 || design.name.is_empty() || design.name.len() > 64 || design.notes.len() > 2000 {
+        return Err(format!("visual design for {part_id} has an invalid header"));
+    }
+    if !matches!(design.part_type.as_str(), "hull" | "weapon" | "thruster" | "accelerant" | "rocket_bay" | "booster" | "drone" | "shield" | "utility" | "core") {
+        return Err(format!("visual design for {part_id} has an invalid type"));
+    }
+    let expected = match (design.footprint.width, design.footprint.height) {
+        (1, 1) => (8, 8),
+        (1, 2) => (8, 15),
+        (2, 2) => (15, 15),
+        (2, 4) => (15, 29),
+        _ => return Err(format!("visual design for {part_id} has an invalid footprint")),
+    };
+    if design.grid.width != expected.0 || design.grid.height != expected.1 || expected.0 * expected.1 > MAX_PART_LAB_PIXELS {
+        return Err(format!("visual design for {part_id} has an invalid grid"));
+    }
+    validate_pixels(&design.layers.base, expected.0 * expected.1, part_id)?;
+    if let Some(turret) = &design.layers.turret {
+        if design.part_type != "weapon" {
+            return Err(format!("non-weapon {part_id} cannot have turret art"));
+        }
+        validate_pixels(turret, expected.0 * expected.1, part_id)?;
+    }
+    validate_part_lab_anchors(&design.anchors, expected, part_id)?;
+    if let Some(point) = &design.barrel { validate_part_lab_point(point, expected, part_id)?; }
+    if let Some(anchors) = &design.raw_anchors { validate_part_lab_anchors(anchors, expected, part_id)?; }
+    if let Some(point) = &design.raw_barrel { validate_part_lab_point(point, expected, part_id)?; }
+    if !design.rotation_offset.is_finite() || !design.stats.is_object() {
+        return Err(format!("visual design for {part_id} has invalid metadata"));
+    }
+    Ok(())
+}
+
+#[cfg(debug_assertions)]
+fn validate_pixels(pixels: &[u8], expected: usize, part_id: &str) -> Result<(), String> {
+    if pixels.len() != expected || pixels.iter().any(|pixel| *pixel > 2) {
+        return Err(format!("visual design for {part_id} has invalid pixels"));
+    }
+    Ok(())
+}
+
+#[cfg(debug_assertions)]
+fn validate_part_lab_anchors(anchors: &PartLabAnchors, grid: (usize, usize), part_id: &str) -> Result<(), String> {
+    if let Some(point) = &anchors.base { validate_part_lab_point(point, grid, part_id)?; }
+    if let Some(point) = &anchors.turret { validate_part_lab_point(point, grid, part_id)?; }
+    Ok(())
+}
+
+#[cfg(debug_assertions)]
+fn validate_part_lab_point(point: &PartLabPoint, grid: (usize, usize), part_id: &str) -> Result<(), String> {
+    if !point.x.is_finite() || !point.y.is_finite() || point.x < 0.0 || point.y < 0.0 || point.x > grid.0 as f64 || point.y > grid.1 as f64 {
+        return Err(format!("visual design for {part_id} has an out-of-bounds point"));
+    }
+    Ok(())
+}
+
+#[cfg(debug_assertions)]
+fn is_safe_part_lab_id(value: &str) -> bool {
+    !value.is_empty() && value.len() <= 80 && value.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
+}
+
+#[cfg(debug_assertions)]
+fn is_safe_sound_id(value: &str) -> bool {
+    !value.is_empty() && value.len() <= 64 && value.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
+}
+
+#[cfg(debug_assertions)]
 fn is_safe_generated_sound_id(id: &str) -> bool {
     !id.is_empty()
         && id.len() <= 64
@@ -246,6 +523,7 @@ fn is_safe_generated_sound_id(id: &str) -> bool {
             .all(|(index, byte)| byte.is_ascii_lowercase() || byte.is_ascii_digit() || (byte == b'-' && index > 0))
 }
 
+#[cfg(debug_assertions)]
 fn write_bounded_bytes(path: &Path, bytes: &[u8], max_bytes: usize) -> Result<(), String> {
     if bytes.len() > max_bytes {
         return Err("generated sound exceeds size limit".into());
@@ -476,6 +754,7 @@ fn remove_if_present(path: &Path) -> Result<(), String> {
     }
 }
 
+#[cfg(debug_assertions)]
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -498,6 +777,35 @@ pub fn run() {
             load_signal_forge_pack,
             write_signal_forge_pack,
             promote_signal_forge_pack,
+            promote_part_lab_manifest,
+            write_peer_smoke_report
+        ])
+        .run(tauri::generate_context!())
+        .expect("failed to run Framebound");
+}
+
+#[cfg(not(debug_assertions))]
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(navigation_guard())
+        .setup(|app| {
+            if let Some(url) = peer_smoke_url_from_environment()
+                .map_err(std::io::Error::other)?
+            {
+                let window = app
+                    .get_webview_window("main")
+                    .ok_or_else(|| std::io::Error::other("main window is missing"))?;
+                window.navigate(url)?;
+            }
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            load_run_save,
+            write_run_save,
+            clear_run_save,
+            load_signal_forge_pack,
+            write_signal_forge_pack,
             write_peer_smoke_report
         ])
         .run(tauri::generate_context!())
@@ -524,6 +832,47 @@ mod tests {
                 std::process::id()
             ))
             .join(name)
+    }
+
+    fn valid_part_lab_manifest() -> String {
+        serde_json::json!({
+            "schemaVersion": 1,
+            "version": 1,
+            "modifiedAt": "2026-08-11T12:00:00.000Z",
+            "visuals": [{
+                "partId": "gun_basic",
+                "design": {
+                    "format": "framebound-part-design",
+                    "version": 1,
+                    "name": "dart",
+                    "type": "weapon",
+                    "partType": "weapon",
+                    "footprint": { "width": 1, "height": 1 },
+                    "grid": { "width": 8, "height": 8 },
+                    "layers": {
+                        "base": vec![0; 64],
+                        "turret": vec![0; 64]
+                    },
+                    "anchors": { "base": null, "turret": null },
+                    "barrel": null,
+                    "rotationOffset": 0.0,
+                    "stats": { "hp": 10 },
+                    "notes": ""
+                }
+            }],
+            "sounds": [{
+                "partId": "gun_basic",
+                "slots": [{
+                    "id": "fire",
+                    "label": "fire",
+                    "eventKey": "part:gun_basic:fire",
+                    "fallback": "shoot_dart",
+                    "optional": false,
+                    "assignment": { "source": "runtime", "eventId": "shoot_dart" }
+                }]
+            }],
+            "reviews": [{ "partId": "gun_basic", "status": "good", "notes": "clean" }]
+        }).to_string()
     }
 
     #[test]
@@ -615,8 +964,50 @@ mod tests {
             .expect("promoted manifest should be readable");
         assert!(manifest.contains("./generated-sounds/laser-zap.wav"));
         assert!(!manifest.contains("wavBase64"));
+        if root.parent().unwrap().exists() {
+            fs::remove_dir_all(root.parent().unwrap())
+                .expect("test directory should be removable");
+        }
+    }
+
+    #[test]
+    fn part_lab_promotion_accepts_valid_manifest_and_replaces_atomically() {
+        let root = test_path("generated-parts");
+        promote_part_lab_manifest_to(&root, &valid_part_lab_manifest())
+            .expect("valid part lab manifest should promote");
+        let saved = fs::read_to_string(root.join("part-lab-overrides.json"))
+            .expect("part lab manifest should be readable");
+        assert!(saved.contains("gun_basic"));
+        assert!(!root.join("../part-lab-overrides.json").exists());
         fs::remove_dir_all(root.parent().unwrap())
             .expect("test directory should be removable");
+    }
+
+    #[test]
+    fn part_lab_promotion_rejects_path_like_ids_and_bad_pixels() {
+        let root = test_path("generated-parts");
+        let mut path_like = serde_json::from_str::<serde_json::Value>(&valid_part_lab_manifest())
+            .expect("fixture should parse");
+        path_like["visuals"][0]["partId"] = serde_json::json!("../escape");
+        assert!(promote_part_lab_manifest_to(&root, &path_like.to_string()).is_err());
+
+        let mut bad_pixels = serde_json::from_str::<serde_json::Value>(&valid_part_lab_manifest())
+            .expect("fixture should parse");
+        bad_pixels["visuals"][0]["design"]["layers"]["base"][0] = serde_json::json!(9);
+        assert!(promote_part_lab_manifest_to(&root, &bad_pixels.to_string()).is_err());
+        assert!(!root.join("part-lab-overrides.json").exists());
+        if root.parent().unwrap().exists() {
+            fs::remove_dir_all(root.parent().unwrap())
+                .expect("test directory should be removable");
+        }
+    }
+
+    #[test]
+    fn part_lab_promotion_rejects_oversized_payload() {
+        let root = test_path("generated-parts");
+        let oversized = "x".repeat(MAX_PART_LAB_MANIFEST_BYTES + 1);
+        assert!(promote_part_lab_manifest_to(&root, &oversized).is_err());
+        assert!(!root.exists());
     }
 
     #[test]
