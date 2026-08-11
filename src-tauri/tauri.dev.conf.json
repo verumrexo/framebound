@@ -1,0 +1,9 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Framebound Dev",
+  "identifier": "com.verumrexo.framebound.dev",
+  "build": {
+    "beforeBuildCommand": "node scripts/build-frontend.mjs --flavor dev",
+    "features": ["part-lab"]
+  }
+}

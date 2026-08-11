@@ -112,6 +112,8 @@ export class PartDef {
         this.description = ''; // Plain-English explanation shown in the UI
         this.rotationOffset = 0; // Optional rotation offset for turrets
         this.turretDrawOffset = 0; // Optional positional offset for turrets (along aim vector)
+        this.projectileLook = 'default'; // Renderer-only weapon projectile skin
+        this.projectileTrail = 'default'; // Renderer-only weapon trail skin
 
         // Auto-assign rarity based on size
         const size = width * height;

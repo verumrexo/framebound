@@ -1870,3 +1870,87 @@ select {
     .part-sound-footer { align-items: stretch; flex-direction: column; }
     .part-sound-status { min-width: 0; }
 }
+
+/* focused part forge: the two semantic slots stay visible while synthesis stays local */
+.part-sound-dialog {
+    width: min(1120px, 100%);
+    max-height: min(860px, 100%);
+}
+.part-sound-slots { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.part-sound-slots button,
+#part-sound-editor .part-sound-button {
+    border: 1px solid var(--ui-line);
+    background: var(--ui-black);
+    color: var(--ui-ink);
+    cursor: pointer;
+    font: 10px var(--ui-mono);
+    padding: 7px 8px;
+    text-transform: lowercase;
+}
+.part-sound-slots button.is-selected { border-color: var(--ui-cyan); color: var(--ui-cyan-bright); }
+.part-sound-forge-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.2fr) minmax(220px, .8fr);
+    gap: 10px;
+    margin-top: 12px;
+}
+.part-sound-panel {
+    min-width: 0;
+    padding: 11px;
+    border: 1px solid var(--ui-line);
+    background: var(--ui-panel-soft);
+}
+.part-sound-panel h3 { margin: 0 0 9px; color: var(--ui-bright); font: 12px var(--ui-display); text-transform: lowercase; }
+.part-sound-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.part-sound-field { display: grid; gap: 4px; color: var(--ui-muted); font-size: 9px; }
+.part-sound-field input,
+.part-sound-field select {
+    min-width: 0;
+    border: 1px solid var(--ui-line);
+    background: var(--ui-black);
+    color: var(--ui-ink);
+    font: 10px var(--ui-mono);
+    padding: 7px;
+}
+.part-sound-actions,
+.part-sound-assignment-actions { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 9px; }
+#part-sound-editor .part-sound-button:hover:not(:disabled) { border-color: var(--ui-cyan); color: var(--ui-bright); }
+#part-sound-editor .part-sound-button.is-cyan { color: var(--ui-cyan-bright); }
+#part-sound-editor .part-sound-button.is-pink { border-color: #ff7eb8; color: #ff9ac8; }
+#part-sound-editor .part-sound-button.is-amber { color: var(--ui-amber); }
+#part-sound-editor .part-sound-button.is-danger { color: #ff9e9e; }
+#part-sound-editor .part-sound-button.is-muted { color: var(--ui-muted); }
+.part-sound-editor-state,
+.part-sound-meter,
+.part-sound-assignment-state,
+.part-sound-empty { margin-top: 8px; color: var(--ui-muted); font-size: 9px; line-height: 1.4; }
+.part-sound-wave { display: block; width: 100%; height: 100px; margin-top: 9px; border: 1px solid var(--ui-line); background: #010405; image-rendering: pixelated; }
+.part-sound-meter.is-clipping { color: #ff9e9e; }
+.part-sound-params { max-height: 295px; overflow: auto; padding-right: 3px; }
+.part-sound-param { display: grid; grid-template-columns: minmax(0, 1fr) 110px; align-items: center; gap: 8px; margin-bottom: 6px; }
+.part-sound-param label { display: flex; justify-content: space-between; gap: 6px; color: var(--ui-muted); font-size: 8px; }
+.part-sound-param label span:last-child { color: var(--ui-cyan); }
+.part-sound-param input[type="range"], .part-sound-param select { width: 100%; }
+.part-sound-library { max-height: 295px; overflow: auto; }
+.part-sound-library-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; align-items: center; padding: 7px 0; border-bottom: 1px solid rgba(85, 255, 194, .12); }
+.part-sound-library-row.is-current { border-left: 2px solid var(--ui-cyan); padding-left: 6px; }
+.part-sound-library-row strong,
+.part-sound-library-row small { display: block; }
+.part-sound-library-row strong { color: var(--ui-bright); font-size: 10px; }
+.part-sound-library-row small { margin-top: 3px; color: var(--ui-muted); font-size: 8px; }
+.part-sound-library-row > div:last-child { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+.part-sound-assignment { grid-column: 1 / -1; }
+.part-sound-assignment-state { padding: 8px; border: 1px solid var(--ui-line); background: var(--ui-black); }
+.part-sound-assignment-state.is-custom { color: var(--ui-cyan); }
+.part-sound-assignment-state.is-default { color: var(--ui-green); }
+.part-sound-assignment-state.is-missing { color: #ff9e9e; }
+
+@media (max-width: 850px) {
+    .part-sound-forge-layout { grid-template-columns: 1fr; }
+    .part-sound-assignment { grid-column: auto; }
+}
+
+@media (max-width: 640px) {
+    .part-sound-fields { grid-template-columns: 1fr; }
+    .part-sound-slots { grid-template-columns: 1fr; }
+}

@@ -9,6 +9,7 @@ import {
     getPartFireDefault,
     partSoundEventKey
 } from '../audio/SoundEventRegistry.js';
+import { normalizeProjectileVisuals } from '../../shared/combat/ProjectileVisuals.js';
 
 function playPartEvent(audio, partId, slot, fallbackName, options) {
     if (typeof audio.playEvent === 'function') {
@@ -464,6 +465,12 @@ export class WeaponSystem {
                 projectile.sourcePlayerId = game.sourcePlayerId ||
                     game.peerNetwork?.replicator?.selfId ||
                     'host';
+                const projectileVisuals = normalizeProjectileVisuals({
+                    look: def.projectileLook,
+                    trail: def.projectileTrail
+                });
+                projectile.projectileLook = projectileVisuals.look;
+                projectile.projectileTrail = projectileVisuals.trail;
                 projectile.prismChild = splitIndex > 0;
 
                 if (family === 'velocity') {

@@ -1,8 +1,28 @@
+import { normalizeProjectileVisuals } from '../../shared/combat/ProjectileVisuals.js';
+
+const BEAM_TYPES = new Set([
+    'laser', 'small_laser', 'railgun', 'saber', 'beam_freeze', 'beam_sword', 'arc_welder'
+]);
+
 export function drawProjectile(renderer, projectile) {
     if (projectile.delay > 0) return;
 
     const color = projectile.owner === 'enemy' ? '#ff4444' : '#26d426';
     const ctx = renderer.ctx;
+    const visuals = normalizeProjectileVisuals({
+        look: projectile.projectileLook,
+        trail: projectile.projectileTrail
+    });
+    const customVisualsSupported = !BEAM_TYPES.has(projectile.type);
+    if (customVisualsSupported && visuals.trail === 'default' && visuals.look !== 'default') {
+        drawDefaultProjectileTrail(renderer, projectile);
+    } else if (customVisualsSupported && visuals.trail !== 'default') {
+        drawProjectileTrail(renderer, projectile, visuals.trail);
+    }
+    if (customVisualsSupported && visuals.look !== 'default') {
+        drawProjectileLook(renderer, projectile, visuals.look, color);
+        return;
+    }
 
     if (
         projectile.type === 'laser' ||
@@ -138,8 +158,10 @@ export function drawProjectile(renderer, projectile) {
         renderer.drawRect(-10, -3, 20, 6, bodyColor);
         renderer.drawRect(4, -3, 6, 6, '#444');
 
-        const flameSize = 4 + Math.sin(Date.now() * 0.05) * 2;
-        renderer.drawRect(-14, -2, flameSize, 4, '#ffff00');
+        if (visuals.trail === 'default') {
+            const flameSize = 4 + Math.sin(Date.now() * 0.05) * 2;
+            renderer.drawRect(-14, -2, flameSize, 4, '#ffff00');
+        }
 
         ctx.restore();
     } else if (projectile.type === 'rocket_he') {
@@ -150,8 +172,10 @@ export function drawProjectile(renderer, projectile) {
         renderer.drawRect(-10, -3, 20, 6, '#44aaff');
         renderer.drawRect(4, -3, 6, 6, '#224466');
 
-        const flameSize = 4 + Math.sin(Date.now() * 0.05) * 2;
-        renderer.drawRect(-14, -2, flameSize, 4, '#00ccff');
+        if (visuals.trail === 'default') {
+            const flameSize = 4 + Math.sin(Date.now() * 0.05) * 2;
+            renderer.drawRect(-14, -2, flameSize, 4, '#00ccff');
+        }
 
         ctx.restore();
     } else if (projectile.type === 'ggbm') {
@@ -162,8 +186,10 @@ export function drawProjectile(renderer, projectile) {
         renderer.drawRect(-8, -4, 16, 8, '#aa00ff');
         renderer.drawRect(4, -4, 4, 8, '#ffffff');
 
-        const flameSize = 6 + Math.sin(Date.now() * 0.1) * 3;
-        renderer.drawRect(-14, -3, flameSize, 6, '#ff00ff');
+        if (visuals.trail === 'default') {
+            const flameSize = 6 + Math.sin(Date.now() * 0.1) * 3;
+            renderer.drawRect(-14, -3, flameSize, 6, '#ff00ff');
+        }
 
         ctx.restore();
     } else if (projectile.type === 'mini_grenade') {
@@ -207,4 +233,61 @@ export function drawProjectile(renderer, projectile) {
             color
         );
     }
+}
+
+function drawDefaultProjectileTrail(renderer, projectile) {
+    const ctx = renderer.ctx;
+    ctx.save();
+    ctx.translate(projectile.x, projectile.y);
+    ctx.rotate(projectile.angle || 0);
+    if (projectile.type === 'rocket_he') {
+        renderer.drawRect(-14, -2, 6, 4, '#00ccff');
+    } else if (projectile.type === 'ggbm') {
+        renderer.drawRect(-14, -3, 7, 6, '#ff00ff');
+    } else if (projectile.type === 'rocket' || projectile.type === 'rocket_le' || projectile.type === 'guided_rocket') {
+        renderer.drawRect(-14, -2, 6, 4, '#ffff00');
+    }
+    ctx.restore();
+}
+
+function drawProjectileTrail(renderer, projectile, trail) {
+    const ctx = renderer.ctx;
+    ctx.save();
+    ctx.translate(projectile.x, projectile.y);
+    ctx.rotate(projectile.angle || 0);
+    if (trail === 'sparks') {
+        renderer.drawRect(-24, -1, 13, 2, '#fff0a6');
+        renderer.drawRect(-33, 2, 7, 2, '#ff9d2e');
+    } else if (trail === 'smoke') {
+        renderer.drawRect(-26, -4, 10, 7, '#87919c');
+        renderer.drawRect(-37, -2, 8, 5, '#4b5560');
+    } else if (trail === 'ion') {
+        renderer.drawRect(-28, -3, 17, 6, '#70f5ff');
+        renderer.drawRect(-39, -1, 10, 2, '#e4ffff');
+    }
+    ctx.restore();
+}
+
+function drawProjectileLook(renderer, projectile, look, color) {
+    const ctx = renderer.ctx;
+    ctx.save();
+    ctx.translate(projectile.x, projectile.y);
+    ctx.rotate(projectile.angle || 0);
+    if (look === 'tracer') {
+        renderer.drawRect(-14, -1, 28, 2, color);
+        renderer.drawRect(6, -1, 5, 2, '#fff4c2');
+    } else if (look === 'heavy-slug') {
+        renderer.drawRect(-10, -4, 20, 8, '#d5a36c');
+        renderer.drawRect(5, -2, 6, 4, '#fff0c4');
+    } else if (look === 'plasma-bolt') {
+        renderer.drawRect(-9, -5, 18, 10, '#7e62ff');
+        renderer.drawRect(-5, -2, 12, 4, '#e8d9ff');
+    } else if (look === 'missile') {
+        renderer.drawRect(-11, -3, 21, 6, '#c6d0da');
+        renderer.drawRect(8, -2, 5, 4, '#ffcf5c');
+    } else if (look === 'needle') {
+        renderer.drawRect(-15, -1, 30, 2, '#d8ffff');
+        renderer.drawRect(10, -2, 6, 4, '#ffffff');
+    }
+    ctx.restore();
 }

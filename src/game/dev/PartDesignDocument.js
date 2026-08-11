@@ -1,3 +1,10 @@
+import {
+    DEFAULT_PROJECTILE_LOOK,
+    DEFAULT_PROJECTILE_TRAIL,
+    normalizeProjectileLook,
+    normalizeProjectileTrail
+} from '../../shared/combat/ProjectileVisuals.js';
+
 const FORMAT = 'framebound-part-design';
 const VERSION = 1;
 const MAX_NAME_LENGTH = 64;
@@ -49,6 +56,8 @@ export function createBlankPartDesign({
         },
         barrel: null,
         rotationOffset: 0,
+        projectileLook: DEFAULT_PROJECTILE_LOOK,
+        projectileTrail: DEFAULT_PROJECTILE_TRAIL,
         stats: {},
         notes: ''
     };
@@ -144,6 +153,9 @@ export function normalizePartDesign(value) {
         throw new Error('rotation offset must be finite');
     }
 
+    const projectileLook = normalizeProjectileLook(value.projectileLook);
+    const projectileTrail = normalizeProjectileTrail(value.projectileTrail);
+
     const stats = normalizeJsonObject(value.stats ?? {}, 'stats');
     const notes = cleanOptionalText(value.notes, MAX_NOTES_LENGTH, 'notes');
 
@@ -161,6 +173,8 @@ export function normalizePartDesign(value) {
         },
         barrel,
         rotationOffset,
+        projectileLook,
+        projectileTrail,
         stats,
         notes
     };

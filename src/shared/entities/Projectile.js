@@ -27,6 +27,8 @@ export class Projectile {
         this.type = type;
         this.owner = owner;
         this.damage = damage;
+        this.projectileLook = 'default';
+        this.projectileTrail = 'default';
         this.life = 2.0; // Seconds
         this.random = randomGen || Math.random;
 

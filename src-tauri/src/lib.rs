@@ -1,8 +1,8 @@
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "part-lab"))]
 use base64::engine::general_purpose::STANDARD as BASE64;
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "part-lab"))]
 use base64::Engine;
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "part-lab"))]
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::fs::File;
@@ -13,18 +13,18 @@ use tauri::Manager;
 
 const MAX_SAVE_BYTES: usize = 8 * 1024 * 1024;
 const MAX_SIGNAL_FORGE_PACK_BYTES: usize = 48 * 1024 * 1024;
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "part-lab"))]
 const MAX_PART_LAB_MANIFEST_BYTES: usize = 8 * 1024 * 1024;
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "part-lab"))]
 const MAX_PART_LAB_ENTRIES: usize = 256;
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "part-lab"))]
 const MAX_PART_LAB_PIXELS: usize = 512;
 const MAX_SMOKE_REPORT_BYTES: usize = 64 * 1024;
 const SAVE_FILE_NAME: &str = "run-save-v2.json";
 const SIGNAL_FORGE_PACK_FILE_NAME: &str = "signal-forge-pack-v1.json";
 const DEV_SERVER_PORT: u16 = 5173;
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "part-lab"))]
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PromotionPack {
@@ -34,7 +34,7 @@ struct PromotionPack {
     bindings: Vec<PromotionBinding>,
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "part-lab"))]
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PromotionSound {
@@ -52,7 +52,7 @@ struct PromotionSound {
     modified_at: String,
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "part-lab"))]
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct PromotionBinding {
@@ -60,7 +60,7 @@ struct PromotionBinding {
     sound_id: String,
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "part-lab"))]
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct PromotedManifest {
@@ -70,7 +70,7 @@ struct PromotedManifest {
     bindings: Vec<PromotionBinding>,
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "part-lab"))]
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct PromotedSound {
@@ -88,7 +88,7 @@ struct PromotedSound {
     modified_at: String,
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "part-lab"))]
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PartLabManifest {
@@ -100,7 +100,7 @@ struct PartLabManifest {
     reviews: Vec<PartLabReview>,
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "part-lab"))]
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PartLabVisual {
@@ -108,7 +108,7 @@ struct PartLabVisual {
     design: PartLabDesign,
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "part-lab"))]
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PartLabDesign {
@@ -129,37 +129,41 @@ struct PartLabDesign {
     raw_anchors: Option<PartLabAnchors>,
     #[serde(default)]
     raw_barrel: Option<PartLabPoint>,
+    #[serde(default)]
+    projectile_look: Option<String>,
+    #[serde(default)]
+    projectile_trail: Option<String>,
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "part-lab"))]
 #[derive(Deserialize)]
 struct PartLabSize {
     width: usize,
     height: usize,
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "part-lab"))]
 #[derive(Deserialize)]
 struct PartLabPoint {
     x: f64,
     y: f64,
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "part-lab"))]
 #[derive(Deserialize)]
 struct PartLabAnchors {
     base: Option<PartLabPoint>,
     turret: Option<PartLabPoint>,
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "part-lab"))]
 #[derive(Deserialize)]
 struct PartLabLayers {
     base: Vec<u8>,
     turret: Option<Vec<u8>>,
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "part-lab"))]
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PartLabSound {
@@ -167,7 +171,7 @@ struct PartLabSound {
     slots: Vec<PartLabSoundSlot>,
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "part-lab"))]
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PartLabSoundSlot {
@@ -178,7 +182,7 @@ struct PartLabSoundSlot {
     assignment: Option<PartLabAssignment>,
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "part-lab"))]
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PartLabAssignment {
@@ -187,7 +191,7 @@ struct PartLabAssignment {
     sound_id: Option<String>,
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "part-lab"))]
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PartLabReview {
@@ -275,10 +279,10 @@ fn write_signal_forge_pack(
     )
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "part-lab"))]
 #[tauri::command]
 fn promote_signal_forge_pack(raw: String) -> Result<String, String> {
-    if !cfg!(debug_assertions) {
+    if !cfg!(any(debug_assertions, feature = "part-lab")) {
         return Err("sound pack promotion is available only in development builds".into());
     }
     let source_root = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -290,7 +294,7 @@ fn promote_signal_forge_pack(raw: String) -> Result<String, String> {
     Ok(source_root.to_string_lossy().into_owned())
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "part-lab"))]
 fn promote_signal_forge_pack_to(root: &Path, raw: &str) -> Result<(), String> {
     if raw.len() > MAX_SIGNAL_FORGE_PACK_BYTES {
         return Err("signal forge pack exceeds size limit".into());
@@ -361,7 +365,7 @@ fn promote_signal_forge_pack_to(root: &Path, raw: &str) -> Result<(), String> {
     )
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "part-lab"))]
 #[tauri::command]
 fn promote_part_lab_manifest(raw: String) -> Result<String, String> {
     let source_root = Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -373,7 +377,7 @@ fn promote_part_lab_manifest(raw: String) -> Result<String, String> {
     Ok(source_root.to_string_lossy().into_owned())
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "part-lab"))]
 fn promote_part_lab_manifest_to(root: &Path, raw: &str) -> Result<(), String> {
     if raw.len() > MAX_PART_LAB_MANIFEST_BYTES {
         return Err("part lab manifest exceeds size limit".into());
@@ -391,7 +395,7 @@ fn promote_part_lab_manifest_to(root: &Path, raw: &str) -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "part-lab"))]
 fn validate_part_lab_manifest(manifest: &PartLabManifest) -> Result<(), String> {
     if manifest.schema_version != 1 || manifest.version == 0 || manifest.modified_at.is_empty() || manifest.modified_at.len() > 64 {
         return Err("unsupported part lab manifest header".into());
@@ -445,7 +449,7 @@ fn validate_part_lab_manifest(manifest: &PartLabManifest) -> Result<(), String> 
     Ok(())
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "part-lab"))]
 fn validate_part_lab_design(part_id: &str, design: &PartLabDesign) -> Result<(), String> {
     if design.format != "framebound-part-design" || design.version != 1 || design.name.is_empty() || design.name.len() > 64 || design.notes.len() > 2000 {
         return Err(format!("visual design for {part_id} has an invalid header"));
@@ -474,13 +478,18 @@ fn validate_part_lab_design(part_id: &str, design: &PartLabDesign) -> Result<(),
     if let Some(point) = &design.barrel { validate_part_lab_point(point, expected, part_id)?; }
     if let Some(anchors) = &design.raw_anchors { validate_part_lab_anchors(anchors, expected, part_id)?; }
     if let Some(point) = &design.raw_barrel { validate_part_lab_point(point, expected, part_id)?; }
+    if design.projectile_look.as_deref().is_some_and(|id| !is_allowed_projectile_look(id))
+        || design.projectile_trail.as_deref().is_some_and(|id| !is_allowed_projectile_trail(id))
+    {
+        return Err(format!("visual design for {part_id} has invalid projectile visuals"));
+    }
     if !design.rotation_offset.is_finite() || !design.stats.is_object() {
         return Err(format!("visual design for {part_id} has invalid metadata"));
     }
     Ok(())
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "part-lab"))]
 fn validate_pixels(pixels: &[u8], expected: usize, part_id: &str) -> Result<(), String> {
     if pixels.len() != expected || pixels.iter().any(|pixel| *pixel > 2) {
         return Err(format!("visual design for {part_id} has invalid pixels"));
@@ -488,14 +497,14 @@ fn validate_pixels(pixels: &[u8], expected: usize, part_id: &str) -> Result<(), 
     Ok(())
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "part-lab"))]
 fn validate_part_lab_anchors(anchors: &PartLabAnchors, grid: (usize, usize), part_id: &str) -> Result<(), String> {
     if let Some(point) = &anchors.base { validate_part_lab_point(point, grid, part_id)?; }
     if let Some(point) = &anchors.turret { validate_part_lab_point(point, grid, part_id)?; }
     Ok(())
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "part-lab"))]
 fn validate_part_lab_point(point: &PartLabPoint, grid: (usize, usize), part_id: &str) -> Result<(), String> {
     if !point.x.is_finite() || !point.y.is_finite() || point.x < 0.0 || point.y < 0.0 || point.x > grid.0 as f64 || point.y > grid.1 as f64 {
         return Err(format!("visual design for {part_id} has an out-of-bounds point"));
@@ -503,17 +512,17 @@ fn validate_part_lab_point(point: &PartLabPoint, grid: (usize, usize), part_id: 
     Ok(())
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "part-lab"))]
 fn is_safe_part_lab_id(value: &str) -> bool {
     !value.is_empty() && value.len() <= 80 && value.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "part-lab"))]
 fn is_safe_sound_id(value: &str) -> bool {
     !value.is_empty() && value.len() <= 64 && value.bytes().all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "part-lab"))]
 fn is_safe_generated_sound_id(id: &str) -> bool {
     !id.is_empty()
         && id.len() <= 64
@@ -523,7 +532,17 @@ fn is_safe_generated_sound_id(id: &str) -> bool {
             .all(|(index, byte)| byte.is_ascii_lowercase() || byte.is_ascii_digit() || (byte == b'-' && index > 0))
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "part-lab"))]
+fn is_allowed_projectile_look(id: &str) -> bool {
+    matches!(id, "default" | "tracer" | "heavy-slug" | "plasma-bolt" | "missile" | "needle")
+}
+
+#[cfg(any(debug_assertions, feature = "part-lab"))]
+fn is_allowed_projectile_trail(id: &str) -> bool {
+    matches!(id, "default" | "none" | "sparks" | "smoke" | "ion")
+}
+
+#[cfg(any(debug_assertions, feature = "part-lab"))]
 fn write_bounded_bytes(path: &Path, bytes: &[u8], max_bytes: usize) -> Result<(), String> {
     if bytes.len() > max_bytes {
         return Err("generated sound exceeds size limit".into());
@@ -621,7 +640,7 @@ fn peer_smoke_url_for(
     Ok(url)
 }
 
-#[cfg(test)]
+#[cfg(all(test, any(debug_assertions, feature = "part-lab")))]
 fn read_save_file(path: &Path) -> Result<Option<String>, String> {
     Ok(read_save_candidates(path).into_iter().next())
 }
@@ -754,7 +773,7 @@ fn remove_if_present(path: &Path) -> Result<(), String> {
     }
 }
 
-#[cfg(debug_assertions)]
+#[cfg(any(debug_assertions, feature = "part-lab"))]
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -784,7 +803,7 @@ pub fn run() {
         .expect("failed to run Framebound");
 }
 
-#[cfg(not(debug_assertions))]
+#[cfg(all(not(debug_assertions), not(feature = "part-lab")))]
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -812,6 +831,7 @@ pub fn run() {
         .expect("failed to run Framebound");
 }
 
+#[cfg(any(debug_assertions, feature = "part-lab"))]
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -996,6 +1016,24 @@ mod tests {
         bad_pixels["visuals"][0]["design"]["layers"]["base"][0] = serde_json::json!(9);
         assert!(promote_part_lab_manifest_to(&root, &bad_pixels.to_string()).is_err());
         assert!(!root.join("part-lab-overrides.json").exists());
+        if root.parent().unwrap().exists() {
+            fs::remove_dir_all(root.parent().unwrap())
+                .expect("test directory should be removable");
+        }
+    }
+
+    #[test]
+    fn part_lab_promotion_validates_renderer_only_projectile_presets() {
+        let root = test_path("generated-parts");
+        let mut valid = serde_json::from_str::<serde_json::Value>(&valid_part_lab_manifest())
+            .expect("fixture should parse");
+        valid["visuals"][0]["design"]["projectileLook"] = serde_json::json!("heavy-slug");
+        valid["visuals"][0]["design"]["projectileTrail"] = serde_json::json!("ion");
+        promote_part_lab_manifest_to(&root, &valid.to_string())
+            .expect("allowed projectile presets should promote");
+
+        valid["visuals"][0]["design"]["projectileLook"] = serde_json::json!("damage-buff");
+        assert!(promote_part_lab_manifest_to(&root, &valid.to_string()).is_err());
         if root.parent().unwrap().exists() {
             fs::remove_dir_all(root.parent().unwrap())
                 .expect("test directory should be removable");

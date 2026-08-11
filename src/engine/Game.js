@@ -54,11 +54,15 @@ import { CombatTelemetry } from '../game/systems/CombatTelemetry.js';
 import { SalvageSweepSystem } from '../game/systems/SalvageSweepSystem.js';
 import { SignalForgeRuntime } from '../game/audio/SignalForgeRuntime.js';
 import { AbilitySystem } from '../game/systems/AbilitySystem.js';
-import { PartLabWindow } from '../game/dev/PartLabWindow.js';
 import { applyPartLabSoundOverrides } from '../game/dev/PartLabManifest.js';
 
 export class Game {
-    constructor(canvas, { partLabManifest = null, isDevelopment = false } = {}) {
+    constructor(canvas, {
+        partLabManifest = null,
+        isDevelopment = false,
+        partLabWindowClass = null,
+        signalForgeWindowClass = null
+    } = {}) {
         // Graphics Settings
         this.graphics = {
             gridOpacity: 0.15,
@@ -190,8 +194,10 @@ export class Game {
         this.damageNumberMode = 'singular';
 
         // Dev Tools
-        this.devTools = new DevTools(this);
-        this.partLabWindow = this.isDevelopment ? new PartLabWindow(this) : null;
+        this.devTools = new DevTools(this, { signalForgeWindowClass });
+        this.partLabWindow = this.isDevelopment && partLabWindowClass
+            ? new partLabWindowClass(this)
+            : null;
         this.gameSettings = new GameSettings(this);
         this.pauseOverlay = null;
         this.showPauseSettings = false;

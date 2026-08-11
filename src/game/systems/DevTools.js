@@ -8,14 +8,13 @@ import { Enemy } from '../../shared/entities/Enemy.js';
 import { TreasureChest } from '../../shared/entities/TreasureChest.js';
 import { PartsLibrary } from '../../shared/parts/Part.js';
 import { Shipwreck } from '../../shared/entities/Shipwreck.js';
-import { SignalForgeWindow } from '../dev/SignalForgeWindow.js';
 
 export function shouldShowPartLabButton(game) {
     return game?.isDevelopment === true;
 }
 
 export class DevTools {
-    constructor(game) {
+    constructor(game, { signalForgeWindowClass = null } = {}) {
         this.game = game;
         this.active = false;
         this.keypadActive = false;
@@ -26,7 +25,7 @@ export class DevTools {
         this.spawnAmount = 1;
         this.pendingSpawnAction = null; // Function to execute on map click
         this.placementMode = false;
-        this.signalForge = new SignalForgeWindow(game);
+        this.signalForge = signalForgeWindowClass ? new signalForgeWindowClass(game) : null;
 
         // Create UI
         this.ui = document.createElement('div');
@@ -287,11 +286,13 @@ export class DevTools {
         createBtn('🔓 unlock parts', () => this.unlockAllParts(), '#00ffff', false);
 
         // --- EDITORS ---
-        createBtn('🔊 signal forge', () => {
-            this.active = false;
-            this.ui.style.display = 'none';
-            this.signalForge.open();
-        }, '#55f6ff', false);
+        if (this.signalForge) {
+            createBtn('🔊 signal forge', () => {
+                this.active = false;
+                this.ui.style.display = 'none';
+                this.signalForge.open();
+            }, '#55f6ff', false);
+        }
         if (shouldShowPartLabButton(this.game)) {
             createBtn('🧩 part lab', () => {
                 this.active = false;

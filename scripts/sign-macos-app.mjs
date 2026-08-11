@@ -7,13 +7,23 @@ if (process.platform !== 'darwin') {
     process.exit(0);
 }
 
+const flavorIndex = process.argv.indexOf('--flavor');
+const flavor = flavorIndex >= 0
+    ? process.argv[flavorIndex + 1]
+    : 'release';
+const productName = flavor === 'dev' ? 'Framebound Dev' : 'Framebound';
+if (!['release', 'dev'].includes(flavor)) {
+    console.error(`unsupported desktop flavor: ${flavor}`);
+    process.exit(1);
+}
+
 const appPath = resolve(
     'src-tauri',
     'target',
     'release',
     'bundle',
     'macos',
-    'Framebound.app'
+    `${productName}.app`
 );
 
 if (!existsSync(appPath)) {

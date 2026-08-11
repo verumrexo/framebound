@@ -2,6 +2,15 @@ import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { verifyDesktopArtifact } from './verify-desktop-artifact.mjs';
 
+const flavorIndex = process.argv.indexOf('--flavor');
+const flavor = flavorIndex >= 0
+    ? process.argv[flavorIndex + 1]
+    : 'release';
+
+if (!['release', 'dev'].includes(flavor)) {
+    throw new Error(`unsupported desktop flavor: ${flavor}`);
+}
+
 const tauriCli = path.resolve(
     'node_modules',
     '@tauri-apps',
@@ -9,6 +18,10 @@ const tauriCli = path.resolve(
     'tauri.js'
 );
 const args = [tauriCli, 'build'];
+
+if (flavor === 'dev') {
+    args.push('--config', path.resolve('src-tauri', 'tauri.dev.conf.json'));
+}
 
 if (process.platform === 'darwin') {
     args.push('--bundles', 'app');
@@ -20,12 +33,14 @@ run(process.execPath, args);
 
 if (process.platform === 'darwin') {
     run(process.execPath, [
-        path.resolve('scripts', 'sign-macos-app.mjs')
+        path.resolve('scripts', 'sign-macos-app.mjs'),
+        '--flavor',
+        flavor
     ]);
 }
 
 if (process.platform === 'darwin' || process.platform === 'win32') {
-    await verifyDesktopArtifact();
+    await verifyDesktopArtifact({ flavor });
 }
 
 function run(command, commandArgs) {

@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { execFile } from 'node:child_process';
 import {
     access,
     readFile,
@@ -6,7 +7,10 @@ import {
     stat
 } from 'node:fs/promises';
 import path from 'node:path';
+import { promisify } from 'node:util';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+
+const execFileAsync = promisify(execFile);
 
 const MACH_O_MAGICS = new Set([
     'cafebabe',
@@ -17,16 +21,30 @@ const MACH_O_MAGICS = new Set([
 
 export async function verifyDesktopArtifact({
     platform = process.platform,
-    root = process.cwd()
+    root = process.cwd(),
+    flavor = 'release'
 } = {}) {
     const packageJson = JSON.parse(await readFile(
         path.join(root, 'package.json'),
         'utf8'
     ));
-    const tauri = JSON.parse(await readFile(
+    const baseTauri = JSON.parse(await readFile(
         path.join(root, 'src-tauri', 'tauri.conf.json'),
         'utf8'
     ));
+    const tauri = flavor === 'dev'
+        ? {
+            ...baseTauri,
+            ...JSON.parse(await readFile(
+                path.join(root, 'src-tauri', 'tauri.dev.conf.json'),
+                'utf8'
+            ))
+        }
+        : baseTauri;
+    assert.ok(
+        ['release', 'dev'].includes(flavor),
+        `unsupported desktop flavor: ${flavor}`
+    );
     const expected = {
         productName: tauri.productName,
         identifier: tauri.identifier,
@@ -49,6 +67,7 @@ export async function verifyDesktopArtifact({
             `${expected.productName}.app`
         );
         await verifyMacArtifact(appPath, expected);
+        await verifyMacCodeSignature(appPath);
         console.log(`verified macos app artifact: ${appPath}`);
         return appPath;
     }
@@ -70,6 +89,19 @@ export async function verifyDesktopArtifact({
     throw new Error(
         `desktop artifact verification is unsupported on ${platform}`
     );
+}
+
+export async function verifyMacCodeSignature(
+    appPath,
+    execFileImpl = execFileAsync
+) {
+    await execFileImpl('/usr/bin/codesign', [
+        '--verify',
+        '--deep',
+        '--strict',
+        '--verbose=2',
+        appPath
+    ]);
 }
 
 export async function verifyMacArtifact(appPath, expected) {
@@ -183,7 +215,11 @@ const invokedPath = process.argv[1]
     ? pathToFileURL(path.resolve(process.argv[1])).href
     : null;
 if (invokedPath === import.meta.url) {
-    verifyDesktopArtifact().catch(error => {
+    const flavorIndex = process.argv.indexOf('--flavor');
+    const flavor = flavorIndex >= 0
+        ? process.argv[flavorIndex + 1]
+        : 'release';
+    verifyDesktopArtifact({ flavor }).catch(error => {
         console.error(error.message);
         process.exitCode = 1;
     });

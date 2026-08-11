@@ -23,8 +23,8 @@ test('untouched part-lab entries count as untested', () => {
 });
 
 test('sound editor explains immediate staging versus source promotion', () => {
-    assert.match(PART_SOUND_EDITOR_INTRO, /test the staged choices immediately/);
-    assert.match(PART_SOUND_EDITOR_INTRO, /only save all promotes source changes/);
+    assert.match(PART_SOUND_EDITOR_INTRO, /two semantic slots stay staged/);
+    assert.match(PART_SOUND_EDITOR_INTRO, /save all promotes source changes/);
 });
 
 function bareWindow({ audio, forge, store = { state: { parts: {} } } } = {}) {

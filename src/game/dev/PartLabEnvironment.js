@@ -4,7 +4,8 @@
  */
 export function resolvePartLabDevelopmentFlag({
     viteDev = false,
-    runtimeFlag = globalThis.__FRAMEBOUND_DEV__
+    runtimeFlag = globalThis.__FRAMEBOUND_DEV__,
+    flavor = ''
 } = {}) {
-    return viteDev === true || runtimeFlag === true;
+    return viteDev === true || runtimeFlag === true || flavor === 'dev';
 }

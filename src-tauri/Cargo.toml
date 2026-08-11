@@ -5,6 +5,10 @@ description = "Framebound desktop shell"
 authors = ["Framebound contributors"]
 edition = "2021"
 
+[features]
+default = []
+part-lab = []
+
 [lints.rust]
 warnings = "deny"
 

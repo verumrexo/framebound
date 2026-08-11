@@ -20,6 +20,7 @@ import {
     isVaultPhase,
     VaultPhase
 } from '../../shared/vault/VaultDefinitions.js';
+import { isProjectileLook, isProjectileTrail } from '../../shared/combat/ProjectileVisuals.js';
 
 const MAX_ROOMS = 512;
 const MAX_ENTITIES = 1024;
@@ -47,6 +48,7 @@ const PROJECTILE_STATE_KEYS = [
     'explosionDamage', 'shrapnelCount', 'shrapnelDamage',
     'ricochetCount', 'ricochetRange', 'ricochetDamageMul',
     'sourcePlayerId', 'sourcePartId', 'sourcePartKey', 'sourcePartName',
+    'projectileLook', 'projectileTrail',
     'weaponFamily', 'hackDuration', 'isVisualOnly', 'prismChild'
 ];
 const DRONE_STATE_KEYS = [
@@ -758,13 +760,15 @@ function validProjectileSnapshot(value) {
             ],
             strings: [
                 'sourcePlayerId', 'sourcePartId', 'sourcePartKey',
-                'sourcePartName', 'weaponFamily'
+                'sourcePartName', 'weaponFamily', 'projectileLook', 'projectileTrail'
             ],
             booleans: [
                 'shouldExplode', 'armed', 'triggered', 'isBeam',
                 'isVisualOnly', 'prismChild'
             ]
-        });
+        }) &&
+        (value.state.projectileLook === undefined || isProjectileLook(value.state.projectileLook)) &&
+        (value.state.projectileTrail === undefined || isProjectileTrail(value.state.projectileTrail));
 }
 
 function validDroneSnapshot(value) {

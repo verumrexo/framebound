@@ -191,7 +191,9 @@ test('projectile construction preserves type, rocket speed, damage, lifetime, an
             lifetime: 7,
             soundVolume: 0.4,
             soundPitch: 0.8
-        }
+        },
+        projectileLook: 'missile',
+        projectileTrail: 'ion'
     };
 
     system.spawnProjectile(def, 10, 20, 0.25, part);
@@ -204,6 +206,8 @@ test('projectile construction preserves type, rocket speed, damage, lifetime, an
         'shoot_rocketle',
         { volume: 0.4, pitch: 0.8, randomizePitch: 0.15 }
     ]);
+    assert.equal(game.projectiles[0].projectileLook, 'missile');
+    assert.equal(game.projectiles[0].projectileTrail, 'ion');
 });
 
 test('pellets retain perpendicular barrel spacing and randomized per-pellet delay', () => {

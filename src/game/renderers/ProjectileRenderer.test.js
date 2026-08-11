@@ -182,3 +182,48 @@ test('new arsenal projectiles render with distinct deterministic silhouettes', (
     drawProjectile(mine.renderer, createProjectile({ type: 'proximity_mine', armed: false }));
     assert.equal(drawRects(mine.calls)[0][5], '#8c8c8c');
 });
+
+test('custom projectile looks and trails render without changing beam visuals', () => {
+    const custom = createRenderer();
+    drawProjectile(custom.renderer, createProjectile({
+        projectileLook: 'heavy-slug',
+        projectileTrail: 'smoke'
+    }));
+    assert.deepEqual(drawRects(custom.calls), [
+        ['drawRect', -26, -4, 10, 7, '#87919c'],
+        ['drawRect', -37, -2, 8, 5, '#4b5560'],
+        ['drawRect', -10, -4, 20, 8, '#d5a36c'],
+        ['drawRect', 5, -2, 6, 4, '#fff0c4']
+    ]);
+
+    const beam = createRenderer();
+    drawProjectile(beam.renderer, createProjectile({
+        type: 'laser',
+        projectileLook: 'plasma-bolt',
+        projectileTrail: 'ion'
+    }));
+    assert.deepEqual(drawRects(beam.calls), [
+        ['drawRect', -15, -2, 30, 4, '#26d426']
+    ]);
+
+    const noTrail = createRenderer();
+    drawProjectile(noTrail.renderer, createProjectile({
+        type: 'rocket',
+        projectileTrail: 'none'
+    }));
+    assert.deepEqual(drawRects(noTrail.calls), [
+        ['drawRect', -10, -3, 20, 6, '#ffaa44'],
+        ['drawRect', 4, -3, 6, 6, '#444']
+    ]);
+
+    const defaultTrail = createRenderer();
+    drawProjectile(defaultTrail.renderer, createProjectile({
+        type: 'rocket_he',
+        projectileLook: 'needle'
+    }));
+    assert.deepEqual(drawRects(defaultTrail.calls), [
+        ['drawRect', -14, -2, 6, 4, '#00ccff'],
+        ['drawRect', -15, -1, 30, 2, '#d8ffff'],
+        ['drawRect', 10, -2, 6, 4, '#ffffff']
+    ]);
+});

@@ -608,6 +608,8 @@ function updateProjectiles(dt, random) {
                         childProj.sourcePartKey = p.sourcePartKey;
                         childProj.sourcePartName = p.sourcePartName;
                         childProj.sourcePlayerId = p.sourcePlayerId;
+                        childProj.projectileLook = p.projectileLook || 'default';
+                        childProj.projectileTrail = p.projectileTrail || 'default';
                         this.projectiles.push(childProj);
                     }
                     playProjectileEvent(this.audio, p, 'detonate', 'explosion', { volume: 0.5, pitch: 0.8 });
@@ -633,6 +635,8 @@ function updateProjectiles(dt, random) {
                         fragment.sourcePartKey = p.sourcePartKey;
                         fragment.sourcePartName = p.sourcePartName;
                         fragment.sourcePlayerId = p.sourcePlayerId;
+                        fragment.projectileLook = p.projectileLook || 'default';
+                        fragment.projectileTrail = p.projectileTrail || 'default';
                         this.projectiles.push(fragment);
                     }
                 }

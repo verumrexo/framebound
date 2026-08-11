@@ -11,6 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import {
     verifyMacArtifact,
+    verifyMacCodeSignature,
     verifyWindowsArtifact
 } from './verify-desktop-artifact.mjs';
 
@@ -73,6 +74,23 @@ test('windows artifact verification rejects fake installers', async () => {
     } finally {
         await rm(root, { recursive: true, force: true });
     }
+});
+
+test('mac artifact verification requires a strict deep code signature', async () => {
+    const calls = [];
+    await verifyMacCodeSignature('/tmp/Framebound Dev.app', async (...args) => {
+        calls.push(args);
+    });
+    assert.deepEqual(calls, [[
+        '/usr/bin/codesign',
+        [
+            '--verify',
+            '--deep',
+            '--strict',
+            '--verbose=2',
+            '/tmp/Framebound Dev.app'
+        ]
+    ]]);
 });
 
 function plistFor({ productName, identifier, version }) {

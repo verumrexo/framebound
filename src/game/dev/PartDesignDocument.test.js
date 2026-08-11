@@ -64,3 +64,18 @@ test('part design document keeps turret art restricted to weapons', () => {
         /turret art requires weapon type/
     );
 });
+
+test('part design document persists renderer-only projectile presets and rejects unknown ids', () => {
+    const design = createBlankPartDesign({ name: 'slug', type: 'weapon' });
+    design.projectileLook = 'heavy-slug';
+    design.projectileTrail = 'smoke';
+    const restored = parsePartDesign(serializePartDesign(design));
+    assert.equal(restored.projectileLook, 'heavy-slug');
+    assert.equal(restored.projectileTrail, 'smoke');
+
+    design.projectileLook = 'hitscan-damage-but-somehow-a-skin';
+    assert.throws(
+        () => serializePartDesign(design),
+        /invalid projectile look preset/
+    );
+});

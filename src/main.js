@@ -55,6 +55,11 @@ async function boot() {
       renderVisualGallery(canvas);
     });
   } else {
+    let authoring = {};
+    const authoringBuild = import.meta.env?.DEV === true || import.meta.env?.VITE_FRAMEBOUND_FLAVOR === 'dev';
+    if (authoringBuild) {
+      authoring = await import('./game/dev/AuthoringWindows.js');
+    }
     let partLabManifest = null;
     try {
       partLabManifest = await loadPromotedPartLabManifest();
@@ -64,7 +69,12 @@ async function boot() {
     }
     const game = new Game(canvas, {
       partLabManifest,
-      isDevelopment: resolvePartLabDevelopmentFlag({ viteDev: import.meta.env?.DEV === true })
+      isDevelopment: resolvePartLabDevelopmentFlag({
+        viteDev: import.meta.env?.DEV === true,
+        flavor: import.meta.env?.VITE_FRAMEBOUND_FLAVOR
+      }),
+      partLabWindowClass: authoring.PartLabWindow,
+      signalForgeWindowClass: authoring.SignalForgeWindow
     });
     window.game = game;
     game.start();

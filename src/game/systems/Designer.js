@@ -8,6 +8,15 @@ import {
     serializePartDesign
 } from '../dev/PartDesignDocument.js';
 import { parseLegacyPartDesign } from '../dev/LegacyPartDesignImport.js';
+import { getMountedTurretPosition } from '../renderers/ShipAssemblyRenderer.js';
+import {
+    DEFAULT_PROJECTILE_LOOK,
+    DEFAULT_PROJECTILE_TRAIL,
+    PROJECTILE_LOOK_PRESETS,
+    PROJECTILE_TRAIL_PRESETS,
+    normalizeProjectileLook,
+    normalizeProjectileTrail
+} from '../../shared/combat/ProjectileVisuals.js';
 
 const COLORS = { 1: '#26d426', 2: '#333' };
 const TYPE_LABELS = [
@@ -70,6 +79,8 @@ export function partDefinitionToDesign(partId, definition) {
     design.rotationOffset = Number.isFinite(definition.rotationOffset)
         ? definition.rotationOffset
         : 0;
+    design.projectileLook = definition.projectileLook || DEFAULT_PROJECTILE_LOOK;
+    design.projectileTrail = definition.projectileTrail || DEFAULT_PROJECTILE_TRAIL;
     design.stats = cloneSerializable(definition.stats || {});
 
     const barrelPosition = definition.stats?.barrelPosition;
@@ -239,6 +250,10 @@ export class Designer {
                     <option value="3.1416">face left</option><option value="4.7124">face up</option>
                 </select>
             </div>
+            <div id="projectile-visual-controls" style="display:none;margin:10px 0;gap:8px;justify-content:center;align-items:center;flex-wrap:wrap">
+                <label>projectile look <select id="projectile-look" aria-label="projectile look" style="${fieldStyle()}"></select></label>
+                <label>trail <select id="projectile-trail" aria-label="projectile trail" style="${fieldStyle()}"></select></label>
+            </div>
             <div style="margin:10px 0;display:flex;gap:16px;justify-content:center;flex-wrap:wrap">
                 <label><input type="checkbox" id="turret-mode"> base + turret</label>
                 <label><input type="checkbox" id="pivot-mode"> set mount/pivot</label>
@@ -291,6 +306,21 @@ export class Designer {
         this.pivotModeCheckbox = this.ui.querySelector('#pivot-mode');
         this.barrelModeCheckbox = this.ui.querySelector('#barrel-mode');
         this.facingSelect = this.ui.querySelector('#turret-facing');
+        this.projectileVisualControls = this.ui.querySelector('#projectile-visual-controls');
+        this.projectileLookSelect = this.ui.querySelector('#projectile-look');
+        this.projectileTrailSelect = this.ui.querySelector('#projectile-trail');
+        this.projectileLookSelect.replaceChildren(...PROJECTILE_LOOK_PRESETS.map(preset => {
+            const option = document.createElement('option');
+            option.value = preset.id;
+            option.textContent = preset.label;
+            return option;
+        }));
+        this.projectileTrailSelect.replaceChildren(...PROJECTILE_TRAIL_PRESETS.map(preset => {
+            const option = document.createElement('option');
+            option.value = preset.id;
+            option.textContent = preset.label;
+            return option;
+        }));
         this.importPanel = this.ui.querySelector('#import-panel');
         this.importInput = this.ui.querySelector('#import-text');
         this.status = this.ui.querySelector('#designer-status');
@@ -310,6 +340,8 @@ export class Designer {
         this.typeSelect.onchange = () => { this.syncTypeAndTurret('type'); this.notifyDraftChange(); };
         this.turretModeCheckbox.onchange = () => { this.syncTypeAndTurret('turret'); this.notifyDraftChange(); };
         this.facingSelect.onchange = () => { this.drawGrid(); this.notifyDraftChange(); };
+        this.projectileLookSelect.onchange = () => { this.drawPreview(); this.notifyDraftChange(); };
+        this.projectileTrailSelect.onchange = () => { this.drawPreview(); this.notifyDraftChange(); };
         this.nameInput.oninput = () => { this.drawPreview(); this.notifyDraftChange(); };
         this.notesInput.oninput = () => { this.clearStatus(); this.notifyDraftChange(); };
         this.previewCanvas.onmousemove = event => this.updatePreviewAim(event);
@@ -442,6 +474,7 @@ export class Designer {
         this.turretMode = this.turretModeCheckbox.checked;
         this.ui.querySelector('#turret-canvas-wrapper').style.display = this.turretMode ? 'block' : 'none';
         this.facingSelect.style.display = this.turretMode ? 'inline-block' : 'none';
+        this.projectileVisualControls.style.display = this.turretMode ? 'flex' : 'none';
         this.barrelModeCheckbox.disabled = !this.turretMode;
         if (!this.turretMode) {
             this.barrelMode = false;
@@ -498,6 +531,12 @@ export class Designer {
         };
         design.rawBarrel = this.turretMode && this.rawBarrel ? { ...this.rawBarrel } : null;
         design.rotationOffset = this.turretMode ? Number(this.facingSelect.value) : 0;
+        design.projectileLook = this.turretMode
+            ? normalizeProjectileLook(this.projectileLookSelect.value)
+            : DEFAULT_PROJECTILE_LOOK;
+        design.projectileTrail = this.turretMode
+            ? normalizeProjectileTrail(this.projectileTrailSelect.value)
+            : DEFAULT_PROJECTILE_TRAIL;
         design.stats = { ...this.importedStats };
         design.notes = this.notesInput.value;
         return design;
@@ -530,6 +569,8 @@ export class Designer {
         this.importedStats = { ...design.stats };
         this.notesInput.value = design.notes || '';
         this.facingSelect.value = closestFacing(design.rotationOffset);
+        this.projectileLookSelect.value = design.projectileLook || DEFAULT_PROJECTILE_LOOK;
+        this.projectileTrailSelect.value = design.projectileTrail || DEFAULT_PROJECTILE_TRAIL;
         this.syncTypeAndTurret('type');
     }
 
@@ -677,6 +718,8 @@ export class Designer {
             definition.rotationOffset = design.rotationOffset;
             definition.turretDrawOffset = 0;
         }
+        definition.projectileLook = design.projectileLook || DEFAULT_PROJECTILE_LOOK;
+        definition.projectileTrail = design.projectileTrail || DEFAULT_PROJECTILE_TRAIL;
         return definition;
     }
 
@@ -721,18 +764,19 @@ export class Designer {
             if (definition.baseSprite) definition.baseSprite.draw(ctx, partX, partY, 0, .5, .5);
             const followsAim = definition.type === PartType.WEAPON;
             const aim = this.previewAim || { x: partX + TILE_SIZE * 2, y: partY };
-            const aimAngle = Math.atan2(aim.y - partY, aim.x - partX);
+            const mount = getDesignerPreviewMount(definition, partX, partY, aim);
+            const aimAngle = Math.atan2(aim.y - mount.y, aim.x - mount.x);
             definition.sprite.draw(
                 ctx,
-                partX,
-                partY,
+                mount.x,
+                mount.y,
                 followsAim ? aimAngle + (definition.rotationOffset || 0) : 0,
                 null,
                 null
             );
             if (followsAim) {
-                drawAimGuide(ctx, partX, partY, aim, aimAngle);
-                this.drawPreviewFire(ctx, definition, partX, partY, aimAngle, now);
+                drawAimGuide(ctx, mount.x, mount.y, aim, aimAngle);
+                this.drawPreviewFire(ctx, definition, mount.x, mount.y, aimAngle, now);
             }
         } catch { /* incomplete text fields are allowed while typing */ }
         ctx.strokeStyle = '#44ff88'; ctx.lineWidth = 3; ctx.beginPath();
@@ -772,8 +816,10 @@ export class Designer {
         const height = this.currentSize[1];
         const partX = 54 + (1 + (width - 1) / 2) * TILE_SIZE;
         const partY = this.previewCanvas.height / 2 + (-Math.floor((height - 1) / 2) + (height - 1) / 2) * TILE_SIZE;
-        const aimAngle = Math.atan2(aim.y - partY, aim.x - partX);
-        this.previewFire = { startedAt: nowMs(), partX, partY, aimAngle };
+        const definition = this.createDefinition('preview', this.toDesignDocument());
+        const mount = getDesignerPreviewMount(definition, partX, partY, aim);
+        const aimAngle = Math.atan2(aim.y - mount.y, aim.x - mount.x);
+        this.previewFire = { startedAt: nowMs(), partX: mount.x, partY: mount.y, aimAngle };
         this.setStatus('preview fire test — game state untouched');
         this.startPreviewAnimation();
         this.drawPreview();
@@ -787,12 +833,17 @@ export class Designer {
             this.previewFire = null;
             return;
         }
-        const barrel = previewMuzzle(definition, partX, partY, aimAngle);
+        const barrel = getDesignerPreviewMuzzle(definition, partX, partY, aimAngle);
         const travel = Math.min(300, Math.max(0, elapsed * 1.2));
         const endX = barrel.x + Math.cos(aimAngle) * travel;
         const endY = barrel.y + Math.sin(aimAngle) * travel;
         ctx.save();
         ctx.globalAlpha = Math.max(0, 1 - elapsed / 900);
+        drawPreviewProjectile(ctx, definition, barrel, aimAngle, elapsed);
+        if (definition.projectileLook !== 'default' || definition.projectileTrail !== 'default') {
+            ctx.restore();
+            return;
+        }
         ctx.strokeStyle = '#ffe58a';
         ctx.shadowColor = '#ff9d2e';
         ctx.shadowBlur = 10;
@@ -858,7 +909,7 @@ function drawAimGuide(ctx, partX, partY, aim, angle) {
     ctx.fillText(facingArrow((angle + Math.PI * 2) % (Math.PI * 2)), aim.x + 8, aim.y - 7);
     ctx.restore();
 }
-function previewMuzzle(definition, partX, partY, angle) {
+export function getDesignerPreviewMuzzle(definition, partX, partY, angle) {
     const height = definition.height || 1;
     const barrel = definition.stats?.barrelPosition;
     if (barrel) {
@@ -869,6 +920,67 @@ function previewMuzzle(definition, partX, partY, angle) {
     }
     const length = height > 1.5 ? TILE_SIZE * 1.3 : TILE_SIZE * .6;
     return { x: partX + Math.cos(angle) * length, y: partY + Math.sin(angle) * length };
+}
+
+export function getDesignerPreviewMount(definition, partX, partY, aim = { x: partX + 1, y: partY }) {
+    const baseAngle = 0;
+    const part = {
+        def: definition,
+        width: definition.width,
+        height: definition.height,
+        partRef: { recoil: 0 }
+    };
+    const first = getMountedTurretPosition(
+        part,
+        baseAngle,
+        Math.atan2(aim.y - partY, aim.x - partX),
+        0
+    );
+    const firstX = partX + first.offsetX;
+    const firstY = partY + first.offsetY;
+    const aimAngle = Math.atan2(aim.y - firstY, aim.x - firstX);
+    const shifted = getMountedTurretPosition(part, baseAngle, aimAngle, 0);
+    return { x: partX + shifted.offsetX, y: partY + shifted.offsetY };
+}
+
+function drawPreviewProjectile(ctx, definition, barrel, angle, elapsed) {
+    const look = definition.projectileLook || DEFAULT_PROJECTILE_LOOK;
+    const trail = definition.projectileTrail || DEFAULT_PROJECTILE_TRAIL;
+    if (look === DEFAULT_PROJECTILE_LOOK && trail === DEFAULT_PROJECTILE_TRAIL) return;
+    ctx.save();
+    ctx.translate(barrel.x, barrel.y);
+    ctx.rotate(angle);
+    ctx.globalAlpha = Math.max(0, 1 - elapsed / 900);
+    if (trail === DEFAULT_PROJECTILE_TRAIL && look !== DEFAULT_PROJECTILE_LOOK) {
+        ctx.fillStyle = '#ff9d2e'; ctx.fillRect(-24, -1, 10, 2);
+    } else if (trail === 'sparks') {
+        ctx.fillStyle = '#fff0a6'; ctx.fillRect(-22, -1, 11, 2);
+        ctx.fillStyle = '#ff9d2e'; ctx.fillRect(-30, 2, 7, 2);
+    } else if (trail === 'smoke') {
+        ctx.fillStyle = '#87919c'; ctx.fillRect(-25, -4, 9, 7);
+        ctx.fillStyle = '#4b5560'; ctx.fillRect(-35, -2, 7, 5);
+    } else if (trail === 'ion') {
+        ctx.fillStyle = '#70f5ff'; ctx.fillRect(-26, -3, 16, 6);
+        ctx.fillStyle = '#e4ffff'; ctx.fillRect(-34, -1, 9, 2);
+    }
+    if (look === 'tracer') {
+        ctx.fillStyle = '#ffe58a'; ctx.fillRect(-14, -1, 28, 2);
+    } else if (look === 'heavy-slug') {
+        ctx.fillStyle = '#d5a36c'; ctx.fillRect(-10, -4, 20, 8);
+        ctx.fillStyle = '#fff0c4'; ctx.fillRect(5, -2, 6, 4);
+    } else if (look === 'plasma-bolt') {
+        ctx.fillStyle = '#7e62ff'; ctx.fillRect(-9, -5, 18, 10);
+        ctx.fillStyle = '#e8d9ff'; ctx.fillRect(-5, -2, 12, 4);
+    } else if (look === 'missile') {
+        ctx.fillStyle = '#c6d0da'; ctx.fillRect(-11, -3, 21, 6);
+        ctx.fillStyle = '#ffcf5c'; ctx.fillRect(8, -2, 5, 4);
+    } else if (look === 'needle') {
+        ctx.fillStyle = '#d8ffff'; ctx.fillRect(-15, -1, 30, 2);
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(10, -2, 6, 4);
+    } else {
+        ctx.fillStyle = '#ffe58a'; ctx.fillRect(-14, -1, 28, 2);
+    }
+    ctx.restore();
 }
 function drawMarker(ctx, point, scale, color) {
     const x = point.x * scale; const y = point.y * scale;

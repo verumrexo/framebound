@@ -1,6 +1,12 @@
 import { Sprite } from '../../engine/Sprite.js';
 import { parsePartDesign } from './PartDesignDocument.js';
 import { getSoundEvent } from '../audio/SoundEventRegistry.js';
+import {
+    DEFAULT_PROJECTILE_LOOK,
+    DEFAULT_PROJECTILE_TRAIL,
+    normalizeProjectileLook,
+    normalizeProjectileTrail
+} from '../../shared/combat/ProjectileVisuals.js';
 
 export const PART_LAB_MANIFEST_SCHEMA_VERSION = 1;
 export const PART_LAB_MANIFEST_PATH = './generated-parts/part-lab-overrides.json';
@@ -213,6 +219,8 @@ export function applyVisualDesignOverride(definition, design) {
         definition.baseSprite = null;
         definition.drawTurretInInventory = false;
     }
+    definition.projectileLook = normalizeProjectileLook(design.projectileLook || DEFAULT_PROJECTILE_LOOK);
+    definition.projectileTrail = normalizeProjectileTrail(design.projectileTrail || DEFAULT_PROJECTILE_TRAIL);
     if (Number.isFinite(design.rotationOffset)) definition.rotationOffset = design.rotationOffset;
     return true;
 }

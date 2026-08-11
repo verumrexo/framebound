@@ -8,9 +8,41 @@ import {
 
 const {
     Designer,
+    getDesignerPreviewMount,
+    getDesignerPreviewMuzzle,
     partDefinitionToDesign,
     validateStagedDesignDocument
 } = await import('./Designer.js');
+
+test('designer preview applies the base sprite anchor to the turret mount and muzzle', () => {
+    const definition = {
+        type: 'weapon',
+        width: 1,
+        height: 1,
+        turretDrawOffset: 0,
+        baseSprite: {
+            width: 8,
+            height: 8,
+            scale: 4,
+            anchorX: .25,
+            anchorY: .5
+        },
+        stats: { barrelPosition: { x: 12, y: 0 } }
+    };
+    const centered = getDesignerPreviewMount(
+        { ...definition, baseSprite: { ...definition.baseSprite, anchorX: .5 } },
+        100,
+        100,
+        { x: 200, y: 100 }
+    );
+    const shifted = getDesignerPreviewMount(definition, 100, 100, { x: 200, y: 100 });
+    assert.deepEqual(centered, { x: 100, y: 100 });
+    assert.deepEqual(shifted, { x: 92, y: 100 });
+    assert.deepEqual(
+        getDesignerPreviewMuzzle(definition, shifted.x, shifted.y, 0),
+        { x: 104, y: 100 }
+    );
+});
 
 test('part definition conversion preserves art, anchors, barrel, rotation, and stats', () => {
     const base = new Array(8 * 15).fill(0);
