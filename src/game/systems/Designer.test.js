@@ -31,6 +31,40 @@ test('legacy definitions convert to v2 without mutating stats or world scale', (
     assert.equal(JSON.stringify(definition.stats), stats);
 });
 
+test('opening a saved v1 draft upgrades it instead of stranding the standalone lab', () => {
+    const legacy = {
+        format: 'framebound-part-design',
+        version: 1,
+        name: 'old scattr',
+        type: 'weapon',
+        footprint: { width: 1, height: 2 },
+        grid: { width: 8, height: 15 },
+        layers: {
+            base: new Array(120).fill(0),
+            turret: new Array(120).fill(0)
+        },
+        anchors: {
+            base: { x: 4, y: 7.5 },
+            turret: { x: 4, y: 7.5 }
+        },
+        barrel: { x: 7.5, y: 7.5 },
+        rotationOffset: 0,
+        stats: { ...PartsLibrary.scattr.stats },
+        notes: '',
+        partId: 'scattr',
+        partType: 'weapon'
+    };
+
+    const migrated = validateStagedDesignDocument(legacy, 'scattr');
+
+    assert.equal(migrated.version, 2);
+    assert.equal(migrated.partId, 'scattr');
+    assert.equal(migrated.partType, 'weapon');
+    assert.deepEqual(migrated.grid, { width: 16, height: 30 });
+    assert.equal(migrated.layers.base.length, 480);
+    assert.deepEqual(migrated.muzzles, [{ x: 15, y: 15 }]);
+});
+
 test('a 1x2 base accepts a separately authored 2x1 turret', () => {
     const design = createBlankPartDesign({ name: 'wide turret', type: 'weapon', width: 1, height: 2, turretWidth: 2, turretHeight: 1 });
     design.partId = 'scattr'; design.partType = 'weapon';

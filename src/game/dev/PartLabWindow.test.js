@@ -27,6 +27,23 @@ test('sound editor explains immediate staging versus source promotion', () => {
     assert.match(PART_SOUND_EDITOR_INTRO, /save all promotes source changes/);
 });
 
+test('visual editor failures reopen the catalog instead of exposing connecting', () => {
+    const lab = Object.create(PartLabWindow.prototype);
+    lab.partsLibrary = { dart: { id: 'dart', name: 'dart', type: 'weapon' } };
+    lab.store = { get: () => ({ visual: { version: 1 } }) };
+    lab.game = { designer: { openPart: () => { throw new Error('bad old draft'); } } };
+    lab.closing = false;
+    lab.hideCatalog = () => { lab.hidden = true; };
+    lab.open = () => { lab.reopened = true; return lab; };
+    lab.setStatus = message => { lab.statusMessage = message; };
+
+    lab.openVisual('dart');
+
+    assert.equal(lab.hidden, true);
+    assert.equal(lab.reopened, true);
+    assert.match(lab.statusMessage, /bad old draft/);
+});
+
 function bareWindow({ audio, forge, store = { state: { parts: {} } } } = {}) {
     const lab = Object.create(PartLabWindow.prototype);
     lab.game = {

@@ -87,7 +87,8 @@ export function validateStagedDesignDocument(design, partId = design?.partId) {
     if (design?.partId && stablePartId && design.partId !== stablePartId) {
         throw new Error('staged design part id does not match the open part');
     }
-    const validated = parsePartDesign(serializePartDesign(design));
+    let validated = parsePartDesign(serializePartDesign(design));
+    if (validated.version === 1) validated = upgradeLegacyPartDesign(validated);
     if (validated.version !== 2) throw new Error('save requires a v2 part design');
     if (stablePartId) validated.partId = stablePartId;
     if (design?.partType !== undefined) {

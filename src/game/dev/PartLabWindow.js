@@ -126,7 +126,13 @@ export class PartLabWindow {
                 else this.store.saveReview(partId, review.status, review.notes);
                 this.renderCatalog();
             },
-            onExit: () => { if (!this.closing) this.open(); }
+            onExit: () => {
+                if (this.standalone) {
+                    this.game?.loop?.stop?.();
+                    this.setStandaloneCanvasVisible(false);
+                }
+                if (!this.closing) this.open();
+            }
         });
         if (game) {
             game.partLabSimulation = this.simulation;
@@ -211,6 +217,10 @@ export class PartLabWindow {
 
     open() {
         if (!this.overlay) return this;
+        if (this.standalone && !this.simulation.active) {
+            this.game?.loop?.stop?.();
+            this.setStandaloneCanvasVisible(false);
+        }
         if (this.wasPaused === null) this.wasPaused = Boolean(this.game?.paused);
         this.active = true;
         this.game && (this.game.paused = true);
@@ -291,23 +301,36 @@ export class PartLabWindow {
     openVisual(partId) {
         const part = this.partsLibrary[partId];
         if (!part) return;
+        if (this.standalone) {
+            this.game?.loop?.stop?.();
+            this.setStandaloneCanvasVisible(false);
+        }
         this.hideCatalog();
-        this.game.designer.openPart(partId, {
-            draft: this.store.get(partId)?.visual || undefined,
-            fallbackDefinition: part,
-            onDraftChange: design => this.stageVisual(partId, design),
-            onStagedSave: design => this.stageVisual(partId, design),
-            onNext: () => {
-                const next = this.nextPartId(partId);
-                if (next) this.openVisual(next);
-            },
-            onClose: () => { if (!this.closing) this.open(); }
-        });
+        try {
+            this.game.designer.openPart(partId, {
+                draft: this.store.get(partId)?.visual || undefined,
+                fallbackDefinition: part,
+                onDraftChange: design => this.stageVisual(partId, design),
+                onStagedSave: design => this.stageVisual(partId, design),
+                onNext: () => {
+                    const next = this.nextPartId(partId);
+                    if (next) this.openVisual(next);
+                },
+                onClose: () => { if (!this.closing) this.open(); }
+            });
+        } catch (error) {
+            this.setStatus(`${partId}: visual editor failed: ${error.message || 'unknown error'}`);
+            if (!this.closing) this.open();
+        }
     }
 
     async openSound(partId) {
         const part = this.partsLibrary[partId];
         if (!part) return;
+        if (this.standalone) {
+            this.game?.loop?.stop?.();
+            this.setStandaloneCanvasVisible(false);
+        }
         this.hideCatalog();
         try { await this.game?.loadingPromise; } catch { /* editor still shows missing states */ }
         if (this.active) return;
@@ -329,7 +352,26 @@ export class PartLabWindow {
     openSimulation(partId) {
         if (!partId) return;
         this.hideCatalog();
-        this.simulation.start(partId);
+        try {
+            this.simulation.start(partId);
+            if (this.standalone) {
+                this.setStandaloneCanvasVisible(true);
+                this.game?.loop?.start?.();
+            }
+        } catch (error) {
+            if (this.standalone) {
+                this.game?.loop?.stop?.();
+                this.setStandaloneCanvasVisible(false);
+            }
+            this.setStatus(`${partId}: simulation failed: ${error.message || 'unknown error'}`);
+            if (!this.closing) this.open();
+        }
+    }
+
+    setStandaloneCanvasVisible(visible) {
+        if (!this.standalone) return;
+        const canvas = this.game?.renderer?.canvas;
+        if (canvas?.style) canvas.style.display = visible ? '' : 'none';
     }
 
     stageVisual(partId, design) {

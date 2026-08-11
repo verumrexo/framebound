@@ -83,7 +83,6 @@ async function boot() {
     if (standalonePartLab) {
       document.documentElement.dataset.frameboundFlavor = 'part-lab';
       game.partLabWindow.open();
-      game.loop.start();
     } else {
       game.start();
     }
