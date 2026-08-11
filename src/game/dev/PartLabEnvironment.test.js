@@ -7,6 +7,7 @@ test('part lab development gate is explicit and production-safe', () => {
     assert.equal(resolvePartLabDevelopmentFlag({ viteDev: true, runtimeFlag: false }), true);
     assert.equal(resolvePartLabDevelopmentFlag({ viteDev: false, runtimeFlag: true }), true);
     assert.equal(resolvePartLabDevelopmentFlag({ viteDev: false, runtimeFlag: false, flavor: 'dev' }), true);
+    assert.equal(resolvePartLabDevelopmentFlag({ viteDev: false, runtimeFlag: false, flavor: 'part-lab' }), true);
     assert.equal(resolvePartLabDevelopmentFlag({ viteDev: false, runtimeFlag: false, flavor: 'release' }), false);
     assert.equal(resolvePartLabDevelopmentFlag({ viteDev: 'true', runtimeFlag: true }), true);
 });

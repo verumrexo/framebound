@@ -56,7 +56,9 @@ async function boot() {
     });
   } else {
     let authoring = {};
-    const authoringBuild = import.meta.env?.DEV === true || import.meta.env?.VITE_FRAMEBOUND_FLAVOR === 'dev';
+    const flavor = import.meta.env?.VITE_FRAMEBOUND_FLAVOR;
+    const standalonePartLab = flavor === 'part-lab';
+    const authoringBuild = import.meta.env?.DEV === true || flavor === 'dev' || standalonePartLab;
     if (authoringBuild) {
       authoring = await import('./game/dev/AuthoringWindows.js');
     }
@@ -74,10 +76,17 @@ async function boot() {
         flavor: import.meta.env?.VITE_FRAMEBOUND_FLAVOR
       }),
       partLabWindowClass: authoring.PartLabWindow,
-      signalForgeWindowClass: authoring.SignalForgeWindow
+      signalForgeWindowClass: authoring.SignalForgeWindow,
+      partLabStandalone: standalonePartLab
     });
     window.game = game;
-    game.start();
+    if (standalonePartLab) {
+      document.documentElement.dataset.frameboundFlavor = 'part-lab';
+      game.partLabWindow.open();
+      game.loop.start();
+    } else {
+      game.start();
+    }
   }
 }
 

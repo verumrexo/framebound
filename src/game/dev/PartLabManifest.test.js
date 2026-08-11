@@ -129,8 +129,10 @@ test('part lab manifests round-trip and apply nested drone visuals without mutat
     droneDesign.stats = { hp: 40, mass: 4, droneType: 'striker' };
     droneDesign.drone = {
         blueprintId: 'striker',
-        grid: { width: 8, height: 8 },
-        layers: { base: new Array(64).fill(0).map((_, index) => index === 0 ? 2 : 0) },
+        resolution: 16,
+        grid: { width: 16, height: 16 },
+        palette: ['#00ffff', '#177777'],
+        layers: { base: new Array(256).fill(0).map((_, index) => index === 0 ? 2 : 0) },
         projectileLook: 'heavy-slug',
         projectileTrail: 'smoke'
     };
@@ -151,7 +153,8 @@ test('part lab manifests round-trip and apply nested drone visuals without mutat
 
     applyVisualDesignOverride(definition, restored.visuals[0].design);
     const visual = getDroneBlueprintVisual('striker');
-    assert.equal(visual.spriteRows[0], '20000000');
+    assert.equal(visual.visualPixels[0], 2);
+    assert.deepEqual(visual.visualGrid, { width: 16, height: 16 });
     assert.equal(visual.projectileLook, 'heavy-slug');
     assert.equal(visual.projectileTrail, 'smoke');
     clearDroneVisualOverrides();
@@ -172,13 +175,14 @@ test('visual override preserves, removes, and replaces core effects by field pre
 
     const replacement = createBlankPartDesign({ name: 'hull', type: 'hull' });
     replacement.coreEffect = {
-        grid: { width: 8, height: 8 },
-        layers: { base: new Array(64).fill(0).map((_, index) => index === 3 ? 1 : 0) },
-        color: '#B56CFF'
+        resolution: 16,
+        grid: { width: 16, height: 16 },
+        palette: ['#b56cff'],
+        layers: { base: new Array(256).fill(0).map((_, index) => index === 3 ? 1 : 0) }
     };
     applyVisualDesignOverride(definition, replacement);
     assert.notEqual(definition.coreEffectSprite, original);
-    assert.equal(definition.coreEffectSprite.colorMap[1], '#B56CFF');
+    assert.equal(definition.coreEffectSprite.colorMap[1], '#b56cff');
     assert.equal(definition.coreEffectSprite.data[3], 1);
 
     const removed = createBlankPartDesign({ name: 'hull', type: 'hull' });

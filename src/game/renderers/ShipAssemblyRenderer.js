@@ -4,6 +4,12 @@ import {
     getValidatedAssemblyParts,
     SHIP_ASSEMBLY_PROFILES
 } from './ShipAssemblyCache.js';
+import {
+    getAuthoredMuzzlePositions,
+    isAuthoredPartGeometry,
+    pointOffset,
+    rotateVector
+} from '../../shared/parts/PartVisualGeometry.js';
 
 export function getShipAssemblyParts(partRefs, partsLibrary) {
     return getValidatedAssemblyParts(partRefs, partsLibrary);
@@ -40,6 +46,22 @@ export function getMountedTurretPosition(part, baseAngle, aimAngle, recoil = 0, 
 } = {}) {
     let offsetX = 0;
     let offsetY = 0;
+    if (isAuthoredPartGeometry(part.def)) {
+        const geometry = part.def.visualGeometry;
+        const local = pointOffset(
+            geometry.baseMount,
+            geometry.baseGrid,
+            geometry.scale
+        );
+        const mounted = rotateVector(local.x, local.y, baseAngle);
+        offsetX = mounted.x;
+        offsetY = mounted.y;
+        if (recoil) {
+            offsetX -= Math.cos(aimAngle) * recoil;
+            offsetY -= Math.sin(aimAngle) * recoil;
+        }
+        return { offsetX, offsetY };
+    }
     const offset = part.def.turretDrawOffset;
     if (offset) {
         if (typeof offset === 'object') {
@@ -71,6 +93,19 @@ export function getMountedTurretPosition(part, baseAngle, aimAngle, recoil = 0, 
 }
 
 export function getChargeTip(part, x, y, aimAngle) {
+    if (isAuthoredPartGeometry(part.def)) {
+        const baseAngle = Number.isFinite(part.baseAngle)
+            ? part.baseAngle
+            : (part.rotation || 0) * Math.PI / 2;
+        const muzzle = getAuthoredMuzzlePositions(
+            part.def,
+            x,
+            y,
+            baseAngle,
+            aimAngle
+        )[0];
+        if (muzzle) return muzzle;
+    }
     let barrelLength = part.height > 1.5 ? TILE_SIZE * 1.3 : TILE_SIZE * 0.6;
     barrelLength += typeof part.def.turretDrawOffset === 'number'
         ? part.def.turretDrawOffset

@@ -77,24 +77,27 @@ export const DRONE_BLUEPRINTS = Object.freeze({
 
 const visualOverrides = new Map();
 
-function pixelsToRows(pixels) {
-    return Array.from({ length: 8 }, (_, y) =>
-        pixels.slice(y * 8, (y + 1) * 8).join('')
-    );
-}
-
 export function registerDroneVisualOverride(visual) {
     if (!visual || typeof visual.blueprintId !== 'string') return false;
     if (!Object.hasOwn(DRONE_BLUEPRINTS, visual.blueprintId)) return false;
     const blueprint = resolveDroneBlueprint(visual.blueprintId);
     const pixels = visual.layers?.base || visual.pixels;
-    if (!Array.isArray(pixels) || pixels.length !== 64) return false;
-    if (pixels.some(pixel => !Number.isInteger(pixel) || pixel < 0 || pixel > 2)) return false;
+    const width = Number(visual.grid?.width || 8);
+    const height = Number(visual.grid?.height || 8);
+    const palette = Array.isArray(visual.palette)
+        ? visual.palette
+        : ['#00ffff', '#177777'];
+    if (!Array.isArray(pixels) || pixels.length !== width * height) return false;
+    if (pixels.some(pixel => !Number.isInteger(pixel) || pixel < 0 || pixel > palette.length)) return false;
     const projectileLook = visual.projectileLook || 'default';
     const projectileTrail = visual.projectileTrail || 'default';
     if (!isProjectileLook(projectileLook) || !isProjectileTrail(projectileTrail)) return false;
     visualOverrides.set(blueprint.id, {
-        spriteRows: Object.freeze(pixelsToRows([...pixels])),
+        visualPixels: Object.freeze([...pixels]),
+        visualGrid: Object.freeze({ width, height }),
+        visualScale: Number(visual.resolution) === 16 ? 2 : 4,
+        visualPalette: Object.freeze([...palette]),
+        orientationOffset: Number(visual.resolution) === 16 ? 0 : Math.PI / 2,
         projectileLook,
         projectileTrail
     });

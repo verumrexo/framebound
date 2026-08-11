@@ -1,5 +1,5 @@
 import { parsePartStatsLiteral } from './PartStatsParser.js';
-import { createBlankPartDesign, normalizePartDesign } from './PartDesignDocument.js';
+import { normalizePartDesign } from './PartDesignDocument.js';
 
 const SPRITE_PATTERN = /new Sprite\(\s*(\[[0-9,\s]+\])\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*4\s*,\s*\{[^}]*\}(?:\s*,\s*([-0-9.]+)\s*,\s*([-0-9.]+))?\s*\)/g;
 
@@ -26,11 +26,28 @@ export function parseLegacyPartDesign(source) {
     const art = isWeapon ? sprites[0] : sprites.at(-1);
     const base = isWeapon ? sprites[1] : sprites.at(-1);
     const footprint = inferFootprint(source, art.width, art.height);
-    const design = createBlankPartDesign({
+    const grid = legacyGridDimensions(footprint.width, footprint.height);
+    const design = {
+        format: 'framebound-part-design',
+        version: 1,
         name: definition?.[1] || 'imported part',
         type,
-        ...footprint
-    });
+        footprint,
+        grid,
+        layers: {
+            base: new Array(grid.width * grid.height).fill(0),
+            turret: null
+        },
+        anchors: { base: null, turret: null },
+        barrel: null,
+        rotationOffset: 0,
+        projectileLook: 'default',
+        projectileTrail: 'default',
+        coreEffect: null,
+        drone: null,
+        stats: {},
+        notes: ''
+    };
 
     if (art.width !== design.grid.width || art.height !== design.grid.height) {
         throw new Error('legacy sprite dimensions do not match a supported footprint');
@@ -59,6 +76,13 @@ export function parseLegacyPartDesign(source) {
     }
 
     return normalizePartDesign(design);
+}
+
+function legacyGridDimensions(width, height) {
+    return {
+        width: width * 8 - (width - 1),
+        height: height * 8 - (height - 1)
+    };
 }
 
 function inferFootprint(source, gridWidth, gridHeight) {

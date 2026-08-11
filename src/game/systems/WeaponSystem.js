@@ -10,6 +10,12 @@ import {
     partSoundEventKey
 } from '../audio/SoundEventRegistry.js';
 import { normalizeProjectileVisuals } from '../../shared/combat/ProjectileVisuals.js';
+import {
+    getAuthoredMuzzlePositions,
+    getAuthoredTurretMount,
+    getPartWorldCenter,
+    isAuthoredPartGeometry
+} from '../../shared/parts/PartVisualGeometry.js';
 
 function playPartEvent(audio, partId, slot, fallbackName, options) {
     if (typeof audio.playEvent === 'function') {
@@ -30,6 +36,16 @@ function wrapAngle(angle) {
     while (angle <= -Math.PI) angle += Math.PI * 2;
     while (angle > Math.PI) angle -= Math.PI * 2;
     return angle;
+}
+
+function authoredFireSoundSlot(definition) {
+    const stats = definition.stats || {};
+    const projectile = String(stats.projectileType || '').toLowerCase();
+    if (stats.chargeTime) return null;
+    if (projectile === 'beam_sword' || projectile === 'saber') return 'swing';
+    if (stats.armingTime !== undefined || projectile.includes('mine')) return 'deploy';
+    if (stats.weaponGroup === 'rocket' || projectile.includes('rocket') || projectile.includes('grenade')) return 'launch';
+    return 'fire';
 }
 
 export class WeaponSystem {
@@ -275,6 +291,9 @@ export class WeaponSystem {
     }
 
     getInitialShotOrigin(partRef, def, worldMouseX, worldMouseY) {
+        if (isAuthoredPartGeometry(def)) {
+            return this.getAuthoredShotOrigin(partRef, def, worldMouseX, worldMouseY);
+        }
         const game = this.game;
         const isRotated = ((partRef.rotation || 0) % 2 !== 0);
         const width = isRotated ? def.height : def.width;
@@ -328,6 +347,9 @@ export class WeaponSystem {
     }
 
     getBurstShotOrigin(partRef, def, worldMouseX, worldMouseY) {
+        if (isAuthoredPartGeometry(def)) {
+            return this.getAuthoredShotOrigin(partRef, def, worldMouseX, worldMouseY);
+        }
         const game = this.game;
         const isRotated = ((partRef.rotation || 0) % 2 !== 0);
         const width = isRotated ? def.height : def.width;
@@ -367,6 +389,31 @@ export class WeaponSystem {
         }
 
         return { fireX, fireY, angle };
+    }
+
+    getAuthoredShotOrigin(partRef, def, worldMouseX, worldMouseY) {
+        const center = getPartWorldCenter(this.game, partRef, def);
+        const mount = getAuthoredTurretMount(
+            def,
+            center.x,
+            center.y,
+            center.baseAngle
+        );
+        const rawAngle = Math.atan2(worldMouseY - mount.y, worldMouseX - mount.x);
+        const angle = this.getAssistedAimAngle(rawAngle, mount.x, mount.y);
+        const positions = getAuthoredMuzzlePositions(
+            def,
+            center.x,
+            center.y,
+            center.baseAngle,
+            angle
+        );
+        const start = Math.max(0, Math.trunc(partRef.muzzleCursor || 0)) % Math.max(1, positions.length);
+        partRef.muzzleCursor = (start + 1) % Math.max(1, positions.length);
+        partRef.authoredShotMuzzles = positions;
+        partRef.authoredShotMuzzleStart = start;
+        const muzzle = positions[start] || mount;
+        return { fireX: muzzle.x, fireY: muzzle.y, angle };
     }
 
     getAssistedAimAngle(angle, originX, originY) {
@@ -416,6 +463,14 @@ export class WeaponSystem {
             const finalAngle = angle + (this.random() - 0.5) * spread;
             let projectileX = fireX;
             let projectileY = fireY;
+
+            const authoredMuzzles = partRef?.authoredShotMuzzles;
+            if (Array.isArray(authoredMuzzles) && authoredMuzzles.length > 1) {
+                const start = Math.max(0, Math.trunc(partRef.authoredShotMuzzleStart || 0));
+                const muzzle = authoredMuzzles[(start + i) % authoredMuzzles.length];
+                projectileX = muzzle.x;
+                projectileY = muzzle.y;
+            }
 
             if (projectileCount > 1 && def.stats.barrelSpacing) {
                 const perpendicularX = Math.cos(angle + Math.PI / 2);
@@ -536,6 +591,10 @@ export class WeaponSystem {
         if (spawnedProjectile && game.playerShip) {
             game.playerShip.stealthTimer = 0;
         }
+        if (partRef) {
+            delete partRef.authoredShotMuzzles;
+            delete partRef.authoredShotMuzzleStart;
+        }
 
         const sound = getPartFireDefault(def.id);
         let pitch = def.stats.soundPitch || 1.0;
@@ -546,13 +605,14 @@ export class WeaponSystem {
             if (partRef.shotCount % 5 !== 0) shouldPlayShoot = false;
         }
 
-        if (shouldPlayShoot) {
+        const soundSlot = authoredFireSoundSlot(def);
+        if (shouldPlayShoot && soundSlot) {
             const options = {
                 volume: def.stats.soundVolume ?? 0.6,
                 pitch,
                 randomizePitch: 0.15
             };
-            playPartEvent(game.audio, def.id, 'fire', sound, options);
+            playPartEvent(game.audio, def.id, soundSlot, sound, options);
         }
     }
 }

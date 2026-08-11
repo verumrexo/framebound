@@ -90,6 +90,23 @@ export function createDroneSprite(
     colorMap = { 1: '#00ffff', 2: '#177777' }
 ) {
     if (isSprite(spec)) return /** @type {Sprite} */ (spec);
+    if (spec && typeof spec === 'object') {
+        const record = /** @type {Record<string, unknown>} */ (spec);
+        const pixels = record.visualPixels;
+        const grid = /** @type {{width?: unknown, height?: unknown}} */ (record.visualGrid || {});
+        if (Array.isArray(pixels) && Number.isInteger(grid.width) && Number.isInteger(grid.height)) {
+            const authored = Array.isArray(record.visualPalette)
+                ? Object.fromEntries(record.visualPalette.map((color, index) => [index + 1, color]))
+                : {};
+            return new Sprite(
+                [...pixels],
+                /** @type {number} */ (grid.width),
+                /** @type {number} */ (grid.height),
+                Number(record.visualScale) || 4,
+                { ...authored, ...colorMap }
+            );
+        }
+    }
     const rows = readRows(spec);
     return rows ? createSprite(spec, rows, colorMap) : null;
 }

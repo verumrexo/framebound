@@ -173,6 +173,30 @@ test('initial and burst origins preserve their intentionally different turret-of
     assert.equal(burst.fireY, 203);
 });
 
+test('v2 shots and bursts share authored geometry and alternate multiple muzzles', () => {
+    const part = { partId: 'authored', x: 0, y: 0, rotation: 0 };
+    const { game } = makeGame(part);
+    const system = new WeaponSystem(game, { ProjectileClass: ProjectileStub, random: () => .5 });
+    const def = {
+        id: 'authored', name: 'authored', width: 1, height: 1,
+        stats: { pelletCount: 2, damage: 5 },
+        visualGeometry: {
+            version: 2, scale: 2,
+            baseGrid: { width: 16, height: 16 },
+            turretGrid: { width: 30, height: 16 },
+            baseMount: { x: 8, y: 8 },
+            turretPivot: { x: 4, y: 8 },
+            muzzles: [{ x: 14, y: 5 }, { x: 14, y: 11 }]
+        }
+    };
+    const initial = system.getInitialShotOrigin(part, def, 1000, 200);
+    assert.deepEqual(initial, { fireX: 120, fireY: 194, angle: 0 });
+    system.spawnProjectile(def, initial.fireX, initial.fireY, initial.angle, part);
+    assert.deepEqual(game.projectiles.map(projectile => projectile.args.slice(0, 2)), [[120, 194], [120, 206]]);
+    const burst = system.getBurstShotOrigin(part, def, 1000, 200);
+    assert.deepEqual(burst, { fireX: 120, fireY: 206, angle: 0 });
+});
+
 test('projectile construction preserves type, rocket speed, damage, lifetime, and sound identity', () => {
     const part = { partId: 'rocketle' };
     const { game, calls } = makeGame(part);

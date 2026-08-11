@@ -11,8 +11,12 @@ const flavorIndex = process.argv.indexOf('--flavor');
 const flavor = flavorIndex >= 0
     ? process.argv[flavorIndex + 1]
     : 'release';
-const productName = flavor === 'dev' ? 'Framebound Dev' : 'Framebound';
-if (!['release', 'dev'].includes(flavor)) {
+const productName = flavor === 'dev'
+    ? 'Framebound Dev'
+    : flavor === 'part-lab'
+        ? 'Framebound Part Lab'
+        : 'Framebound';
+if (!['release', 'dev', 'part-lab'].includes(flavor)) {
     console.error(`unsupported desktop flavor: ${flavor}`);
     process.exit(1);
 }

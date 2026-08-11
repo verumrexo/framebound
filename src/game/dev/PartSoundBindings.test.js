@@ -23,16 +23,15 @@ function audioWith(...names) {
     };
 }
 
-test('part lab exposes exactly two semantic slots for every part family', () => {
+test('part lab exposes only capability-backed runtime slots', () => {
     const weapon = getPartLabSoundSlots({ id: 'railgun', type: PartType.WEAPON, stats: {} });
     assert.deepEqual(weapon.map(slot => [slot.id, slot.eventSlot]), [
-        ['fire', 'fire'],
-        ['hit', 'impact']
+        ['fire', 'fire']
     ]);
     assert.deepEqual(getPartSoundProfile({ id: 'hive', type: PartType.DRONE }), 'drone');
     assert.deepEqual(
         getPartLabSoundSlots({ id: 'hive', type: PartType.DRONE }).map(slot => slot.id),
-        ['deploy', 'action']
+        ['deploy', 'shoot', 'destroyed']
     );
     assert.deepEqual(
         getPartLabSoundSlots({
@@ -40,11 +39,11 @@ test('part lab exposes exactly two semantic slots for every part family', () => 
             type: PartType.UTILITY,
             stats: { activeAbility: 'blink' }
         }).map(slot => [slot.id, slot.fallback]),
-        [['activate', 'dash'], ['effect', 'nova']]
+        [['departure', 'dash'], ['arrival', 'nova']]
     );
     assert.deepEqual(
-        getPartLabSoundSlots({ id: 'hull', type: PartType.HULL }).map(slot => slot.optional),
-        [true, true]
+        getPartLabSoundSlots({ id: 'hull', type: PartType.HULL }),
+        []
     );
     assert.deepEqual(getPartSoundProfile({ id: 'hull', type: PartType.HULL }), 'passive');
 });
@@ -71,16 +70,13 @@ test('drafts retain current Signal Forge bindings and serialize semantic event k
         source: 'signal-forge',
         soundId: 'zap'
     });
-    assert.equal(draft.slots[1].eventKey, 'part:gun_basic:impact');
-    assert.equal(draft.slots[1].assignment, null);
-
     const staged = withPartSoundAssignment(
         draft,
-        'hit',
+        'fire',
         { source: 'runtime', eventId: 'explosion' }
     );
-    assert.equal(getAssignmentForSlot(draft, 'hit'), null);
-    assert.deepEqual(getAssignmentForSlot(staged, 'hit'), {
+    assert.deepEqual(getAssignmentForSlot(draft, 'fire'), { source: 'signal-forge', soundId: 'zap' });
+    assert.deepEqual(getAssignmentForSlot(staged, 'fire'), {
         source: 'runtime',
         eventId: 'explosion'
     });
@@ -97,7 +93,7 @@ test('choice keys and slot states distinguish default, custom, and missing audio
     };
     const audio = audioWith('shoot_dart', 'hit', 'forge:zap');
     const part = { id: 'gun_basic', type: PartType.WEAPON, stats: {} };
-    const [fire, hit] = getPartLabSoundSlots(part);
+    const [fire] = getPartLabSoundSlots(part);
 
     assert.equal(inspectPartSoundSlot(fire, null, { audio, signalForge }).status, 'default');
     assert.equal(inspectPartSoundSlot(
@@ -106,7 +102,7 @@ test('choice keys and slot states distinguish default, custom, and missing audio
         { audio, signalForge }
     ).status, 'custom');
     assert.equal(inspectPartSoundSlot(
-        hit,
+        fire,
         { source: 'runtime', eventId: 'not_registered' },
         { audio, signalForge }
     ).status, 'missing');

@@ -119,10 +119,22 @@ struct PartLabDesign {
     part_type: String,
     footprint: PartLabSize,
     grid: PartLabSize,
+    #[serde(default)]
+    resolution: Option<u32>,
+    #[serde(default)]
+    turret_footprint: Option<PartLabSize>,
+    #[serde(default)]
+    turret_grid: Option<PartLabSize>,
+    #[serde(default)]
+    palette: Vec<String>,
     layers: PartLabLayers,
     anchors: PartLabAnchors,
+    #[serde(default)]
+    muzzles: Vec<PartLabPoint>,
+    #[serde(default)]
     barrel: Option<PartLabPoint>,
-    rotation_offset: f64,
+    #[serde(default)]
+    rotation_offset: Option<f64>,
     stats: serde_json::Value,
     notes: String,
     #[serde(default)]
@@ -144,7 +156,11 @@ struct PartLabDesign {
 #[serde(rename_all = "camelCase")]
 struct PartLabDroneVisual {
     blueprint_id: String,
+    #[serde(default)]
+    resolution: Option<u32>,
     grid: PartLabSize,
+    #[serde(default)]
+    palette: Vec<String>,
     layers: PartLabLayers,
     #[serde(default)]
     projectile_look: Option<String>,
@@ -156,9 +172,14 @@ struct PartLabDroneVisual {
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct PartLabCoreEffect {
+    #[serde(default)]
+    resolution: Option<u32>,
     grid: PartLabSize,
     layers: PartLabCoreLayers,
-    color: String,
+    #[serde(default)]
+    palette: Vec<String>,
+    #[serde(default)]
+    color: Option<String>,
 }
 
 #[cfg(any(debug_assertions, feature = "part-lab"))]
@@ -449,7 +470,7 @@ fn validate_part_lab_manifest(manifest: &PartLabManifest) -> Result<(), String> 
         if !is_safe_part_lab_id(&sound.part_id) || !sound_ids.insert(sound.part_id.as_str()) {
             return Err("part lab manifest contains an invalid or duplicate sound id".into());
         }
-        if sound.slots.len() > 2 {
+        if sound.slots.len() > 16 {
             return Err("part lab sound override has too many slots".into());
         }
         let mut slot_ids = std::collections::HashSet::new();
@@ -483,30 +504,53 @@ fn validate_part_lab_manifest(manifest: &PartLabManifest) -> Result<(), String> 
 
 #[cfg(any(debug_assertions, feature = "part-lab"))]
 fn validate_part_lab_design(part_id: &str, design: &PartLabDesign) -> Result<(), String> {
-    if design.format != "framebound-part-design" || design.version != 1 || design.name.is_empty() || design.name.len() > 64 || design.notes.len() > 2000 {
+    if design.format != "framebound-part-design" || !matches!(design.version, 1 | 2) || design.name.is_empty() || design.name.len() > 64 || design.notes.len() > 2000 {
         return Err(format!("visual design for {part_id} has an invalid header"));
     }
     if !matches!(design.part_type.as_str(), "hull" | "weapon" | "thruster" | "accelerant" | "rocket_bay" | "booster" | "drone" | "shield" | "utility" | "core") {
         return Err(format!("visual design for {part_id} has an invalid type"));
     }
-    let expected = match (design.footprint.width, design.footprint.height) {
-        (1, 1) => (8, 8),
-        (1, 2) => (8, 15),
-        (2, 2) => (15, 15),
-        (2, 4) => (15, 29),
+    let expected = match (design.version, design.footprint.width, design.footprint.height) {
+        (1, 1, 1) => (8, 8),
+        (1, 1, 2) => (8, 15),
+        (1, 2, 2) => (15, 15),
+        (1, 2, 4) => (15, 29),
+        (2, 1, 1) => (16, 16),
+        (2, 1, 2) => (16, 30),
+        (2, 2, 2) => (30, 30),
+        (2, 2, 4) => (30, 58),
         _ => return Err(format!("visual design for {part_id} has an invalid footprint")),
     };
+    if design.version == 2 && design.resolution != Some(16) {
+        return Err(format!("visual design for {part_id} has an invalid resolution"));
+    }
     if design.grid.width != expected.0 || design.grid.height != expected.1 || expected.0 * expected.1 > MAX_PART_LAB_PIXELS {
         return Err(format!("visual design for {part_id} has an invalid grid"));
     }
-    validate_pixels(&design.layers.base, expected.0 * expected.1, part_id)?;
+    let palette_len = if design.version == 2 {
+        validate_palette(&design.palette, part_id)?
+    } else { 2 };
+    validate_pixels(&design.layers.base, expected.0 * expected.1, palette_len, part_id)?;
+    let turret_expected = if design.version == 2 {
+        let footprint = design.turret_footprint.as_ref().ok_or_else(|| format!("visual design for {part_id} has no turret footprint"))?;
+        let size = authored_grid_size(footprint.width, footprint.height)
+            .ok_or_else(|| format!("visual design for {part_id} has an invalid turret footprint"))?;
+        let grid = design.turret_grid.as_ref().ok_or_else(|| format!("visual design for {part_id} has no turret grid"))?;
+        if (grid.width, grid.height) != size {
+            return Err(format!("visual design for {part_id} has an invalid turret grid"));
+        }
+        size
+    } else { expected };
     if let Some(turret) = &design.layers.turret {
         if design.part_type != "weapon" {
             return Err(format!("non-weapon {part_id} cannot have turret art"));
         }
-        validate_pixels(turret, expected.0 * expected.1, part_id)?;
+        validate_pixels(turret, turret_expected.0 * turret_expected.1, palette_len, part_id)?;
     }
-    validate_part_lab_anchors(&design.anchors, expected, part_id)?;
+    validate_part_lab_point_option(&design.anchors.base, expected, part_id)?;
+    validate_part_lab_point_option(&design.anchors.turret, turret_expected, part_id)?;
+    if design.muzzles.len() > 16 { return Err(format!("visual design for {part_id} has too many muzzles")); }
+    for point in &design.muzzles { validate_part_lab_point(point, turret_expected, part_id)?; }
     if let Some(point) = &design.barrel { validate_part_lab_point(point, expected, part_id)?; }
     if let Some(anchors) = &design.raw_anchors { validate_part_lab_anchors(anchors, expected, part_id)?; }
     if let Some(point) = &design.raw_barrel { validate_part_lab_point(point, expected, part_id)?; }
@@ -519,13 +563,16 @@ fn validate_part_lab_design(part_id: &str, design: &PartLabDesign) -> Result<(),
         if design.part_type != "drone" {
             return Err(format!("non-drone {part_id} cannot have drone visuals"));
         }
+        let drone_size = if design.version == 2 { 16 } else { 8 };
         if !is_safe_part_lab_id(&drone.blueprint_id)
-            || drone.grid.width != 8
-            || drone.grid.height != 8
+            || drone.grid.width != drone_size
+            || drone.grid.height != drone_size
+            || (design.version == 2 && drone.resolution != Some(16))
         {
             return Err(format!("visual design for {part_id} has invalid drone blueprint"));
         }
-        validate_pixels(&drone.layers.base, 64, part_id)?;
+        let drone_palette_len = if design.version == 2 { validate_palette(&drone.palette, part_id)? } else { 2 };
+        validate_pixels(&drone.layers.base, drone_size * drone_size, drone_palette_len, part_id)?;
         if drone.projectile_look.as_deref().is_some_and(|id| !is_allowed_projectile_look(id))
             || drone.projectile_trail.as_deref().is_some_and(|id| !is_allowed_projectile_trail(id))
         {
@@ -533,20 +580,44 @@ fn validate_part_lab_design(part_id: &str, design: &PartLabDesign) -> Result<(),
         }
     }
     if let Some(core) = &design.core_effect {
-        if core.grid.width != 8 || core.grid.height != 8 {
+        let core_size = if design.version == 2 { 16 } else { 8 };
+        if core.grid.width != core_size || core.grid.height != core_size || (design.version == 2 && core.resolution != Some(16)) {
             return Err(format!("visual design for {part_id} has an invalid core effect grid"));
         }
-        if core.layers.base.len() != 64 || core.layers.base.iter().any(|pixel| *pixel > 1) {
-            return Err(format!("visual design for {part_id} has invalid core effect pixels"));
-        }
-        if !is_core_effect_color(&core.color) {
-            return Err(format!("visual design for {part_id} has an invalid core effect color"));
+        if design.version == 2 {
+            let core_palette_len = validate_palette(&core.palette, part_id)?;
+            validate_pixels(&core.layers.base, core_size * core_size, core_palette_len, part_id)?;
+        } else {
+            if core.layers.base.len() != 64 || core.layers.base.iter().any(|pixel| *pixel > 1) {
+                return Err(format!("visual design for {part_id} has invalid core effect pixels"));
+            }
+            if !matches!(core.color.as_deref(), Some(color) if is_core_effect_color(color)) {
+                return Err(format!("visual design for {part_id} has an invalid core effect color"));
+            }
         }
     }
-    if !design.rotation_offset.is_finite() || !design.stats.is_object() {
+    if design.rotation_offset.is_some_and(|value| !value.is_finite()) || !design.stats.is_object() {
         return Err(format!("visual design for {part_id} has invalid metadata"));
     }
     Ok(())
+}
+
+#[cfg(any(debug_assertions, feature = "part-lab"))]
+fn authored_grid_size(width: usize, height: usize) -> Option<(usize, usize)> {
+    match (width, height) {
+        (1, 1) => Some((16, 16)), (1, 2) => Some((16, 30)),
+        (2, 1) => Some((30, 16)), (2, 2) => Some((30, 30)),
+        (2, 4) => Some((30, 58)), (4, 2) => Some((58, 30)),
+        _ => None,
+    }
+}
+
+#[cfg(any(debug_assertions, feature = "part-lab"))]
+fn validate_palette(palette: &[String], part_id: &str) -> Result<usize, String> {
+    if palette.is_empty() || palette.len() > 16 || palette.iter().any(|color| !is_core_effect_color(color)) {
+        return Err(format!("visual design for {part_id} has an invalid palette"));
+    }
+    Ok(palette.len())
 }
 
 #[cfg(any(debug_assertions, feature = "part-lab"))]
@@ -557,10 +628,16 @@ fn is_core_effect_color(value: &str) -> bool {
 }
 
 #[cfg(any(debug_assertions, feature = "part-lab"))]
-fn validate_pixels(pixels: &[u8], expected: usize, part_id: &str) -> Result<(), String> {
-    if pixels.len() != expected || pixels.iter().any(|pixel| *pixel > 2) {
+fn validate_pixels(pixels: &[u8], expected: usize, max_index: usize, part_id: &str) -> Result<(), String> {
+    if pixels.len() != expected || pixels.iter().any(|pixel| *pixel as usize > max_index) {
         return Err(format!("visual design for {part_id} has invalid pixels"));
     }
+    Ok(())
+}
+
+#[cfg(any(debug_assertions, feature = "part-lab"))]
+fn validate_part_lab_point_option(point: &Option<PartLabPoint>, grid: (usize, usize), part_id: &str) -> Result<(), String> {
+    if let Some(point) = point { validate_part_lab_point(point, grid, part_id)?; }
     Ok(())
 }
 
@@ -962,6 +1039,29 @@ mod tests {
         }).to_string()
     }
 
+    fn valid_v2_part_lab_manifest() -> String {
+        let mut manifest = serde_json::from_str::<serde_json::Value>(&valid_part_lab_manifest())
+            .expect("v1 fixture should parse");
+        let design = &mut manifest["visuals"][0]["design"];
+        design["version"] = serde_json::json!(2);
+        design["resolution"] = serde_json::json!(16);
+        design["grid"] = serde_json::json!({ "width": 16, "height": 16 });
+        design["turretFootprint"] = serde_json::json!({ "width": 2, "height": 1 });
+        design["turretGrid"] = serde_json::json!({ "width": 30, "height": 16 });
+        design["palette"] = serde_json::json!(["#26d426", "#333333"]);
+        design["layers"]["base"] = serde_json::json!(vec![0; 256]);
+        design["layers"]["turret"] = serde_json::json!(vec![0; 480]);
+        design["anchors"] = serde_json::json!({
+            "base": { "x": 8, "y": 8 },
+            "turret": { "x": 15, "y": 8 }
+        });
+        design["muzzles"] = serde_json::json!([
+            { "x": 29, "y": 6 },
+            { "x": 29, "y": 10 }
+        ]);
+        manifest.to_string()
+    }
+
     #[test]
     fn native_save_replaces_complete_files() {
         let path = test_path("run-save-v2.json");
@@ -1066,6 +1166,18 @@ mod tests {
             .expect("part lab manifest should be readable");
         assert!(saved.contains("gun_basic"));
         assert!(!root.join("../part-lab-overrides.json").exists());
+        fs::remove_dir_all(root.parent().unwrap())
+            .expect("test directory should be removable");
+    }
+
+    #[test]
+    fn part_lab_promotion_accepts_v2_independent_turret_geometry() {
+        let root = test_path("generated-parts-v2");
+        promote_part_lab_manifest_to(&root, &valid_v2_part_lab_manifest())
+            .expect("valid v2 part lab manifest should promote");
+        let saved = fs::read_to_string(root.join("part-lab-overrides.json"))
+            .expect("v2 part lab manifest should be readable");
+        assert!(saved.contains("turretFootprint"));
         fs::remove_dir_all(root.parent().unwrap())
             .expect("test directory should be removable");
     }

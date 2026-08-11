@@ -1,19 +1,12 @@
 import { PartType } from '../../shared/parts/PartDefinitions.js';
 import {
     SOUND_EVENTS,
-    getPartFireDefault,
+    getPartSoundSlots,
     getSoundEvent,
     partSoundEventKey
 } from '../audio/SoundEventRegistry.js';
 
 export const PART_SOUND_DRAFT_SCHEMA_VERSION = 1;
-
-const ACTIVE_ABILITY_SOUND_DEFAULTS = Object.freeze({
-    blink: { activate: 'dash', effect: 'nova' },
-    emp: { activate: 'reload', effect: 'nova' },
-    decoy: { activate: 'reload', effect: 'hit' },
-    stealth: { activate: 'dash', effect: 'hit' }
-});
 
 function hasAudioSound(audio, name) {
     if (!audio || !name) return false;
@@ -27,112 +20,23 @@ function savedAudioName(signalForge, soundId) {
     return `forge:${soundId}`;
 }
 
-function activeUtility(part) {
-    const stats = part?.stats || {};
-    return part?.type === PartType.BOOSTER || (
-        part?.type === PartType.UTILITY &&
-        (typeof stats.activeAbility === 'string' || Number.isFinite(stats.abilityCooldown))
-    );
-}
-
-function activeUtilityFallbacks(part) {
-    const ability = String(part?.stats?.activeAbility || '').toLowerCase();
-    return ACTIVE_ABILITY_SOUND_DEFAULTS[ability] || {
-        activate: 'reload',
-        effect: 'hit'
-    };
-}
-
 function freezeSlots(slots) {
-    return Object.freeze(slots.map(slot => Object.freeze({ ...slot })));
+    return Object.freeze(slots.map(slot => Object.freeze({
+        ...slot,
+        label: slot.label || slot.id,
+        eventSlot: slot.id,
+        optional: Boolean(slot.optional)
+    })));
 }
 
 /**
- * Return the two semantic sound slots shown by Part Lab.
- *
- * `eventSlot` deliberately keeps compatibility with the runtime event names:
- * the human-facing weapon "hit" slot is currently the projectile "impact" key.
+ * Return only sound hooks that the runtime actually triggers for this part.
  *
  * @param {{ id: string, type: string, stats?: object }} part
  * @returns {ReadonlyArray<object>}
  */
 export function getPartLabSoundSlots(part) {
-    if (!part?.id || !part?.type) return [];
-
-    if (part.type === PartType.WEAPON) {
-        return freezeSlots([
-            {
-                id: 'fire',
-                label: 'fire',
-                eventSlot: 'fire',
-                fallback: getPartFireDefault(part.id),
-                optional: false
-            },
-            {
-                id: 'hit',
-                label: 'hit',
-                eventSlot: 'impact',
-                fallback: 'hit',
-                optional: false
-            }
-        ]);
-    }
-
-    if (part.type === PartType.DRONE) {
-        return freezeSlots([
-            {
-                id: 'deploy',
-                label: 'deploy',
-                eventSlot: 'deploy',
-                fallback: 'reload',
-                optional: false
-            },
-            {
-                id: 'action',
-                label: 'action',
-                eventSlot: 'attack',
-                fallback: 'shoot_dart',
-                optional: false
-            }
-        ]);
-    }
-
-    if (activeUtility(part)) {
-        const fallbacks = activeUtilityFallbacks(part);
-        return freezeSlots([
-            {
-                id: 'activate',
-                label: 'activate',
-                eventSlot: 'activate',
-                fallback: fallbacks.activate,
-                optional: false
-            },
-            {
-                id: 'effect',
-                label: 'effect',
-                eventSlot: 'effect',
-                fallback: fallbacks.effect,
-                optional: false
-            }
-        ]);
-    }
-
-    return freezeSlots([
-        {
-            id: 'attach',
-            label: 'attach',
-            eventSlot: 'attach',
-            fallback: 'item_pickup',
-            optional: true
-        },
-        {
-            id: 'damage',
-            label: 'damage',
-            eventSlot: 'damage',
-            fallback: 'hit',
-            optional: true
-        }
-    ]);
+    return freezeSlots(getPartSoundSlots(part));
 }
 
 function normalizeAssignment(assignment) {
@@ -220,7 +124,7 @@ export function withPartSoundAssignment(draft, slotId, assignment) {
 export function getPartSoundProfile(part) {
     if (part?.type === PartType.WEAPON) return 'weapon';
     if (part?.type === PartType.DRONE) return 'drone';
-    if (activeUtility(part)) return 'active-utility';
+    if (part?.type === PartType.BOOSTER || part?.type === PartType.SHIELD || part?.stats?.activeAbility) return 'active-utility';
     return 'passive';
 }
 

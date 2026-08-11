@@ -440,7 +440,14 @@ export class EntityRenderer {
 
     static drawDrone(renderer, drone) {
         if (drone.sprite) {
-             drone.sprite.draw(renderer.ctx, drone.x, drone.y, drone.rotation + Math.PI/2, 0.5, 0.5);
+             drone.sprite.draw(
+                 renderer.ctx,
+                 drone.x,
+                 drone.y,
+                 drone.rotation + (drone.spriteRotationOffset ?? Math.PI / 2),
+                 0.5,
+                 0.5
+             );
         }
     }
 

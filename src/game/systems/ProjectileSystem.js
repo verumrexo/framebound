@@ -47,7 +47,11 @@ function updateProjectiles(dt, random) {
     this.projectileClock = (this.projectileClock || 0) + dt;
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
         const p = this.projectiles[i];
+        const wasArmed = Boolean(p.armed);
         p.update(dt, this);
+        if (!wasArmed && p.armed && p.sourcePartId) {
+            playProjectileEvent(this.audio, p, 'arm', 'reload', { volume: 0.35, pitch: 1.4 });
+        }
 
         if (p.type === 'proximity_mine' && p.armed && !p.isDead) {
             const trigger = findNearestHostile(this, p.x, p.y, p.triggerRadius || 80, p);
@@ -641,9 +645,11 @@ function updateProjectiles(dt, random) {
 }
 
 function playProjectileEvent(audio, projectile, slot, fallbackName, options) {
+    if (slot === 'impact') return audio.play(fallbackName, options);
+    const eventSlot = slot === 'detonate' ? 'explosion' : slot;
     if (projectile.sourcePartId && typeof audio.playEvent === 'function') {
         return audio.playEvent(
-            partSoundEventKey(projectile.sourcePartId, slot),
+            partSoundEventKey(projectile.sourcePartId, eventSlot),
             fallbackName,
             options
         );

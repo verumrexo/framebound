@@ -295,10 +295,15 @@ export class DroneSystem {
             if (!drone.isDead) continue;
 
             game.spawnExplosion(drone.x, drone.y, 20, 0.4, '#00ffff');
-            game.audio.play('explosion', {
-                volume: 0.2,
-                pitch: 2.0
-            });
+            if (drone.owner === 'player' && drone.sourcePartId && game.audio.playEvent) {
+                game.audio.playEvent(
+                    partSoundEventKey(drone.sourcePartId, 'destroyed'),
+                    'explosion',
+                    { volume: 0.2, pitch: 2.0 }
+                );
+            } else {
+                game.audio.play('explosion', { volume: 0.2, pitch: 2.0 });
+            }
             game.drones.splice(i, 1);
         }
     }

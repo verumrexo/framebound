@@ -1,5 +1,6 @@
 import { Decoy } from '../../shared/entities/Decoy.js';
 import { PartsLibrary } from '../../shared/parts/Part.js';
+import { partSoundEventKey } from '../audio/SoundEventRegistry.js';
 
 export const ACTIVE_ABILITY_DEFINITIONS = Object.freeze({
     blink: Object.freeze({
@@ -104,14 +105,25 @@ export class AbilitySystem {
     update(dt) {
         if (!Number.isFinite(dt) || dt <= 0) return;
         for (const ship of this.controlledShips()) {
+            const wasStealthed = finiteNonNegative(ship.stealthTimer) > 0;
             tickShipState(ship, dt);
+            if (wasStealthed && ship.stealthTimer === 0) {
+                const stealth = this.getInstalledAbilities(ship).find(candidate => candidate.id === 'stealth');
+                if (stealth) this.playAbilitySound(stealth, 'reveal', 'hit');
+            }
             for (const id of ACTIVE_ABILITY_IDS) {
                 this.syncPartCooldowns(ship, id, ship.abilityCooldowns[id]);
             }
         }
 
         const decoys = this.game.decoys || [];
-        for (const decoy of decoys) decoy.update?.(dt);
+        for (const decoy of decoys) {
+            decoy.update?.(dt);
+            if (decoy.isDead && !decoy.destroySoundPlayed && decoy.sourcePartId) {
+                this.playPartSound(decoy.sourcePartId, 'destroyed', 'hit');
+                decoy.destroySoundPlayed = true;
+            }
+        }
         this.game.decoys = decoys.filter(decoy => !decoy.isDead);
     }
 
@@ -141,9 +153,11 @@ export class AbilitySystem {
         };
 
         if (abilityId === 'blink') {
+            this.playAbilitySound(ability, 'departure', 'dash');
             const destination = this.pointAlong(origin, aimAngle, ability.balance.range);
             const clamped = this.clampToRoom(destination.x, destination.y);
             this.setPosition(playerId, ship, clamped.x, clamped.y);
+            this.playAbilitySound(ability, 'arrival', 'nova');
             return { ...result, x: clamped.x, y: clamped.y };
         }
 
@@ -164,7 +178,9 @@ export class AbilitySystem {
                 }
             );
             this.game.decoys ||= [];
+            decoy.sourcePartId = ability.def.id;
             this.game.decoys.push(decoy);
+            this.playAbilitySound(ability, 'deploy', 'reload');
             return { ...result, x: clamped.x, y: clamped.y, decoyId: id };
         }
 
@@ -173,9 +189,11 @@ export class AbilitySystem {
                 Number.isFinite(ship.stealthTimer) ? ship.stealthTimer : 0,
                 ability.balance.duration
             );
+            this.playAbilitySound(ability, 'cloak', 'dash');
             return { ...result, duration: ability.balance.duration };
         }
 
+        this.playAbilitySound(ability, 'activate', 'reload');
         const radius = ability.balance.radius;
         const originPoint = this.positionFor(playerId, ship);
         const affected = [];
@@ -194,6 +212,7 @@ export class AbilitySystem {
             );
             affected.push(String(enemy.id || enemy.type || 'enemy'));
         }
+        this.playAbilitySound(ability, 'pulse', 'nova');
         return {
             ...result,
             radius,
@@ -258,6 +277,22 @@ export class AbilitySystem {
         for (const ability of this.getInstalledAbilities(ship)) {
             if (ability.id === abilityId) ability.part.abilityCooldown = value;
         }
+    }
+
+    playAbilitySound(ability, slot, fallback) {
+        return this.playPartSound(ability?.def?.id || ability?.part?.partId, slot, fallback);
+    }
+
+    playPartSound(partId, slot, fallback) {
+        if (!partId || !this.game.audio) return null;
+        if (this.game.audio.playEvent) {
+            return this.game.audio.playEvent(
+                partSoundEventKey(partId, slot),
+                fallback,
+                { volume: 0.55 }
+            );
+        }
+        return this.game.audio.play?.(fallback, { volume: 0.55 });
     }
 
     reset() {

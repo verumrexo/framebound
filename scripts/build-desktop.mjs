@@ -7,7 +7,7 @@ const flavor = flavorIndex >= 0
     ? process.argv[flavorIndex + 1]
     : 'release';
 
-if (!['release', 'dev'].includes(flavor)) {
+if (!['release', 'dev', 'part-lab'].includes(flavor)) {
     throw new Error(`unsupported desktop flavor: ${flavor}`);
 }
 
@@ -19,8 +19,8 @@ const tauriCli = path.resolve(
 );
 const args = [tauriCli, 'build'];
 
-if (flavor === 'dev') {
-    args.push('--config', path.resolve('src-tauri', 'tauri.dev.conf.json'));
+if (flavor !== 'release') {
+    args.push('--config', path.resolve('src-tauri', `tauri.${flavor}.conf.json`));
 }
 
 if (process.platform === 'darwin') {

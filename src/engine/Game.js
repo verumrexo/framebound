@@ -61,7 +61,8 @@ export class Game {
         partLabManifest = null,
         isDevelopment = false,
         partLabWindowClass = null,
-        signalForgeWindowClass = null
+        signalForgeWindowClass = null,
+        partLabStandalone = false
     } = {}) {
         // Graphics Settings
         this.graphics = {
@@ -196,7 +197,7 @@ export class Game {
         // Dev Tools
         this.devTools = new DevTools(this, { signalForgeWindowClass });
         this.partLabWindow = this.isDevelopment && partLabWindowClass
-            ? new partLabWindowClass(this)
+            ? new partLabWindowClass(this, { standalone: partLabStandalone })
             : null;
         this.gameSettings = new GameSettings(this);
         this.pauseOverlay = null;

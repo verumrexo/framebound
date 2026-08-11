@@ -46,7 +46,11 @@ test('active systems cycle in deterministic part order and ignore duplicates', (
 
 test('warp is host-derived, clamped, and cooldown-protected', () => {
     const playerShip = shipWith({ partId: 'warp_gate', x: 0, y: 0 });
-    const target = game({ playerShip });
+    const sounds = [];
+    const target = game({
+        playerShip,
+        audio: { playEvent: (key, fallback) => sounds.push([key, fallback]) }
+    });
     const system = new AbilitySystem(target);
 
     const used = system.activateForPlayer('host', playerShip, {
@@ -56,6 +60,10 @@ test('warp is host-derived, clamped, and cooldown-protected', () => {
     assert.equal(used.x, 360);
     assert.equal(used.y, 100);
     assert.equal(target.x, 360);
+    assert.deepEqual(sounds, [
+        ['part:warp_gate:departure', 'dash'],
+        ['part:warp_gate:arrival', 'nova']
+    ]);
     assert.equal(system.activateForPlayer('host', playerShip, {
         abilityId: 'blink',
         aimAngle: 0
@@ -74,7 +82,13 @@ test('decoy, stealth, and emp apply their authoritative effects', () => {
         { partId: 'stealth', x: 1, y: 0 },
         { partId: 'emp', x: 2, y: 0 }
     );
-    const target = game({ playerShip, enemies: [enemy], bosses: [boss] });
+    const sounds = [];
+    const target = game({
+        playerShip,
+        enemies: [enemy],
+        bosses: [boss],
+        audio: { playEvent: (key, fallback) => sounds.push([key, fallback]) }
+    });
     const system = new AbilitySystem(target);
 
     const decoy = system.activateForPlayer('host', playerShip, {
@@ -98,6 +112,17 @@ test('decoy, stealth, and emp apply their authoritative effects', () => {
     assert.deepEqual(emp.affected, ['e1', 'b1']);
     assert.equal(enemy.empTimer, 3);
     assert.equal(boss.empTimer, 1.25);
+
+    target.decoys[0].isDead = true;
+    system.update(4);
+    assert.deepEqual(sounds, [
+        ['part:decoy:deploy', 'reload'],
+        ['part:stealth:cloak', 'dash'],
+        ['part:emp:activate', 'reload'],
+        ['part:emp:pulse', 'nova'],
+        ['part:stealth:reveal', 'hit'],
+        ['part:decoy:destroyed', 'hit']
+    ]);
 });
 
 test('cooldowns and decoys round-trip through the state helpers', () => {

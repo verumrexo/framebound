@@ -32,17 +32,17 @@ export async function verifyDesktopArtifact({
         path.join(root, 'src-tauri', 'tauri.conf.json'),
         'utf8'
     ));
-    const tauri = flavor === 'dev'
+    const tauri = flavor !== 'release'
         ? {
             ...baseTauri,
             ...JSON.parse(await readFile(
-                path.join(root, 'src-tauri', 'tauri.dev.conf.json'),
+                path.join(root, 'src-tauri', `tauri.${flavor}.conf.json`),
                 'utf8'
             ))
         }
         : baseTauri;
     assert.ok(
-        ['release', 'dev'].includes(flavor),
+        ['release', 'dev', 'part-lab'].includes(flavor),
         `unsupported desktop flavor: ${flavor}`
     );
     const expected = {

@@ -4,34 +4,39 @@ import {
     normalizeProjectileLook,
     normalizeProjectileTrail
 } from '../../shared/combat/ProjectileVisuals.js';
-import { CORE_EFFECT_GRID } from '../../shared/parts/CoreEffect.js';
 
 const FORMAT = 'framebound-part-design';
-const VERSION = 1;
+const VERSION = 2;
+const LEGACY_VERSION = 1;
+const RESOLUTION = 16;
+const OVERLAP = 2;
 const MAX_NAME_LENGTH = 64;
 const MAX_NOTES_LENGTH = 2000;
-const DRONE_GRID = Object.freeze({ width: 8, height: 8 });
-const DRONE_BLUEPRINT_ID = /^[a-zA-Z0-9_-]{1,80}$/;
-const SUPPORTED_FOOTPRINTS = new Set(['1x1', '1x2', '2x2', '2x4']);
+const MAX_PALETTE_COLORS = 16;
+const BLUEPRINT_ID = /^[a-zA-Z0-9_-]{1,80}$/;
+const SUPPORTED_FOOTPRINTS = new Set(['1x1', '1x2', '2x1', '2x2', '2x4', '4x2']);
+const SUPPORTED_BASE_FOOTPRINTS = new Set(['1x1', '1x2', '2x2', '2x4']);
 const SUPPORTED_TYPES = new Set([
-    'hull',
-    'weapon',
-    'thruster',
-    'accelerant',
-    'rocket_bay',
-    'booster',
-    'drone',
-    'shield'
+    'hull', 'weapon', 'thruster', 'accelerant', 'rocket_bay', 'booster',
+    'drone', 'shield', 'utility', 'core'
+]);
+const DEFAULT_PALETTE = Object.freeze([
+    '#26d426', '#333333', '#f2f5ff', '#4a9eff',
+    '#ff9944', '#b56cff', '#00ffff', '#ff4f78'
 ]);
 
 export const PART_DESIGN_FORMAT = FORMAT;
 export const PART_DESIGN_VERSION = VERSION;
+export const PART_DESIGN_RESOLUTION = RESOLUTION;
+export const PART_DESIGN_OVERLAP = OVERLAP;
+export const PART_DESIGN_DEFAULT_PALETTE = DEFAULT_PALETTE;
 
-export function gridDimensions(width, height) {
-    assertFootprint(width, height);
+export function gridDimensions(width, height, resolution = RESOLUTION) {
+    assertFootprint(width, height, resolution === RESOLUTION ? SUPPORTED_FOOTPRINTS : SUPPORTED_BASE_FOOTPRINTS);
+    const overlap = resolution === RESOLUTION ? OVERLAP : 1;
     return {
-        width: width * 8 - (width - 1),
-        height: height * 8 - (height - 1)
+        width: width * resolution - (width - 1) * overlap,
+        height: height * resolution - (height - 1) * overlap
     };
 }
 
@@ -39,16 +44,25 @@ export function createBlankPartDesign({
     name = 'my part',
     type = 'hull',
     width = 1,
-    height = 1
+    height = 1,
+    turretWidth = width,
+    turretHeight = height,
+    palette = DEFAULT_PALETTE
 } = {}) {
+    assertFootprint(width, height, SUPPORTED_BASE_FOOTPRINTS);
     const grid = gridDimensions(width, height);
+    const turretGrid = gridDimensions(turretWidth, turretHeight);
     return {
         format: FORMAT,
         version: VERSION,
+        resolution: RESOLUTION,
         name,
         type,
         footprint: { width, height },
         grid,
+        turretFootprint: { width: turretWidth, height: turretHeight },
+        turretGrid,
+        palette: [...palette],
         layers: {
             base: new Array(grid.width * grid.height).fill(0),
             turret: null
@@ -57,8 +71,7 @@ export function createBlankPartDesign({
             base: null,
             turret: null
         },
-        barrel: null,
-        rotationOffset: 0,
+        muzzles: [],
         projectileLook: DEFAULT_PROJECTILE_LOOK,
         projectileTrail: DEFAULT_PROJECTILE_TRAIL,
         coreEffect: null,
@@ -69,16 +82,9 @@ export function createBlankPartDesign({
 }
 
 export function parsePartDesign(text) {
-    if (typeof text !== 'string' || !text.trim()) {
-        throw new Error('part design is empty');
-    }
-
+    if (typeof text !== 'string' || !text.trim()) throw new Error('part design is empty');
     let value;
-    try {
-        value = JSON.parse(text);
-    } catch {
-        throw new Error('part design must be valid json');
-    }
+    try { value = JSON.parse(text); } catch { throw new Error('part design must be valid json'); }
     return normalizePartDesign(value);
 }
 
@@ -87,202 +93,295 @@ export function serializePartDesign(value) {
 }
 
 export function normalizePartDesign(value) {
-    if (!isPlainObject(value)) {
-        throw new Error('part design must be an object');
-    }
-    if (value.format !== FORMAT || value.version !== VERSION) {
-        throw new Error('unsupported part design format');
-    }
+    if (!isPlainObject(value)) throw new Error('part design must be an object');
+    if (value.format !== FORMAT) throw new Error('unsupported part design format');
+    if (value.version === LEGACY_VERSION) return normalizeLegacyPartDesign(value);
+    if (value.version !== VERSION) throw new Error('unsupported part design format');
 
     const name = cleanText(value.name, MAX_NAME_LENGTH, 'part name');
     const type = cleanText(value.type, 32, 'part type');
-    if (!SUPPORTED_TYPES.has(type)) {
-        throw new Error(`unsupported part type: ${type}`);
-    }
+    if (!SUPPORTED_TYPES.has(type)) throw new Error(`unsupported part type: ${type}`);
+    if (value.resolution !== RESOLUTION) throw new Error(`part resolution must be ${RESOLUTION}`);
 
-    const footprint = value.footprint;
-    if (!isPlainObject(footprint)) {
-        throw new Error('part footprint is missing');
-    }
-    const width = footprint.width;
-    const height = footprint.height;
-    const grid = gridDimensions(width, height);
+    const footprint = normalizeFootprint(value.footprint, 'part footprint', SUPPORTED_BASE_FOOTPRINTS);
+    const grid = gridDimensions(footprint.width, footprint.height);
+    assertGrid(value.grid, grid, 'part grid');
+    const turretFootprint = normalizeFootprint(
+        value.turretFootprint || footprint,
+        'turret footprint',
+        SUPPORTED_FOOTPRINTS
+    );
+    const turretGrid = gridDimensions(turretFootprint.width, turretFootprint.height);
+    assertGrid(value.turretGrid || turretGrid, turretGrid, 'turret grid');
 
-    if (
-        !isPlainObject(value.grid) ||
-        value.grid.width !== grid.width ||
-        value.grid.height !== grid.height
-    ) {
-        throw new Error('part grid does not match its footprint');
-    }
-
-    if (!isPlainObject(value.layers)) {
-        throw new Error('part layers are missing');
-    }
-    const expectedLength = grid.width * grid.height;
-    const base = normalizePixels(value.layers.base, expectedLength, 'base');
+    const palette = normalizePalette(value.palette);
+    if (!isPlainObject(value.layers)) throw new Error('part layers are missing');
+    const base = normalizePixels(value.layers.base, grid.width * grid.height, palette.length, 'base');
     const turret = value.layers.turret === null || value.layers.turret === undefined
         ? null
-        : normalizePixels(value.layers.turret, expectedLength, 'turret');
-
-    if (turret && type !== 'weapon') {
-        throw new Error('turret art requires weapon type');
-    }
+        : normalizePixels(value.layers.turret, turretGrid.width * turretGrid.height, palette.length, 'turret');
+    if (turret && type !== 'weapon') throw new Error('turret art requires weapon type');
 
     const anchors = isPlainObject(value.anchors) ? value.anchors : {};
-    const baseAnchor = normalizePoint(
-        anchors.base,
-        grid.width,
-        grid.height,
-        'base anchor'
-    );
-    const turretAnchor = normalizePoint(
-        anchors.turret,
-        grid.width,
-        grid.height,
-        'turret anchor'
-    );
-    const barrel = normalizePoint(
-        value.barrel,
-        grid.width,
-        grid.height,
-        'barrel'
-    );
-
-    if ((turretAnchor || barrel) && !turret) {
-        throw new Error('turret anchor and barrel require turret art');
+    const baseAnchor = normalizePoint(anchors.base, grid, 'base mount');
+    const turretAnchor = normalizePoint(anchors.turret, turretGrid, 'turret pivot');
+    const muzzles = normalizePoints(value.muzzles || [], turretGrid, 'muzzle', 16);
+    if ((turretAnchor || muzzles.length) && !turret) {
+        throw new Error('turret pivot and muzzles require turret art');
     }
 
-    const rotationOffset = Number(value.rotationOffset ?? 0);
-    if (!Number.isFinite(rotationOffset)) {
-        throw new Error('rotation offset must be finite');
-    }
-
-    const projectileLook = normalizeProjectileLook(value.projectileLook);
-    const projectileTrail = normalizeProjectileTrail(value.projectileTrail);
     const coreEffect = Object.hasOwn(value, 'coreEffect')
-        ? normalizeCoreEffect(value.coreEffect)
+        ? normalizeRasterVisual(value.coreEffect, 'core effect', null)
         : undefined;
     const drone = normalizeDroneVisual(value.drone, type);
-
-    const stats = normalizeJsonObject(value.stats ?? {}, 'stats');
-    const notes = cleanOptionalText(value.notes, MAX_NOTES_LENGTH, 'notes');
 
     return {
         format: FORMAT,
         version: VERSION,
+        resolution: RESOLUTION,
         name,
         type,
-        footprint: { width, height },
+        footprint,
         grid,
+        turretFootprint,
+        turretGrid,
+        palette,
         layers: { base, turret },
-        anchors: {
-            base: baseAnchor,
-            turret: turretAnchor
-        },
-        barrel,
-        rotationOffset,
-        projectileLook,
-        projectileTrail,
+        anchors: { base: baseAnchor, turret: turretAnchor },
+        muzzles,
+        projectileLook: normalizeProjectileLook(value.projectileLook),
+        projectileTrail: normalizeProjectileTrail(value.projectileTrail),
         ...(coreEffect === undefined ? {} : { coreEffect }),
         drone,
-        stats,
-        notes
+        stats: normalizeJsonObject(value.stats ?? {}, 'stats'),
+        notes: cleanOptionalText(value.notes, MAX_NOTES_LENGTH, 'notes')
     };
 }
 
-export function normalizeCoreEffect(value) {
+export function upgradeLegacyPartDesign(value) {
+    const legacy = value?.version === LEGACY_VERSION
+        ? normalizeLegacyPartDesign(value)
+        : normalizeLegacyPartDesign(JSON.parse(serializePartDesign(value)));
+    const upgraded = createBlankPartDesign({
+        name: legacy.name,
+        type: legacy.type,
+        width: legacy.footprint.width,
+        height: legacy.footprint.height,
+        palette: ['#26d426', '#333333']
+    });
+    upgraded.layers.base = upscalePixels2x(legacy.layers.base, legacy.grid);
+    if (legacy.layers.turret) {
+        upgraded.layers.turret = upscalePixels2x(legacy.layers.turret, legacy.grid);
+        upgraded.anchors.turret = scalePoint(legacy.anchors.turret, 2);
+        const barrel = legacy.barrel;
+        if (barrel) upgraded.muzzles = [scalePoint(barrel, 2)];
+    }
+    upgraded.anchors.base = scalePoint(legacy.anchors.base, 2);
+    upgraded.projectileLook = legacy.projectileLook;
+    upgraded.projectileTrail = legacy.projectileTrail;
+    upgraded.stats = clone(legacy.stats);
+    upgraded.notes = legacy.notes;
+    if (legacy.coreEffect) {
+        upgraded.coreEffect = {
+            resolution: RESOLUTION,
+            grid: { width: RESOLUTION, height: RESOLUTION },
+            palette: [legacy.coreEffect.color],
+            layers: { base: upscalePixels2x(legacy.coreEffect.layers.base, { width: 8, height: 8 }) }
+        };
+    }
+    if (legacy.drone) {
+        upgraded.drone = {
+            blueprintId: legacy.drone.blueprintId,
+            resolution: RESOLUTION,
+            grid: { width: RESOLUTION, height: RESOLUTION },
+            palette: ['#00ffff', '#177777'],
+            layers: { base: upscalePixels2x(legacy.drone.layers.base, { width: 8, height: 8 }) },
+            projectileLook: legacy.drone.projectileLook,
+            projectileTrail: legacy.drone.projectileTrail
+        };
+    }
+    return normalizePartDesign(upgraded);
+}
+
+function normalizeLegacyPartDesign(value) {
+    const name = cleanText(value.name, MAX_NAME_LENGTH, 'part name');
+    const type = cleanText(value.type, 32, 'part type');
+    const allowedLegacyTypes = new Set([...SUPPORTED_TYPES].filter(entry => entry !== 'utility' && entry !== 'core'));
+    if (!allowedLegacyTypes.has(type)) throw new Error(`unsupported part type: ${type}`);
+    const footprint = normalizeFootprint(value.footprint, 'part footprint', SUPPORTED_BASE_FOOTPRINTS);
+    const grid = gridDimensions(footprint.width, footprint.height, 8);
+    assertGrid(value.grid, grid, 'part grid');
+    if (!isPlainObject(value.layers)) throw new Error('part layers are missing');
+    const base = normalizePixels(value.layers.base, grid.width * grid.height, 2, 'base');
+    const turret = value.layers.turret === null || value.layers.turret === undefined
+        ? null
+        : normalizePixels(value.layers.turret, grid.width * grid.height, 2, 'turret');
+    if (turret && type !== 'weapon') throw new Error('turret art requires weapon type');
+    const anchors = isPlainObject(value.anchors) ? value.anchors : {};
+    const baseAnchor = normalizePoint(anchors.base, grid, 'base anchor');
+    const turretAnchor = normalizePoint(anchors.turret, grid, 'turret anchor');
+    const barrel = normalizePoint(value.barrel, grid, 'barrel');
+    if ((turretAnchor || barrel) && !turret) throw new Error('turret anchor and barrel require turret art');
+    const rotationOffset = Number(value.rotationOffset ?? 0);
+    if (!Number.isFinite(rotationOffset)) throw new Error('rotation offset must be finite');
+    const coreEffect = Object.hasOwn(value, 'coreEffect') ? normalizeLegacyCoreEffect(value.coreEffect) : undefined;
+    return {
+        format: FORMAT,
+        version: LEGACY_VERSION,
+        name,
+        type,
+        footprint,
+        grid,
+        layers: { base, turret },
+        anchors: { base: baseAnchor, turret: turretAnchor },
+        barrel,
+        rotationOffset,
+        projectileLook: normalizeProjectileLook(value.projectileLook),
+        projectileTrail: normalizeProjectileTrail(value.projectileTrail),
+        ...(coreEffect === undefined ? {} : { coreEffect }),
+        drone: normalizeLegacyDrone(value.drone, type),
+        stats: normalizeJsonObject(value.stats ?? {}, 'stats'),
+        notes: cleanOptionalText(value.notes, MAX_NOTES_LENGTH, 'notes')
+    };
+}
+
+function normalizeLegacyCoreEffect(value) {
     if (value === null) return null;
     if (!isPlainObject(value)) throw new Error('core effect must be an object or null');
-    if (!isPlainObject(value.grid) ||
-        value.grid.width !== CORE_EFFECT_GRID.width ||
-        value.grid.height !== CORE_EFFECT_GRID.height) {
-        throw new Error('core effect grid must be 8x8');
-    }
+    const grid = { width: 8, height: 8 };
+    assertGrid(value.grid, grid, 'core effect grid');
     if (!isPlainObject(value.layers)) throw new Error('core effect layers are missing');
-    const base = normalizeBinaryPixels(value.layers.base, 64, 'core effect base');
-    if (typeof value.color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(value.color)) {
-        throw new Error('core effect color must be #RRGGBB');
-    }
-    return {
-        grid: { ...CORE_EFFECT_GRID },
-        layers: { base },
-        color: value.color.toLowerCase()
-    };
+    const color = normalizeColor(value.color, 'core effect color');
+    return { grid, layers: { base: normalizePixels(value.layers.base, 64, 1, 'core effect base') }, color };
 }
 
-export function normalizeDroneVisual(value, partType = 'drone') {
+function normalizeLegacyDrone(value, type) {
     if (value === null || value === undefined) return null;
-    if (partType !== 'drone') throw new Error('drone visual requires drone type');
-    if (!isPlainObject(value) || typeof value.blueprintId !== 'string' || !DRONE_BLUEPRINT_ID.test(value.blueprintId)) {
+    if (type !== 'drone') throw new Error('drone visual requires drone type');
+    if (!isPlainObject(value) || typeof value.blueprintId !== 'string' || !BLUEPRINT_ID.test(value.blueprintId)) {
         throw new Error('drone visual blueprint id is invalid');
     }
-    if (!isPlainObject(value.grid) || value.grid.width !== DRONE_GRID.width || value.grid.height !== DRONE_GRID.height) {
-        throw new Error('drone visual grid must be 8x8');
-    }
+    const grid = { width: 8, height: 8 };
+    assertGrid(value.grid, grid, 'drone visual grid');
     const layers = isPlainObject(value.layers) ? value.layers : {};
-    const pixels = normalizePixels(layers.base, DRONE_GRID.width * DRONE_GRID.height, 'drone base');
     return {
         blueprintId: value.blueprintId,
-        grid: { ...DRONE_GRID },
-        layers: { base: pixels },
+        grid,
+        layers: { base: normalizePixels(layers.base, 64, 2, 'drone base') },
         projectileLook: normalizeProjectileLook(value.projectileLook),
         projectileTrail: normalizeProjectileTrail(value.projectileTrail)
     };
 }
 
-function assertFootprint(width, height) {
-    if (
-        !Number.isInteger(width) ||
-        !Number.isInteger(height) ||
-        !SUPPORTED_FOOTPRINTS.has(`${width}x${height}`)
-    ) {
+function normalizeRasterVisual(value, label, requiredId) {
+    if (value === null) return null;
+    if (!isPlainObject(value)) throw new Error(`${label} must be an object or null`);
+    if (value.resolution !== RESOLUTION) throw new Error(`${label} resolution must be ${RESOLUTION}`);
+    const grid = { width: RESOLUTION, height: RESOLUTION };
+    assertGrid(value.grid, grid, `${label} grid`);
+    const palette = normalizePalette(value.palette);
+    if (!isPlainObject(value.layers)) throw new Error(`${label} layers are missing`);
+    const result = {
+        resolution: RESOLUTION,
+        grid,
+        palette,
+        layers: { base: normalizePixels(value.layers.base, RESOLUTION * RESOLUTION, palette.length, `${label} base`) }
+    };
+    if (requiredId) result.blueprintId = requiredId;
+    return result;
+}
+
+function normalizeDroneVisual(value, type) {
+    if (value === null || value === undefined) return null;
+    if (type !== 'drone') throw new Error('drone visual requires drone type');
+    if (!isPlainObject(value) || typeof value.blueprintId !== 'string' || !BLUEPRINT_ID.test(value.blueprintId)) {
+        throw new Error('drone visual blueprint id is invalid');
+    }
+    return {
+        ...normalizeRasterVisual(value, 'drone visual', value.blueprintId),
+        projectileLook: normalizeProjectileLook(value.projectileLook),
+        projectileTrail: normalizeProjectileTrail(value.projectileTrail)
+    };
+}
+
+function normalizeFootprint(value, label, allowed) {
+    if (!isPlainObject(value)) throw new Error(`${label} is missing`);
+    assertFootprint(value.width, value.height, allowed);
+    return { width: value.width, height: value.height };
+}
+
+function assertFootprint(width, height, allowed = SUPPORTED_FOOTPRINTS) {
+    if (!Number.isInteger(width) || !Number.isInteger(height) || !allowed.has(`${width}x${height}`)) {
         throw new Error(`unsupported part footprint: ${width}x${height}`);
     }
 }
 
-function normalizePixels(value, expectedLength, label) {
+function assertGrid(value, expected, label) {
+    if (!isPlainObject(value) || value.width !== expected.width || value.height !== expected.height) {
+        throw new Error(`${label} does not match its footprint`);
+    }
+}
+
+function normalizePalette(value) {
+    if (!Array.isArray(value) || value.length < 1 || value.length > MAX_PALETTE_COLORS) {
+        throw new Error(`palette must contain 1-${MAX_PALETTE_COLORS} colors`);
+    }
+    return value.map((color, index) => normalizeColor(color, `palette color ${index + 1}`));
+}
+
+function normalizeColor(value, label) {
+    if (typeof value !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(value)) {
+        throw new Error(`${label} must be #RRGGBB`);
+    }
+    return value.toLowerCase();
+}
+
+function normalizePixels(value, expectedLength, maxIndex, label) {
     if (!Array.isArray(value) || value.length !== expectedLength) {
         throw new Error(`${label} layer has the wrong pixel count`);
     }
     return value.map(pixel => {
-        if (!Number.isInteger(pixel) || pixel < 0 || pixel > 2) {
+        if (!Number.isInteger(pixel) || pixel < 0 || pixel > maxIndex) {
             throw new Error(`${label} layer contains an invalid pixel`);
         }
         return pixel;
     });
 }
 
-function normalizeBinaryPixels(value, expectedLength, label) {
-    if (!Array.isArray(value) || value.length !== expectedLength) {
-        throw new Error(`${label} layer has the wrong pixel count`);
-    }
-    return value.map(pixel => {
-        if (!Number.isInteger(pixel) || (pixel !== 0 && pixel !== 1)) {
-            throw new Error(`${label} layer contains an invalid pixel`);
-        }
-        return pixel;
-    });
+function normalizePoints(value, grid, label, max) {
+    if (!Array.isArray(value) || value.length > max) throw new Error(`${label}s must be a list of at most ${max}`);
+    return value.map((point, index) => normalizePoint(point, grid, `${label} ${index + 1}`));
 }
 
-function normalizePoint(value, maxX, maxY, label) {
+function normalizePoint(value, grid, label) {
     if (value === null || value === undefined) return null;
     if (!isPlainObject(value)) throw new Error(`${label} must be a point`);
     const x = Number(value.x);
     const y = Number(value.y);
-    if (
-        !Number.isFinite(x) ||
-        !Number.isFinite(y) ||
-        x < 0 ||
-        y < 0 ||
-        x > maxX ||
-        y > maxY ||
-        !Number.isInteger(x * 2) ||
-        !Number.isInteger(y * 2)
-    ) {
+    if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0 ||
+        x > grid.width || y > grid.height || !Number.isInteger(x * 2) || !Number.isInteger(y * 2)) {
         throw new Error(`${label} is outside the design grid`);
     }
     return { x, y };
+}
+
+function upscalePixels2x(pixels, grid) {
+    const width = grid.width * 2;
+    const height = grid.height * 2;
+    const result = new Array(width * height).fill(0);
+    for (let y = 0; y < grid.height; y++) for (let x = 0; x < grid.width; x++) {
+        const pixel = pixels[y * grid.width + x];
+        const target = (y * 2) * width + x * 2;
+        result[target] = pixel;
+        result[target + 1] = pixel;
+        result[target + width] = pixel;
+        result[target + width + 1] = pixel;
+    }
+    return result;
+}
+
+function scalePoint(point, factor) {
+    return point ? { x: point.x * factor, y: point.y * factor } : null;
 }
 
 function normalizeJsonObject(value, label) {
@@ -291,18 +390,12 @@ function normalizeJsonObject(value, label) {
 }
 
 function normalizeJsonValue(value, path) {
-    if (value === null || typeof value === 'boolean' || typeof value === 'string') {
-        return value;
-    }
+    if (value === null || typeof value === 'boolean' || typeof value === 'string') return value;
     if (typeof value === 'number') {
         if (!Number.isFinite(value)) throw new Error(`${path} must be finite`);
         return value;
     }
-    if (Array.isArray(value)) {
-        return value.map((entry, index) =>
-            normalizeJsonValue(entry, `${path}[${index}]`)
-        );
-    }
+    if (Array.isArray(value)) return value.map((entry, index) => normalizeJsonValue(entry, `${path}[${index}]`));
     if (isPlainObject(value)) {
         const result = {};
         for (const [key, entry] of Object.entries(value)) {
@@ -317,18 +410,18 @@ function normalizeJsonValue(value, path) {
 function cleanText(value, maxLength, label) {
     if (typeof value !== 'string') throw new Error(`${label} must be text`);
     const clean = value.trim();
-    if (!clean || clean.length > maxLength) {
-        throw new Error(`${label} must be 1-${maxLength} characters`);
-    }
+    if (!clean || clean.length > maxLength) throw new Error(`${label} must be 1-${maxLength} characters`);
     return clean;
 }
 
 function cleanOptionalText(value, maxLength, label) {
     if (value === undefined || value === null) return '';
-    if (typeof value !== 'string' || value.length > maxLength) {
-        throw new Error(`${label} must be at most ${maxLength} characters`);
-    }
+    if (typeof value !== 'string' || value.length > maxLength) throw new Error(`${label} must be at most ${maxLength} characters`);
     return value;
+}
+
+function clone(value) {
+    return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
 }
 
 function isPlainObject(value) {

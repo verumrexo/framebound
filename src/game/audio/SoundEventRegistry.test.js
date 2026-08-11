@@ -38,14 +38,18 @@ test('part capabilities expose every audible slot without changing fallbacks', (
         type: 'weapon',
         stats: { weaponGroup: 'rocket' }
     }), [
-        { id: 'fire', fallback: 'shoot_rocketle' },
-        { id: 'impact', fallback: 'hit' },
-        { id: 'detonate', fallback: 'explosion' }
+        { id: 'launch', label: 'rocket launch', fallback: 'shoot_rocketle' },
+        { id: 'explosion', label: 'explosion', fallback: 'explosion' }
     ]);
     assert.deepEqual(getPartSoundSlots({
         id: 'hive',
         type: 'drone',
         stats: {}
-    }).map(slot => slot.id), ['deploy', 'attack', 'impact']);
+    }).map(slot => slot.id), ['deploy', 'shoot', 'destroyed']);
+    assert.deepEqual(getPartSoundSlots({
+        id: 'warp_gate',
+        type: 'utility',
+        stats: { activeAbility: 'blink' }
+    }).map(slot => slot.id), ['departure', 'arrival']);
     assert.deepEqual(getPartSoundSlots({ id: 'hull', type: 'hull' }), []);
 });

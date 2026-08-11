@@ -77,12 +77,14 @@ export class PartLabWindow {
         documentRef = globalThis.document,
         partsLibrary = PartsLibrary,
         store = null,
-        bridge = new PartLabNativeBridge()
+        bridge = new PartLabNativeBridge(),
+        standalone = false
     } = {}) {
         this.game = game;
         this.document = documentRef;
         this.partsLibrary = partsLibrary;
         this.bridge = bridge;
+        this.standalone = standalone;
         this.store = store || new PartLabDraftStore({ partsLibrary });
         this.active = false;
         this.wasPaused = null;
@@ -178,6 +180,7 @@ export class PartLabWindow {
         this.count = this.overlay.querySelector('.part-lab-count');
         this.status = this.overlay.querySelector('.part-lab-status');
         this.overlay.querySelector('.part-lab-close').onclick = () => this.close();
+        if (this.standalone) this.overlay.querySelector('.part-lab-close').style.display = 'none';
         this.search.oninput = () => this.renderCatalog();
         this.type.onchange = () => this.renderCatalog();
         this.overlay.querySelector('[data-action="untested"]').onclick = () => this.openSimulation(this.nextMatching(id => isPartLabReviewUntested(this.store.get(id))));
@@ -223,6 +226,7 @@ export class PartLabWindow {
             this.simulation.stop();
             return;
         }
+        if (this.standalone) return;
         this.closing = true;
         try {
             if (this.game?.designer?.active) this.game.designer.close();

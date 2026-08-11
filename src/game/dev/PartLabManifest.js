@@ -50,13 +50,15 @@ function normalizeVisual(entry) {
     if (entry.design?.partId && entry.design.partId !== partId) {
         throw new Error('visual override id does not match its design');
     }
-    const rawAnchors = isRecord(entry.design?.rawAnchors)
+    const rawAnchors = design.version === 1 && isRecord(entry.design?.rawAnchors)
         ? {
             base: normalizePoint(entry.design.rawAnchors.base, design.grid, 'raw base anchor'),
             turret: normalizePoint(entry.design.rawAnchors.turret, design.grid, 'raw turret anchor')
         }
         : null;
-    const rawBarrel = normalizePoint(entry.design?.rawBarrel, design.grid, 'raw barrel');
+    const rawBarrel = design.version === 1
+        ? normalizePoint(entry.design?.rawBarrel, design.grid, 'raw barrel')
+        : null;
     return {
         partId,
         design: {
@@ -84,7 +86,7 @@ function normalizeAssignment(value) {
 function normalizeSound(entry) {
     if (!isRecord(entry)) throw new Error('sound override must be an object');
     const partId = assertId(entry.partId);
-    if (!Array.isArray(entry.slots) || entry.slots.length > 2) throw new Error('part sound override needs at most two slots');
+    if (!Array.isArray(entry.slots) || entry.slots.length > 16) throw new Error('part sound override has too many slots');
     const ids = new Set();
     const slots = entry.slots.map(slot => {
         if (!isRecord(slot) || typeof slot.id !== 'string' || !/^[a-z0-9_-]{1,32}$/.test(slot.id)) throw new Error('invalid part sound slot');
@@ -173,9 +175,14 @@ export function buildPartLabManifest(state, now = new Date().toISOString()) {
     });
 }
 
-function makeSprite(existing, pixels, grid, anchor) {
-    const scale = Number.isFinite(existing?.scale) && existing.scale > 0 ? existing.scale : 4;
-    const colorMap = existing?.colorMap || { 1: '#26d426', 2: '#333' };
+function paletteColorMap(palette) {
+    return Object.fromEntries(palette.map((color, index) => [index + 1, color]));
+}
+
+function makeSprite(existing, pixels, grid, anchor, {
+    scale = Number.isFinite(existing?.scale) && existing.scale > 0 ? existing.scale : 4,
+    colorMap = existing?.colorMap || { 1: '#26d426', 2: '#333' }
+} = {}) {
     return new Sprite(
         [...pixels],
         grid.width,
@@ -187,8 +194,76 @@ function makeSprite(existing, pixels, grid, anchor) {
     );
 }
 
+function applyV2VisualDesignOverride(definition, design) {
+    const expectedWidth = definition.width * 16 - (definition.width - 1) * 2;
+    const expectedHeight = definition.height * 16 - (definition.height - 1) * 2;
+    if (design.grid.width !== expectedWidth || design.grid.height !== expectedHeight) {
+        throw new Error(`visual override footprint does not match ${definition.id}`);
+    }
+    const scale = 2;
+    const colorMap = paletteColorMap(design.palette);
+    const base = makeSprite(
+        definition.type === 'weapon' ? (definition.baseSprite || definition.sprite) : definition.sprite,
+        design.layers.base,
+        design.grid,
+        null,
+        { scale, colorMap }
+    );
+    if (definition.type === 'weapon' && design.layers.turret) {
+        const pivot = design.anchors?.turret || {
+            x: design.turretGrid.width / 2,
+            y: design.turretGrid.height / 2
+        };
+        definition.baseSprite = base;
+        definition.sprite = makeSprite(
+            definition.sprite,
+            design.layers.turret,
+            design.turretGrid,
+            pivot,
+            { scale, colorMap }
+        );
+        definition.visualGeometry = {
+            version: 2,
+            scale,
+            baseGrid: { ...design.grid },
+            turretGrid: { ...design.turretGrid },
+            baseMount: design.anchors?.base
+                ? { ...design.anchors.base }
+                : { x: design.grid.width / 2, y: design.grid.height / 2 },
+            turretPivot: { ...pivot },
+            muzzles: design.muzzles.map(point => ({ ...point }))
+        };
+        definition.rotationOffset = 0;
+        definition.turretDrawOffset = 0;
+    } else {
+        definition.sprite = base;
+        definition.baseSprite = null;
+        definition.drawTurretInInventory = false;
+        delete definition.visualGeometry;
+    }
+    definition.projectileLook = normalizeProjectileLook(design.projectileLook || DEFAULT_PROJECTILE_LOOK);
+    definition.projectileTrail = normalizeProjectileTrail(design.projectileTrail || DEFAULT_PROJECTILE_TRAIL);
+    if (Object.hasOwn(design, 'coreEffect')) {
+        definition.coreEffectSprite = design.coreEffect
+            ? makeSprite(
+                null,
+                design.coreEffect.layers.base,
+                design.coreEffect.grid,
+                null,
+                {
+                    scale: 2,
+                    colorMap: paletteColorMap(design.coreEffect.palette)
+                }
+            )
+            : null;
+    }
+    if (design.drone) registerDroneVisualOverride(design.drone);
+    return true;
+}
+
 export function applyVisualDesignOverride(definition, design) {
     if (!definition || !design) return false;
+    if (design.version === 2) return applyV2VisualDesignOverride(definition, design);
     if (definition.width * 8 - (definition.width - 1) !== design.grid.width || definition.height * 8 - (definition.height - 1) !== design.grid.height) {
         throw new Error(`visual override footprint does not match ${definition.id}`);
     }

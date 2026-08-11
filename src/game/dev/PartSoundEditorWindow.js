@@ -19,7 +19,7 @@ const CONTROL_KEYS = new Set([
     'normalization', 'amplification'
 ]);
 
-export const PART_SOUND_EDITOR_INTRO = 'focused signal forge for this part. the two semantic slots stay staged until save or save + next; save all promotes source changes.';
+export const PART_SOUND_EDITOR_INTRO = 'focused signal forge for this part. only sounds this part actually uses are shown; save all promotes source changes.';
 
 function cloneDraft(draft) {
     return {
@@ -121,10 +121,12 @@ export class PartSoundEditorWindow {
 
         if (!this.overlay) this.build();
         this.overlay.classList.add('is-open');
+        this.overlay.classList.toggle('has-no-slots', this.draft.slots.length === 0);
         this.overlay.setAttribute('aria-label', `${part.name || part.id} focused signal forge`);
         this.overlay.addEventListener('keydown', this.handleKeyDown);
         this.render();
-        this.prepareComposer();
+        if (this.activeSlotId) this.prepareComposer();
+        else this.setStatus('this part has no custom sound hooks. there is nothing fake to assign.');
         this.overlay.focus();
         return this;
     }
@@ -159,7 +161,7 @@ export class PartSoundEditorWindow {
         overlay.innerHTML = `
             <section class="part-sound-dialog" role="dialog" aria-modal="true">
                 <header class="part-sound-header">
-                    <div class="part-sound-title"><strong></strong><small>focused signal forge // two staged slots</small></div>
+                    <div class="part-sound-title"><strong></strong><small></small></div>
                     <button class="part-sound-close" type="button" aria-label="close">×</button>
                 </header>
                 <div class="part-sound-body">
@@ -174,10 +176,10 @@ export class PartSoundEditorWindow {
                             <canvas class="part-sound-wave" width="640" height="100"></canvas>
                             <div class="part-sound-meter"></div>
                         </section>
-                        <section class="part-sound-panel part-sound-parameters">
-                            <h3>sound controls</h3>
+                        <details class="part-sound-panel part-sound-parameters">
+                            <summary>advanced sound shaping</summary>
                             <div class="part-sound-params"></div>
-                        </section>
+                        </details>
                         <section class="part-sound-panel part-sound-saved">
                             <h3>saved sounds</h3>
                             <div class="part-sound-library"></div>
@@ -198,6 +200,7 @@ export class PartSoundEditorWindow {
         `;
 
         this.title = overlay.querySelector('.part-sound-title strong');
+        this.subtitle = overlay.querySelector('.part-sound-title small');
         this.slotsElement = overlay.querySelector('.part-sound-slots');
         this.fields = overlay.querySelector('.part-sound-fields');
         this.actions = overlay.querySelector('.part-sound-actions');
@@ -271,6 +274,8 @@ export class PartSoundEditorWindow {
     render() {
         if (!this.draft || !this.overlay) return;
         this.title.textContent = `${this.part.name || this.part.id} // ${this.part.id}`;
+        const count = this.draft.slots.length;
+        this.subtitle.textContent = `focused signal forge // ${count} sound slot${count === 1 ? '' : 's'}`;
         this.renderSlotTabs();
         this.renderAssignment();
         this.renderSavedSounds();
@@ -297,7 +302,14 @@ export class PartSoundEditorWindow {
 
     renderAssignment() {
         const slot = this.draft.slots.find(entry => entry.id === this.activeSlotId) || this.draft.slots[0];
-        if (!slot) return;
+        if (!slot) {
+            this.assignmentBody.replaceChildren();
+            const empty = this.document.createElement('div');
+            empty.className = 'part-sound-empty';
+            empty.textContent = 'this part does not make a part-specific sound in the game.';
+            this.assignmentBody.appendChild(empty);
+            return;
+        }
         this.activeSlotId = slot.id;
         const definition = getPartLabSoundSlots(this.part).find(entry => entry.id === slot.id) || slot;
         const assignment = getAssignmentForSlot(this.draft, slot.id);
@@ -583,8 +595,9 @@ export class PartSoundEditorWindow {
     }
 
     updateButtons() {
+        const hasSlots = Boolean(this.draft?.slots?.length);
         for (const element of [this.cancelButton, this.saveButton, this.saveNextButton]) {
-            if (element) element.disabled = this.busy;
+            if (element) element.disabled = this.busy || (element !== this.cancelButton && !hasSlots);
         }
     }
 

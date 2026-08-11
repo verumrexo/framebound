@@ -23,7 +23,7 @@ test('untouched part-lab entries count as untested', () => {
 });
 
 test('sound editor explains immediate staging versus source promotion', () => {
-    assert.match(PART_SOUND_EDITOR_INTRO, /two semantic slots stay staged/);
+    assert.match(PART_SOUND_EDITOR_INTRO, /only sounds this part actually uses are shown/);
     assert.match(PART_SOUND_EDITOR_INTRO, /save all promotes source changes/);
 });
 

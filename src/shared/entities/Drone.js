@@ -106,6 +106,9 @@ export class Drone {
             4,
             palette
         );
+        this.spriteRotationOffset = Number.isFinite(blueprint.orientationOffset)
+            ? blueprint.orientationOffset
+            : Math.PI / 2;
     }
 
     takeDamage(amount) {
@@ -435,7 +438,7 @@ export class Drone {
             game.audio.playEvent(
                 partSoundEventKey(
                     this.sourcePartId,
-                    'attack'
+                    'shoot'
                 ),
                 'shoot_dart',
                 { volume: 0.3, pitch: 1.5 }

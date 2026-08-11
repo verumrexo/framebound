@@ -82,30 +82,52 @@ export function getPartFireDefault(partId) {
 export function getPartSoundSlots(part) {
     if (!part?.id || !part?.type) return [];
     if (part.type === 'weapon') {
-        const slots = [
-            { id: 'fire', fallback: getPartFireDefault(part.id) },
-            { id: 'impact', fallback: 'hit' }
+        const stats = part.stats || {};
+        const projectile = String(stats.projectileType || '').toLowerCase();
+        if (stats.chargeTime) return [
+            { id: 'charge', label: 'charge', fallback: 'rail_charge' },
+            { id: 'release', label: 'release', fallback: 'rail' }
         ];
-        if (part.stats?.chargeTime) {
-            slots.push(
-                { id: 'charge', fallback: 'rail_charge' },
-                { id: 'release', fallback: 'rail' }
-            );
+        if (projectile === 'beam_sword' || projectile === 'saber') {
+            return [{ id: 'swing', label: 'swing', fallback: 'rail' }];
         }
-        if (part.stats?.weaponGroup === 'rocket') {
-            slots.push({ id: 'detonate', fallback: 'explosion' });
-        }
-        return slots;
+        if (stats.armingTime !== undefined || projectile.includes('mine')) return [
+            { id: 'deploy', label: 'mine deploy', fallback: getPartFireDefault(part.id) },
+            { id: 'arm', label: 'mine armed', fallback: 'reload' },
+            { id: 'explosion', label: 'explosion', fallback: 'explosion' }
+        ];
+        if (stats.weaponGroup === 'rocket' || projectile.includes('rocket') || projectile.includes('grenade')) return [
+            { id: 'launch', label: 'rocket launch', fallback: getPartFireDefault(part.id) },
+            { id: 'explosion', label: 'explosion', fallback: 'explosion' }
+        ];
+        return [{ id: 'fire', label: 'fire', fallback: getPartFireDefault(part.id) }];
     }
     if (part.type === 'drone') {
         return [
-            { id: 'deploy', fallback: 'reload' },
-            { id: 'attack', fallback: 'shoot_dart' },
-            { id: 'impact', fallback: 'hit' }
+            { id: 'deploy', label: 'drone deploy', fallback: 'reload' },
+            { id: 'shoot', label: 'drone shoot', fallback: 'shoot_dart' },
+            { id: 'destroyed', label: 'drone destroyed', fallback: 'explosion' }
         ];
     }
-    if (part.type === 'shield') return [{ id: 'hit', fallback: 'shield_hit' }];
-    if (part.type === 'booster') return [{ id: 'dash', fallback: 'dash' }];
+    if (part.type === 'shield') return [{ id: 'hit', label: 'shield hit', fallback: 'shield_hit' }];
+    if (part.type === 'booster') return [{ id: 'dash', label: 'dash', fallback: 'dash' }];
+    const ability = String(part.stats?.activeAbility || '').toLowerCase();
+    if (ability === 'blink') return [
+        { id: 'departure', label: 'departure', fallback: 'dash' },
+        { id: 'arrival', label: 'arrival', fallback: 'nova' }
+    ];
+    if (ability === 'emp') return [
+        { id: 'activate', label: 'activate', fallback: 'reload' },
+        { id: 'pulse', label: 'pulse', fallback: 'nova' }
+    ];
+    if (ability === 'decoy') return [
+        { id: 'deploy', label: 'decoy deploy', fallback: 'reload' },
+        { id: 'destroyed', label: 'decoy destroyed', fallback: 'hit' }
+    ];
+    if (ability === 'stealth') return [
+        { id: 'cloak', label: 'cloak', fallback: 'dash' },
+        { id: 'reveal', label: 'reveal', fallback: 'hit' }
+    ];
     return [];
 }
 

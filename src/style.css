@@ -1871,12 +1871,12 @@ select {
     .part-sound-status { min-width: 0; }
 }
 
-/* focused part forge: the two semantic slots stay visible while synthesis stays local */
+/* focused part forge: capability slots stay visible while advanced shaping stays tucked away */
 .part-sound-dialog {
-    width: min(1120px, 100%);
+    width: min(880px, 100%);
     max-height: min(860px, 100%);
 }
-.part-sound-slots { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.part-sound-slots { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 .part-sound-slots button,
 #part-sound-editor .part-sound-button {
     border: 1px solid var(--ui-line);
@@ -1901,6 +1901,13 @@ select {
     background: var(--ui-panel-soft);
 }
 .part-sound-panel h3 { margin: 0 0 9px; color: var(--ui-bright); font: 12px var(--ui-display); text-transform: lowercase; }
+.part-sound-parameters { grid-column: 1 / -1; }
+.part-sound-parameters summary { cursor: pointer; color: var(--ui-muted); font: 10px var(--ui-display); text-transform: lowercase; }
+.part-sound-parameters[open] summary { margin-bottom: 10px; color: var(--ui-cyan-bright); }
+#part-sound-editor.has-no-slots .part-sound-composer,
+#part-sound-editor.has-no-slots .part-sound-parameters,
+#part-sound-editor.has-no-slots .part-sound-saved { display: none; }
+#part-sound-editor.has-no-slots .part-sound-assignment { grid-column: 1 / -1; }
 .part-sound-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .part-sound-field { display: grid; gap: 4px; color: var(--ui-muted); font-size: 9px; }
 .part-sound-field input,
