@@ -54,7 +54,24 @@ function createArsenalPartDefinition(spec) {
     );
     definition.baseSprite = sprite;
     if (spec.type === PartType.WEAPON) definition.drawTurretInInventory = true;
+    if (spec.rarity) definition.rarity = spec.rarity;
+    if (spec.coreEffectColor) definition.coreEffectSprite = createCoreEffectSprite(spec.coreEffectColor);
     return definition;
+}
+
+const CORE_EFFECT_PIXELS = [
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0,
+    0, 0, 0, 1, 1, 0, 0, 0,
+    0, 0, 1, 0, 0, 1, 0, 0,
+    0, 0, 1, 1, 0, 1, 0, 0,
+    0, 0, 1, 0, 0, 1, 0, 0,
+    0, 0, 0, 1, 1, 0, 0, 0,
+    0, 0, 0, 0, 0, 0, 0, 0
+];
+
+function createCoreEffectSprite(color) {
+    return new Sprite(CORE_EFFECT_PIXELS, 8, 8, 4, { 1: color });
 }
 
 /**
@@ -71,7 +88,7 @@ export const PartsLibrary = {
     // --- Core Parts ---
     'core': (() => {
         const d = new PartDef('core', 'Core', PartType.CORE, Assets.PlayerBase, { hp: 50, mass: 5 });
-        d.coreEffectSprite = new Sprite([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 8, 8, 4, { 1: '#55ccff' });
+        d.coreEffectSprite = createCoreEffectSprite('#55ccff');
         return d;
     })(),
     'hull': new PartDef('hull', 'Hull Block', PartType.HULL, Assets.PlayerBase, { hp: 20, mass: 2 }),

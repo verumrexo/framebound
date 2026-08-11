@@ -1,3 +1,5 @@
+import { easeSweep } from '../../shared/combat/SweepMath.js';
+
 const CHARGE_DURATION = 5;
 const SWEEP_DURATION = 1;
 const START_ANGLE = -Math.PI / 2;
@@ -239,12 +241,7 @@ export class SalvageSweepSystem {
     }
 }
 
-export function easeSweep(value) {
-    const t = Math.max(0, Math.min(1, value));
-    return t < 0.5
-        ? 16 * t ** 5
-        : 1 - ((-2 * t + 2) ** 5) / 2;
-}
+export { easeSweep };
 
 function normalizeTurn(angle) {
     return ((angle % FULL_TURN) + FULL_TURN) % FULL_TURN;

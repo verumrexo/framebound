@@ -79,3 +79,21 @@ test('part design document persists renderer-only projectile presets and rejects
         /invalid projectile look preset/
     );
 });
+
+test('drone part designs round-trip bounded spawned visual data', () => {
+    const design = createBlankPartDesign({ name: 'striker hive', type: 'drone', width: 1, height: 1 });
+    design.stats = { droneType: 'striker', droneCapacity: 2 };
+    design.drone = {
+        blueprintId: 'striker',
+        grid: { width: 8, height: 8 },
+        layers: { base: new Array(64).fill(0).map((_, index) => index === 3 ? 2 : 0) },
+        projectileLook: 'needle',
+        projectileTrail: 'ion'
+    };
+
+    const restored = parsePartDesign(serializePartDesign(design));
+
+    assert.deepEqual(restored.drone, design.drone);
+    design.drone.layers.base[0] = 9;
+    assert.throws(() => serializePartDesign(design), /drone base layer contains an invalid pixel/);
+});

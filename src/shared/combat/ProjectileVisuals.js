@@ -15,11 +15,16 @@ export const PROJECTILE_TRAIL_PRESETS = Object.freeze([
     Object.freeze({ id: 'ion', label: 'ion' })
 ]);
 
+export const PROJECTILE_BEAM_TYPES = Object.freeze([
+    'laser', 'small_laser', 'railgun', 'saber', 'beam_freeze', 'beam_sword', 'arc_welder'
+]);
+
 export const DEFAULT_PROJECTILE_LOOK = 'default';
 export const DEFAULT_PROJECTILE_TRAIL = 'default';
 
 const PROJECTILE_LOOK_IDS = new Set(PROJECTILE_LOOK_PRESETS.map(preset => preset.id));
 const PROJECTILE_TRAIL_IDS = new Set(PROJECTILE_TRAIL_PRESETS.map(preset => preset.id));
+const PROJECTILE_BEAM_ID_SET = new Set(PROJECTILE_BEAM_TYPES);
 
 export function isProjectileLook(value) {
     return PROJECTILE_LOOK_IDS.has(value);
@@ -27,6 +32,10 @@ export function isProjectileLook(value) {
 
 export function isProjectileTrail(value) {
     return PROJECTILE_TRAIL_IDS.has(value);
+}
+
+export function supportsProjectileCosmetics(type) {
+    return !PROJECTILE_BEAM_ID_SET.has(type);
 }
 
 export function normalizeProjectileLook(value) {

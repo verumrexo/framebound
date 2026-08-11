@@ -1,5 +1,9 @@
 import { Sprite } from '../../engine/Sprite.js';
 import { parsePartDesign } from './PartDesignDocument.js';
+import {
+    clearDroneVisualOverrides,
+    registerDroneVisualOverride
+} from '../../shared/combat/DroneBlueprints.js';
 import { getSoundEvent } from '../audio/SoundEventRegistry.js';
 import {
     DEFAULT_PROJECTILE_LOOK,
@@ -222,11 +226,13 @@ export function applyVisualDesignOverride(definition, design) {
     definition.projectileLook = normalizeProjectileLook(design.projectileLook || DEFAULT_PROJECTILE_LOOK);
     definition.projectileTrail = normalizeProjectileTrail(design.projectileTrail || DEFAULT_PROJECTILE_TRAIL);
     if (Number.isFinite(design.rotationOffset)) definition.rotationOffset = design.rotationOffset;
+    if (design.drone) registerDroneVisualOverride(design.drone);
     return true;
 }
 
 export function applyPartLabManifest(manifest, partsLibrary) {
     const normalized = normalizePartLabManifest(manifest);
+    clearDroneVisualOverrides();
     for (const entry of normalized.visuals) {
         const definition = partsLibrary?.[entry.partId];
         if (definition) applyVisualDesignOverride(definition, entry.design);

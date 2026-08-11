@@ -20,6 +20,8 @@ const EXPLOSIVE_TYPES = new Set([
     'torpedo'
 ]);
 
+import { BEAM_SWORD_SWEEP_DURATION, beamSwordSweepAngle } from '../combat/BeamSword.js';
+
 export class Projectile {
     constructor(x, y, angle, type = 'bullet', speed = 600, owner = 'player', damage = 10, lifetime = null, randomGen = null) {
         this.x = x;
@@ -62,7 +64,7 @@ export class Projectile {
                 case 'railgun': this.life = 2.4; break;
                 case 'saber': this.life = 1.6; break;
                 case 'beam_freeze': this.life = 0.05; break;
-                case 'beam_sword': this.life = 0.08; break;
+                case 'beam_sword': this.life = BEAM_SWORD_SWEEP_DURATION; break;
                 case 'arc_welder': this.life = 0.06; break;
                 case 'rocket':
                 case 'rocket_le':
@@ -97,6 +99,12 @@ export class Projectile {
                 : (this.type === 'beam_sword' ? 120 :
                     (this.type === 'arc_welder' ? 140 : 3000));
             this.targetHits = new Map(); // Track target -> lastHitTime for multi-hit beams
+        }
+
+        if (this.type === 'beam_sword') {
+            this.baseAngle = angle;
+            this.sweepElapsed = 0;
+            this.angle = beamSwordSweepAngle(this.baseAngle, 0);
         }
 
         if (this.type === 'proximity_mine') {
@@ -201,6 +209,10 @@ export class Projectile {
             this.y += this.vy * dt;
         }
         this.life -= dt;
+        if (this.type === 'beam_sword') {
+            this.sweepElapsed = Math.max(0, this.maxLife - this.life);
+            this.angle = beamSwordSweepAngle(this.baseAngle, this.sweepElapsed);
+        }
 
         // Spin for cluster grenades
         if (this.type === 'cluster_grenade') {

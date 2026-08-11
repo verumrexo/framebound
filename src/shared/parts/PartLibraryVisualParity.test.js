@@ -42,6 +42,15 @@ test('existing part art and approved family metadata stay exact', () => {
     );
 });
 
+test('auto aim is explicitly legendary and reuses the core effect geometry in red', () => {
+    const core = PartsLibrary.core.coreEffectSprite;
+    const autoAim = PartsLibrary.auto_aim;
+
+    assert.equal(autoAim.rarity, 'legendary');
+    assert.deepEqual(autoAim.coreEffectSprite.data, core.data);
+    assert.deepEqual(autoAim.coreEffectSprite.colorMap, { 1: '#ff4444' });
+});
+
 function snapshotSprite(sprite) {
     if (!sprite) return null;
     return {

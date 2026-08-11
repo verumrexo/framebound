@@ -1,8 +1,36 @@
 import '../../tests/setup.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { clearDroneVisualOverrides, registerDroneVisualOverride } from '../combat/DroneBlueprints.js';
+import { Drone } from './Drone.js';
 
-const { Drone } = await import('./Drone.js');
+test('drone runtime consumes visual overrides for its sprite and projectiles', () => {
+    registerDroneVisualOverride({
+        blueprintId: 'striker',
+        layers: { base: new Array(64).fill(0).map((_, index) => index === 0 ? 2 : 0) },
+        projectileLook: 'needle',
+        projectileTrail: 'ion'
+    });
+    const drone = new Drone(0, 0, { partId: 'hive', x: 0, y: 0 }, 'player', () => 0.5, {
+        type: 'striker',
+        damage: 4,
+        attackCooldown: 1
+    });
+    const game = {
+        projectiles: [],
+        audio: { play: () => {} },
+        enemies: [],
+        bosses: [],
+        drones: [],
+        playerShip: null
+    };
+    drone.shoot(game, 0);
+
+    assert.equal(drone.sprite.data[0], 2);
+    assert.equal(game.projectiles[0].projectileLook, 'needle');
+    assert.equal(game.projectiles[0].projectileTrail, 'ion');
+    clearDroneVisualOverrides();
+});
 
 function createGame(players) {
     return {

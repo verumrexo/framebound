@@ -79,10 +79,22 @@ test('new beam types keep their restrained ranges and lifetimes', () => {
 
     assert.equal(sword.isBeam, true);
     assert.equal(sword.beamLength, 120);
-    assert.equal(sword.life, 0.08);
+    assert.equal(sword.life, 0.22);
     assert.equal(welder.isBeam, true);
     assert.equal(welder.beamLength, 140);
     assert.equal(welder.life, 0.06);
+});
+
+test('beam sword sweeps from minus forty-five to plus forty-five degrees', () => {
+    const sword = new Projectile(0, 0, 0, 'beam_sword', 0, 'player', 28);
+    const start = sword.angle;
+    sword.update(0.11);
+    const middle = sword.angle;
+    sword.update(0.11);
+
+    assert.ok(Math.abs(start + Math.PI / 4) < 1e-9);
+    assert.ok(Math.abs(middle) < 1e-9);
+    assert.ok(Math.abs(sword.angle - Math.PI / 4) < 1e-9);
 });
 
 test('proximity mines arm on a simulation timer and expire without a stray explosion', () => {

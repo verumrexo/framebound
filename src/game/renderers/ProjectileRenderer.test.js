@@ -9,6 +9,9 @@ function createRenderer() {
         save: () => calls.push(['save']),
         translate: (x, y) => calls.push(['translate', x, y]),
         rotate: angle => calls.push(['rotate', angle]),
+        beginPath: () => calls.push(['beginPath']),
+        arc: (...args) => calls.push(['arc', ...args]),
+        stroke: () => calls.push(['stroke']),
         restore: () => calls.push(['restore'])
     };
 
@@ -226,4 +229,22 @@ test('custom projectile looks and trails render without changing beam visuals', 
         ['drawRect', -15, -1, 30, 2, '#d8ffff'],
         ['drawRect', 10, -2, 6, 4, '#ffffff']
     ]);
+});
+
+test('beam sword uses the eased swept angle and production magenta blade treatment', () => {
+    const { renderer, calls } = createRenderer();
+    drawProjectile(renderer, createProjectile({
+        type: 'beam_sword',
+        baseAngle: 0,
+        maxLife: 0.22,
+        life: 0.11,
+        beamLength: 120,
+        radius: 3
+    }));
+
+    assert.deepEqual(drawRects(calls).slice(0, 2), [
+        ['drawRect', 0, -4, 120, 8, '#ff4fc4'],
+        ['drawRect', 0, -1, 120, 2, '#fff7ff']
+    ]);
+    assert.ok(calls.some(([name]) => name === 'arc'));
 });

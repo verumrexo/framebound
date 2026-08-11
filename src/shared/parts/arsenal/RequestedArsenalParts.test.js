@@ -58,7 +58,7 @@ const EXPECTED = [
             projectileType: 'beam_sword',
             weaponGroup: 'laser',
             range: 120,
-            lifetime: 0.08
+            lifetime: 0.22
         }
     },
     {

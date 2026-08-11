@@ -9,6 +9,8 @@ const FORMAT = 'framebound-part-design';
 const VERSION = 1;
 const MAX_NAME_LENGTH = 64;
 const MAX_NOTES_LENGTH = 2000;
+const DRONE_GRID = Object.freeze({ width: 8, height: 8 });
+const DRONE_BLUEPRINT_ID = /^[a-zA-Z0-9_-]{1,80}$/;
 const SUPPORTED_FOOTPRINTS = new Set(['1x1', '1x2', '2x2', '2x4']);
 const SUPPORTED_TYPES = new Set([
     'hull',
@@ -58,6 +60,7 @@ export function createBlankPartDesign({
         rotationOffset: 0,
         projectileLook: DEFAULT_PROJECTILE_LOOK,
         projectileTrail: DEFAULT_PROJECTILE_TRAIL,
+        drone: null,
         stats: {},
         notes: ''
     };
@@ -155,6 +158,7 @@ export function normalizePartDesign(value) {
 
     const projectileLook = normalizeProjectileLook(value.projectileLook);
     const projectileTrail = normalizeProjectileTrail(value.projectileTrail);
+    const drone = normalizeDroneVisual(value.drone, type);
 
     const stats = normalizeJsonObject(value.stats ?? {}, 'stats');
     const notes = cleanOptionalText(value.notes, MAX_NOTES_LENGTH, 'notes');
@@ -175,8 +179,29 @@ export function normalizePartDesign(value) {
         rotationOffset,
         projectileLook,
         projectileTrail,
+        drone,
         stats,
         notes
+    };
+}
+
+export function normalizeDroneVisual(value, partType = 'drone') {
+    if (value === null || value === undefined) return null;
+    if (partType !== 'drone') throw new Error('drone visual requires drone type');
+    if (!isPlainObject(value) || typeof value.blueprintId !== 'string' || !DRONE_BLUEPRINT_ID.test(value.blueprintId)) {
+        throw new Error('drone visual blueprint id is invalid');
+    }
+    if (!isPlainObject(value.grid) || value.grid.width !== DRONE_GRID.width || value.grid.height !== DRONE_GRID.height) {
+        throw new Error('drone visual grid must be 8x8');
+    }
+    const layers = isPlainObject(value.layers) ? value.layers : {};
+    const pixels = normalizePixels(layers.base, DRONE_GRID.width * DRONE_GRID.height, 'drone base');
+    return {
+        blueprintId: value.blueprintId,
+        grid: { ...DRONE_GRID },
+        layers: { base: pixels },
+        projectileLook: normalizeProjectileLook(value.projectileLook),
+        projectileTrail: normalizeProjectileTrail(value.projectileTrail)
     };
 }
 

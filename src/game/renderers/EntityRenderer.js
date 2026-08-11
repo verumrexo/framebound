@@ -87,7 +87,7 @@ export class EntityRenderer {
                     ctx.restore();
                 }
 
-                if (def.id === 'core' && def.coreEffectSprite) {
+                if (def.coreEffectSprite) {
                     def.coreEffectSprite.draw(ctx, world.x, world.y, rotation + ((Date.now() % 10000) * 0.003));
                 }
             }

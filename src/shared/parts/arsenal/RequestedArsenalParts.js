@@ -121,7 +121,7 @@ const REQUESTED_SPECS = [
             projectileType: 'beam_sword',
             weaponGroup: 'laser',
             range: 120,
-            lifetime: 0.08
+            lifetime: 0.22
         },
         spriteRows: [
             '00010000',
@@ -281,6 +281,8 @@ const REQUESTED_SPECS = [
         type: 'utility',
         width: 1,
         height: 1,
+        rarity: 'legendary',
+        coreEffectColor: '#ff4444',
         stats: {
             hp: 18,
             mass: 2,

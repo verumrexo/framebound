@@ -1,6 +1,6 @@
 import { Sprite } from '../../engine/Sprite.js';
 import { Projectile } from './Projectile.js';
-import { resolveDroneBlueprint } from '../combat/DroneBlueprints.js';
+import { getDroneBlueprintVisual } from '../combat/DroneBlueprints.js';
 import { createDroneSprite } from '../parts/DronePartFactory.js';
 import { partSoundEventKey } from '../audio/SoundEventKeys.js';
 
@@ -43,7 +43,7 @@ export class Drone {
             ownerPart?.droneLabel || 'swarm hive';
         this.isDead = false;
 
-        const blueprint = resolveDroneBlueprint(config.type);
+        const blueprint = getDroneBlueprintVisual(config.type);
         this.droneType = blueprint.id;
         this.hp = valueOr(config.hp, blueprint.hp);
         this.maxHp = this.hp;
@@ -62,8 +62,10 @@ export class Drone {
         );
         this.projectileType = valueOr(
             config.projectileType,
-            blueprint.projectileType ?? 'small_laser'
+            blueprint.projectileType ?? null
         );
+        this.projectileLook = valueOr(config.projectileLook, blueprint.projectileLook ?? 'default');
+        this.projectileTrail = valueOr(config.projectileTrail, blueprint.projectileTrail ?? 'default');
         this.projectileSpeed = valueOr(
             config.projectileSpeed,
             blueprint.projectileSpeed
@@ -395,6 +397,7 @@ export class Drone {
 
     shoot(game, angle) {
         this.cooldown = this.maxCooldown;
+        if (!this.projectileType) return;
         const count = this.shotCount;
         for (let index = 0; index < count; index++) {
             const offset = count === 1
@@ -423,6 +426,8 @@ export class Drone {
                 projectile.sourcePartKey = this.sourcePartKey;
                 projectile.sourcePartName = this.sourcePartName;
             }
+            projectile.projectileLook = this.projectileLook;
+            projectile.projectileTrail = this.projectileTrail;
             game.projectiles.push(projectile);
         }
 

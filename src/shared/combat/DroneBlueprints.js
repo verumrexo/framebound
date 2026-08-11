@@ -1,6 +1,7 @@
 // @ts-check
 
 import { indexDroneSpecs, normalizeDroneBlueprintSpec } from '../parts/DronePartFactory.js';
+import { isProjectileLook, isProjectileTrail } from './ProjectileVisuals.js';
 import {
     DRONE_BLUEPRINT_SPECS_NEEDLE_INTERCEPTOR,
     DRONE_PART_SPECS_NEEDLE_INTERCEPTOR
@@ -34,7 +35,17 @@ const striker = Object.freeze({
     projectileLifetime: 0.8,
     shotCount: 1,
     spread: 0,
-    role: 'attack'
+    role: 'attack',
+    spriteRows: Object.freeze([
+        '00000000',
+        '00000000',
+        '00011000',
+        '00100100',
+        '00111100',
+        '00000000',
+        '00000000',
+        '00000000'
+    ])
 });
 
 const specs = [
@@ -63,6 +74,42 @@ export const DRONE_BLUEPRINTS = Object.freeze({
         Object.freeze(blueprint)
     ]))
 });
+
+const visualOverrides = new Map();
+
+function pixelsToRows(pixels) {
+    return Array.from({ length: 8 }, (_, y) =>
+        pixels.slice(y * 8, (y + 1) * 8).join('')
+    );
+}
+
+export function registerDroneVisualOverride(visual) {
+    if (!visual || typeof visual.blueprintId !== 'string') return false;
+    if (!Object.hasOwn(DRONE_BLUEPRINTS, visual.blueprintId)) return false;
+    const blueprint = resolveDroneBlueprint(visual.blueprintId);
+    const pixels = visual.layers?.base || visual.pixels;
+    if (!Array.isArray(pixels) || pixels.length !== 64) return false;
+    if (pixels.some(pixel => !Number.isInteger(pixel) || pixel < 0 || pixel > 2)) return false;
+    const projectileLook = visual.projectileLook || 'default';
+    const projectileTrail = visual.projectileTrail || 'default';
+    if (!isProjectileLook(projectileLook) || !isProjectileTrail(projectileTrail)) return false;
+    visualOverrides.set(blueprint.id, {
+        spriteRows: Object.freeze(pixelsToRows([...pixels])),
+        projectileLook,
+        projectileTrail
+    });
+    return true;
+}
+
+export function clearDroneVisualOverrides() {
+    visualOverrides.clear();
+}
+
+export function getDroneBlueprintVisual(id) {
+    const blueprint = resolveDroneBlueprint(id);
+    const override = visualOverrides.get(blueprint.id);
+    return override ? { ...blueprint, ...override } : blueprint;
+}
 
 export function resolveDroneBlueprint(id) {
     return DRONE_BLUEPRINTS[id] || DRONE_BLUEPRINTS.striker;

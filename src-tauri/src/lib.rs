@@ -133,6 +133,21 @@ struct PartLabDesign {
     projectile_look: Option<String>,
     #[serde(default)]
     projectile_trail: Option<String>,
+    #[serde(default)]
+    drone: Option<PartLabDroneVisual>,
+}
+
+#[cfg(any(debug_assertions, feature = "part-lab"))]
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PartLabDroneVisual {
+    blueprint_id: String,
+    grid: PartLabSize,
+    layers: PartLabLayers,
+    #[serde(default)]
+    projectile_look: Option<String>,
+    #[serde(default)]
+    projectile_trail: Option<String>,
 }
 
 #[cfg(any(debug_assertions, feature = "part-lab"))]
@@ -482,6 +497,23 @@ fn validate_part_lab_design(part_id: &str, design: &PartLabDesign) -> Result<(),
         || design.projectile_trail.as_deref().is_some_and(|id| !is_allowed_projectile_trail(id))
     {
         return Err(format!("visual design for {part_id} has invalid projectile visuals"));
+    }
+    if let Some(drone) = &design.drone {
+        if design.part_type != "drone" {
+            return Err(format!("non-drone {part_id} cannot have drone visuals"));
+        }
+        if !is_safe_part_lab_id(&drone.blueprint_id)
+            || drone.grid.width != 8
+            || drone.grid.height != 8
+        {
+            return Err(format!("visual design for {part_id} has invalid drone blueprint"));
+        }
+        validate_pixels(&drone.layers.base, 64, part_id)?;
+        if drone.projectile_look.as_deref().is_some_and(|id| !is_allowed_projectile_look(id))
+            || drone.projectile_trail.as_deref().is_some_and(|id| !is_allowed_projectile_trail(id))
+        {
+            return Err(format!("visual design for {part_id} has invalid drone projectile visuals"));
+        }
     }
     if !design.rotation_offset.is_finite() || !design.stats.is_object() {
         return Err(format!("visual design for {part_id} has invalid metadata"));

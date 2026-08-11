@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 
 const { ProjectileSystem } = await import('./ProjectileSystem.js');
 const { Decoy } = await import('../../shared/entities/Decoy.js');
+const { Projectile } = await import('../../shared/entities/Projectile.js');
 
 function createGame(projectiles = [], overrides = {}, systemOptions = {}) {
     const events = [];
@@ -385,6 +386,27 @@ test('enemy beams damage a decoy on the same deterministic throttle as other tar
 
     system.update(0.1);
     assert.equal(decoy.hp, 10);
+});
+
+test('beam sword collision follows the blade and does not multi-hit one target', () => {
+    let damage = 0;
+    const enemy = {
+        id: 'sword-target',
+        isDead: false,
+        x: 80,
+        y: 0,
+        radius: 20,
+        checkShieldHit: () => ({ hit: false }),
+        takeDamage: amount => { damage += amount; },
+        checkPartHit: () => ({ hit: false })
+    };
+    const projectile = new Projectile(0, 0, 0, 'beam_sword', 0, 'player', 28);
+    const { system } = createGame([projectile], { enemies: [enemy] });
+
+    system.update(0.11);
+    system.update(0.001);
+
+    assert.equal(damage, 28);
 });
 
 test('host authority applies enemy explosion damage to every nearby guest', () => {

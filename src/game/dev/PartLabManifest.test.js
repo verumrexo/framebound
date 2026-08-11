@@ -10,6 +10,10 @@ import {
     parsePartLabManifest,
     serializePartLabManifest
 } from './PartLabManifest.js';
+import {
+    clearDroneVisualOverrides,
+    getDroneBlueprintVisual
+} from '../../shared/combat/DroneBlueprints.js';
 
 function design() {
     const value = createBlankPartDesign({ name: 'dart', type: 'weapon' });
@@ -115,4 +119,39 @@ test('non-weapon visual overrides replace visible art and clear stale auxiliary 
     assert.equal(definition.drawTurretInInventory, false);
     assert.deepEqual(definition.stats, { hp: 22, mass: 4 });
     assert.equal(definition.description, 'preserve me');
+});
+
+test('part lab manifests round-trip and apply nested drone visuals without mutating blueprints', () => {
+    const droneDesign = createBlankPartDesign({ name: 'hive', type: 'drone' });
+    droneDesign.partId = 'hive';
+    droneDesign.partType = PartType.DRONE;
+    droneDesign.stats = { hp: 40, mass: 4, droneType: 'striker' };
+    droneDesign.drone = {
+        blueprintId: 'striker',
+        grid: { width: 8, height: 8 },
+        layers: { base: new Array(64).fill(0).map((_, index) => index === 0 ? 2 : 0) },
+        projectileLook: 'heavy-slug',
+        projectileTrail: 'smoke'
+    };
+    const manifest = normalizePartLabManifest({
+        schemaVersion: 1,
+        version: 1,
+        modifiedAt: '2026-08-11T00:00:00.000Z',
+        visuals: [{ partId: 'hive', design: droneDesign }],
+        sounds: [],
+        reviews: []
+    });
+    const restored = parsePartLabManifest(serializePartLabManifest(manifest));
+    const definition = {
+        id: 'hive', type: PartType.DRONE, width: 1, height: 1,
+        stats: { hp: 40, mass: 4, droneType: 'striker' },
+        sprite: { data: new Array(64).fill(1), width: 8, height: 8, scale: 4, anchorX: .5, anchorY: .5 }
+    };
+
+    applyVisualDesignOverride(definition, restored.visuals[0].design);
+    const visual = getDroneBlueprintVisual('striker');
+    assert.equal(visual.spriteRows[0], '20000000');
+    assert.equal(visual.projectileLook, 'heavy-slug');
+    assert.equal(visual.projectileTrail, 'smoke');
+    clearDroneVisualOverrides();
 });

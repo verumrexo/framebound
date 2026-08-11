@@ -5,14 +5,22 @@ import {
     createBlankPartDesign,
     serializePartDesign
 } from '../dev/PartDesignDocument.js';
+import { TILE_SIZE } from '../../shared/parts/Part.js';
 
 const {
     Designer,
+    getDesignerPreviewDronePosition,
     getDesignerPreviewMount,
     getDesignerPreviewMuzzle,
     partDefinitionToDesign,
     validateStagedDesignDocument
 } = await import('./Designer.js');
+const {
+    clearDroneVisualOverrides,
+    getDroneBlueprintVisual,
+    registerDroneVisualOverride,
+    resolveDroneBlueprint
+} = await import('../../shared/combat/DroneBlueprints.js');
 
 test('designer preview applies the base sprite anchor to the turret mount and muzzle', () => {
     const definition = {
@@ -163,4 +171,190 @@ test('designer stage and save-next callbacks receive validated documents without
     assert.deepEqual(staged.stats, design.stats);
     assert.deepEqual(advanced.stats, design.stats);
     assert.notEqual(saved, design);
+});
+
+test('designer conversion loads the exact deployed blueprint silhouette for a drone part', () => {
+    const blueprint = resolveDroneBlueprint('striker');
+    const definition = {
+        id: 'drone_hive',
+        name: 'drone hive',
+        type: 'drone',
+        width: 1,
+        height: 1,
+        stats: { hp: 20, mass: 2, droneType: 'striker' },
+        sprite: { data: new Array(64).fill(1), width: 8, height: 8, scale: 4, anchorX: .5, anchorY: .5 }
+    };
+
+    const design = partDefinitionToDesign('drone_hive', definition);
+
+    assert.equal(design.drone.blueprintId, 'striker');
+    assert.deepEqual(
+        design.drone.layers.base,
+        blueprint.spriteRows.flatMap(row => [...row].map(Number))
+    );
+});
+
+test('designer load restores nested drone art and projectile cosmetics', () => {
+    const design = partDefinitionToDesign('drone_hive', {
+        id: 'drone_hive',
+        name: 'drone hive',
+        type: 'drone',
+        width: 1,
+        height: 1,
+        stats: { hp: 20, mass: 2, droneType: 'striker' },
+        sprite: { data: new Array(64).fill(1), width: 8, height: 8, scale: 4, anchorX: .5, anchorY: .5 }
+    });
+    design.drone.layers.base[7] = 2;
+    design.drone.projectileLook = 'needle';
+    design.drone.projectileTrail = 'ion';
+
+    const worker = Object.create(Designer.prototype);
+    worker.nameInput = { value: '' };
+    worker.typeSelect = { value: '' };
+    worker.sizeSelect = { value: '' };
+    worker.turretModeCheckbox = { checked: false };
+    worker.droneEditModeSelect = { value: '' };
+    worker.facingSelect = { value: '' };
+    worker.notesInput = { value: '' };
+    worker.syncTypeAndTurret = () => {};
+
+    worker.loadDesign(design);
+
+    assert.deepEqual(worker.droneGridData, design.drone.layers.base);
+    assert.equal(worker.droneProjectileLook, 'needle');
+    assert.equal(worker.droneProjectileTrail, 'ion');
+});
+
+test('designer keeps the workspace visible while switching carrier and spawned drone modes', () => {
+    const workspace = { style: { display: 'flex' } };
+    const droneWrapper = { style: { display: 'none' } };
+    const turretWrapper = { style: { display: 'none' } };
+    const worker = Object.create(Designer.prototype);
+    worker.ui = {
+        querySelector(selector) {
+            if (selector === '#turret-canvas-wrapper') return turretWrapper;
+            return { style: {} };
+        }
+    };
+    worker.typeSelect = { value: 'hull' };
+    worker.turretModeCheckbox = { checked: false };
+    worker.droneVisualControls = { style: {} };
+    worker.droneCanvasWrapper = droneWrapper;
+    worker.droneCanvas = { parentElement: { parentElement: workspace } };
+    worker.droneBlueprintLabel = { textContent: '' };
+    worker.facingSelect = { style: {} };
+    worker.barrelModeCheckbox = { disabled: false, checked: false };
+    worker.importedStats = {};
+    worker.droneVisual = { blueprintId: 'striker', layers: { base: new Array(64).fill(0) } };
+    worker.syncProjectileVisualControls = () => {};
+    worker.resizeCanvases = () => {};
+
+    worker.syncTypeAndTurret('type');
+    assert.equal(workspace.style.display, 'flex');
+    assert.equal(droneWrapper.style.display, 'none');
+
+    worker.typeSelect.value = 'drone';
+    worker.editorMode = 'spawned';
+    worker.syncTypeAndTurret('type');
+    assert.equal(workspace.style.display, 'flex');
+    assert.equal(droneWrapper.style.display, 'block');
+    assert.equal(worker.droneVisualControls.style.display, 'block');
+
+    worker.editorMode = 'carrier';
+    worker.syncTypeAndTurret('mode');
+    assert.equal(workspace.style.display, 'flex');
+    assert.equal(droneWrapper.style.display, 'none');
+});
+
+test('designer preview construction does not register staged drone visuals', () => {
+    clearDroneVisualOverrides();
+    const design = partDefinitionToDesign('drone_hive', {
+        id: 'drone_hive',
+        name: 'drone hive',
+        type: 'drone',
+        width: 1,
+        height: 1,
+        stats: { hp: 20, mass: 2, droneType: 'striker' },
+        sprite: { data: new Array(64).fill(1), width: 8, height: 8, scale: 4, anchorX: .5, anchorY: .5 }
+    });
+    design.drone.layers.base[0] = 2;
+    design.drone.projectileLook = 'needle';
+    design.drone.projectileTrail = 'ion';
+    const worker = Object.create(Designer.prototype);
+    const definition = worker.createDefinition('preview', design);
+    const previewCanvas = document.createElement('canvas');
+    previewCanvas.width = 280;
+    previewCanvas.height = 210;
+    worker.previewCtx = previewCanvas.getContext('2d');
+    worker.currentSize = [1, 1];
+    worker.editorMode = 'carrier';
+    worker.previewAim = null;
+    worker.previewFire = null;
+    worker.fireTestButton = null;
+    worker.toDesignDocument = () => design;
+    worker.drawPreview();
+
+    const beforeApply = getDroneBlueprintVisual('striker');
+    assert.notEqual(definition.droneVisual, undefined);
+    assert.notEqual(beforeApply.spriteRows[0], '20000000');
+    assert.equal(beforeApply.projectileLook, undefined);
+    assert.equal(beforeApply.projectileTrail, undefined);
+
+    registerDroneVisualOverride(definition.droneVisual);
+    const afterApply = getDroneBlueprintVisual('striker');
+    assert.equal(afterApply.spriteRows[0], '20000000');
+    assert.equal(afterApply.projectileLook, 'needle');
+    assert.equal(afterApply.projectileTrail, 'ion');
+    clearDroneVisualOverrides();
+});
+
+test('spawned drone preview uses the deployed position while keeping the carrier static', () => {
+    const design = partDefinitionToDesign('drone_hive', {
+        id: 'drone_hive',
+        name: 'drone hive',
+        type: 'drone',
+        width: 1,
+        height: 1,
+        stats: { hp: 20, mass: 2, droneType: 'striker' },
+        sprite: { data: new Array(64).fill(1), width: 8, height: 8, scale: 4, anchorX: .5, anchorY: .5 }
+    });
+    const carrierDraws = [];
+    let fireArgs = null;
+    const worker = Object.create(Designer.prototype);
+    worker.previewCtx = document.createElement('canvas').getContext('2d');
+    worker.previewCtx.canvas.width = 280;
+    worker.previewCtx.canvas.height = 210;
+    worker.currentSize = [1, 1];
+    worker.editorMode = 'spawned';
+    worker.previewAim = { x: 250, y: 90 };
+    worker.previewFire = {};
+    worker.fireTestButton = null;
+    worker.toDesignDocument = () => design;
+    worker.createDefinition = () => ({
+        type: 'drone',
+        width: 1,
+        height: 1,
+        stats: {},
+        rotationOffset: 0,
+        sprite: { draw: (...args) => carrierDraws.push(args) }
+    });
+    worker.drawPreviewFire = (...args) => {
+        fireArgs = {
+            x: args[2],
+            y: args[3],
+            spawnedDrone: args[6]
+        };
+    };
+
+    const previewHeight = worker.previewCtx.canvas.height;
+    worker.drawPreview();
+
+    const partX = 54 + TILE_SIZE;
+    const partY = previewHeight / 2;
+    assert.deepEqual(
+        { x: fireArgs.x, y: fireArgs.y },
+        getDesignerPreviewDronePosition(partX, partY)
+    );
+    assert.equal(fireArgs.spawnedDrone, true);
+    assert.equal(carrierDraws[0][3], 0);
 });

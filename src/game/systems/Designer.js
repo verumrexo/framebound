@@ -9,13 +9,21 @@ import {
 } from '../dev/PartDesignDocument.js';
 import { parseLegacyPartDesign } from '../dev/LegacyPartDesignImport.js';
 import { getMountedTurretPosition } from '../renderers/ShipAssemblyRenderer.js';
+import { Projectile } from '../../shared/entities/Projectile.js';
+import {
+    getDroneBlueprintVisual,
+    registerDroneVisualOverride,
+    resolveDroneBlueprint
+} from '../../shared/combat/DroneBlueprints.js';
+import { drawProjectileOnContext } from '../renderers/ProjectileRenderer.js';
 import {
     DEFAULT_PROJECTILE_LOOK,
     DEFAULT_PROJECTILE_TRAIL,
     PROJECTILE_LOOK_PRESETS,
     PROJECTILE_TRAIL_PRESETS,
     normalizeProjectileLook,
-    normalizeProjectileTrail
+    normalizeProjectileTrail,
+    supportsProjectileCosmetics
 } from '../../shared/combat/ProjectileVisuals.js';
 
 const COLORS = { 1: '#26d426', 2: '#333' };
@@ -82,6 +90,10 @@ export function partDefinitionToDesign(partId, definition) {
     design.projectileLook = definition.projectileLook || DEFAULT_PROJECTILE_LOOK;
     design.projectileTrail = definition.projectileTrail || DEFAULT_PROJECTILE_TRAIL;
     design.stats = cloneSerializable(definition.stats || {});
+    if (definition.type === PartType.DRONE) {
+        const blueprintId = definition.stats?.droneType || 'striker';
+        design.drone = droneVisualFromBlueprint(blueprintId);
+    }
 
     const barrelPosition = definition.stats?.barrelPosition;
     if (turretSprite && barrelPosition && Number.isFinite(barrelPosition.x) && Number.isFinite(barrelPosition.y)) {
@@ -192,6 +204,34 @@ function fallbackWeaponBaseSprite(width, height) {
         : { data: new Array(expected.width * expected.height).fill(0), width: expected.width, height: expected.height, scale: 1, anchorX: .5, anchorY: .5 };
 }
 
+function droneVisualFromBlueprint(blueprintId) {
+    const blueprint = getDroneBlueprintVisual(blueprintId);
+    const rows = blueprint.spriteRows || resolveDroneBlueprint(blueprintId).spriteRows;
+    const pixels = rows?.flatMap(row => [...row].map(Number)) || new Array(64).fill(0);
+    return {
+        blueprintId: blueprint.id,
+        grid: { width: 8, height: 8 },
+        layers: { base: pixels },
+        projectileLook: blueprint.projectileType ? (blueprint.projectileLook || DEFAULT_PROJECTILE_LOOK) : DEFAULT_PROJECTILE_LOOK,
+        projectileTrail: blueprint.projectileType ? (blueprint.projectileTrail || DEFAULT_PROJECTILE_TRAIL) : DEFAULT_PROJECTILE_TRAIL
+    };
+}
+
+export function getDesignerPreviewDronePosition(partX, partY) {
+    return {
+        x: partX + TILE_SIZE * 1.9,
+        y: partY - TILE_SIZE * 0.6
+    };
+}
+
+function getDesignerPreviewDroneMuzzle(originX, originY, angle) {
+    const offset = TILE_SIZE * 0.6;
+    return {
+        x: originX + Math.cos(angle) * offset,
+        y: originY + Math.sin(angle) * offset
+    };
+}
+
 export class Designer {
     constructor(game) {
         this.game = game;
@@ -201,6 +241,13 @@ export class Designer {
         this.gridHeight = 8;
         this.gridData = new Array(64).fill(0);
         this.turretGridData = new Array(64).fill(0);
+        this.droneGridData = new Array(64).fill(0);
+        this.droneVisual = null;
+        this.editorMode = 'carrier';
+        this.weaponProjectileLook = DEFAULT_PROJECTILE_LOOK;
+        this.weaponProjectileTrail = DEFAULT_PROJECTILE_TRAIL;
+        this.droneProjectileLook = DEFAULT_PROJECTILE_LOOK;
+        this.droneProjectileTrail = DEFAULT_PROJECTILE_TRAIL;
         this.importedStats = {};
         this.currentPartId = null;
         this.currentPartType = PartType.HULL;
@@ -253,6 +300,14 @@ export class Designer {
             <div id="projectile-visual-controls" style="display:none;margin:10px 0;gap:8px;justify-content:center;align-items:center;flex-wrap:wrap">
                 <label>projectile look <select id="projectile-look" aria-label="projectile look" style="${fieldStyle()}"></select></label>
                 <label>trail <select id="projectile-trail" aria-label="projectile trail" style="${fieldStyle()}"></select></label>
+                <canvas id="projectile-preview" width="190" height="42" aria-label="live projectile preview" style="${canvasStyle('#8b4cc7')};width:190px;height:42px;cursor:default"></canvas>
+                <span id="projectile-availability" style="color:#aabbff;font-size:9px;max-width:220px"></span>
+            </div>
+            <div id="drone-visual-controls" style="display:none;margin:10px 0;color:#aabbff">
+                <label>drone visual mode <select id="drone-edit-mode" aria-label="drone visual mode" style="${fieldStyle()}">
+                    <option value="carrier">carrier</option><option value="spawned">spawned drone</option>
+                </select></label>
+                <span id="drone-blueprint-label" style="font-size:9px;margin-left:8px"></span>
             </div>
             <div style="margin:10px 0;display:flex;gap:16px;justify-content:center;flex-wrap:wrap">
                 <label><input type="checkbox" id="turret-mode"> base + turret</label>
@@ -264,6 +319,8 @@ export class Designer {
                     <canvas id="designerCanvas" aria-label="base art canvas" style="${canvasStyle('#4a9eff')}"></canvas></div>
                 <div id="turret-canvas-wrapper" style="display:none"><div style="color:#ff9944;margin-bottom:4px">turret art</div>
                     <canvas id="turretCanvas" aria-label="turret art canvas" style="${canvasStyle('#ff9944')}"></canvas></div>
+                <div id="drone-canvas-wrapper" style="display:none"><div style="color:#00ffff;margin-bottom:4px">spawned drone art</div>
+                    <canvas id="droneCanvas" aria-label="spawned drone art canvas" style="${canvasStyle('#00ffff')}"></canvas></div>
                 <div><div style="color:#aabbff;margin-bottom:4px">ship mount preview</div>
                     <canvas id="mount-preview" width="280" height="210" aria-label="ship mount preview" style="${canvasStyle('#aabbff')};width:280px;height:210px"></canvas>
                     <div style="color:#8899bb;font-size:9px;margin-top:5px">move over preview to aim · click fire test</div>
@@ -293,6 +350,8 @@ export class Designer {
         this.ctx = this.canvas.getContext('2d');
         this.turretCanvas = this.ui.querySelector('#turretCanvas');
         this.turretCtx = this.turretCanvas.getContext('2d');
+        this.droneCanvas = this.ui.querySelector('#droneCanvas');
+        this.droneCtx = this.droneCanvas.getContext('2d');
         this.previewCanvas = this.ui.querySelector('#mount-preview');
         this.previewCtx = this.previewCanvas.getContext('2d');
         this.fireTestButton = this.ui.querySelector('#btn-fire-test');
@@ -309,6 +368,13 @@ export class Designer {
         this.projectileVisualControls = this.ui.querySelector('#projectile-visual-controls');
         this.projectileLookSelect = this.ui.querySelector('#projectile-look');
         this.projectileTrailSelect = this.ui.querySelector('#projectile-trail');
+        this.projectilePreviewCanvas = this.ui.querySelector('#projectile-preview');
+        this.projectilePreviewCtx = this.projectilePreviewCanvas.getContext('2d');
+        this.projectileAvailability = this.ui.querySelector('#projectile-availability');
+        this.droneVisualControls = this.ui.querySelector('#drone-visual-controls');
+        this.droneEditModeSelect = this.ui.querySelector('#drone-edit-mode');
+        this.droneBlueprintLabel = this.ui.querySelector('#drone-blueprint-label');
+        this.droneCanvasWrapper = this.ui.querySelector('#drone-canvas-wrapper');
         this.projectileLookSelect.replaceChildren(...PROJECTILE_LOOK_PRESETS.map(preset => {
             const option = document.createElement('option');
             option.value = preset.id;
@@ -340,8 +406,14 @@ export class Designer {
         this.typeSelect.onchange = () => { this.syncTypeAndTurret('type'); this.notifyDraftChange(); };
         this.turretModeCheckbox.onchange = () => { this.syncTypeAndTurret('turret'); this.notifyDraftChange(); };
         this.facingSelect.onchange = () => { this.drawGrid(); this.notifyDraftChange(); };
-        this.projectileLookSelect.onchange = () => { this.drawPreview(); this.notifyDraftChange(); };
-        this.projectileTrailSelect.onchange = () => { this.drawPreview(); this.notifyDraftChange(); };
+        this.projectileLookSelect.onchange = () => { this.captureProjectileSelectors(); this.drawPreview(); this.notifyDraftChange(); };
+        this.projectileTrailSelect.onchange = () => { this.captureProjectileSelectors(); this.drawPreview(); this.notifyDraftChange(); };
+        this.droneEditModeSelect.onchange = () => {
+            this.editorMode = this.droneEditModeSelect.value;
+            this.syncTypeAndTurret('mode');
+            this.drawGrid();
+            this.notifyDraftChange();
+        };
         this.nameInput.oninput = () => { this.drawPreview(); this.notifyDraftChange(); };
         this.notesInput.oninput = () => { this.clearStatus(); this.notifyDraftChange(); };
         this.previewCanvas.onmousemove = event => this.updatePreviewAim(event);
@@ -362,6 +434,7 @@ export class Designer {
         };
         this.bindCanvas(this.canvas, false);
         this.bindCanvas(this.turretCanvas, true);
+        this.bindDroneCanvas();
         window.addEventListener('resize', () => this.active && this.resizeCanvases());
     }
 
@@ -398,6 +471,25 @@ export class Designer {
         window.addEventListener('mouseup', () => { drawing = false; });
     }
 
+    bindDroneCanvas() {
+        let drawing = false;
+        const handle = event => {
+            if (!this.droneVisual) return;
+            const rect = this.droneCanvas.getBoundingClientRect();
+            const rawX = (event.clientX - rect.left) / rect.width * 8;
+            const rawY = (event.clientY - rect.top) / rect.height * 8;
+            const x = Math.floor(rawX); const y = Math.floor(rawY);
+            if (x < 0 || y < 0 || x >= 8 || y >= 8) return;
+            if (event.buttons !== 1 && event.buttons !== 2) return;
+            this.droneGridData[y * 8 + x] = event.buttons === 1 ? 1 : 0;
+            this.clearStatus(); this.drawGrid(); this.notifyDraftChange();
+        };
+        this.droneCanvas.onmousedown = event => { drawing = true; handle(event); };
+        this.droneCanvas.onmousemove = event => { if (drawing) handle(event); };
+        this.droneCanvas.oncontextmenu = event => event.preventDefault();
+        window.addEventListener('mouseup', () => { drawing = false; });
+    }
+
     /**
      * Open a blank designer (legacy behavior) or preload a stable library id.
      * Callbacks are intentionally per-open so normal dev-menu use cannot keep
@@ -424,6 +516,7 @@ export class Designer {
         this.active = true;
         this.ui.style.display = 'block';
         this.resizeCanvases();
+        if (this.getActiveProjectileType()) this.startPreviewAnimation();
         if (this.game?.input) this.game.input.active = false;
         return this;
     }
@@ -473,14 +566,67 @@ export class Designer {
         this.currentPartType = this.typeSelect.value || PartType.HULL;
         this.turretMode = this.turretModeCheckbox.checked;
         this.ui.querySelector('#turret-canvas-wrapper').style.display = this.turretMode ? 'block' : 'none';
+        const isDrone = this.currentPartType === PartType.DRONE;
+        if (isDrone && !this.droneVisual) {
+            this.droneVisual = droneVisualFromBlueprint(this.importedStats?.droneType || 'striker');
+            this.droneGridData = [...this.droneVisual.layers.base];
+        }
+        this.droneVisualControls.style.display = isDrone ? 'block' : 'none';
+        this.droneCanvasWrapper.style.display = isDrone && this.editorMode === 'spawned' ? 'block' : 'none';
+        this.droneBlueprintLabel.textContent = isDrone && this.droneVisual
+            ? `blueprint: ${this.droneVisual.blueprintId}`
+            : '';
         this.facingSelect.style.display = this.turretMode ? 'inline-block' : 'none';
-        this.projectileVisualControls.style.display = this.turretMode ? 'flex' : 'none';
+        this.syncProjectileVisualControls();
         this.barrelModeCheckbox.disabled = !this.turretMode;
         if (!this.turretMode) {
             this.barrelMode = false;
             this.barrelModeCheckbox.checked = false;
         }
         this.resizeCanvases();
+    }
+
+    getActiveProjectileType() {
+        if (this.currentPartType === PartType.WEAPON) return this.importedStats?.projectileType || null;
+        if (this.currentPartType === PartType.DRONE && this.editorMode === 'spawned') {
+            return resolveDroneBlueprint(this.droneVisual?.blueprintId || this.importedStats?.droneType).projectileType || null;
+        }
+        return null;
+    }
+
+    captureProjectileSelectors() {
+        const look = normalizeProjectileLook(this.projectileLookSelect.value);
+        const trail = normalizeProjectileTrail(this.projectileTrailSelect.value);
+        if (this.currentPartType === PartType.DRONE && this.editorMode === 'spawned') {
+            this.droneProjectileLook = look;
+            this.droneProjectileTrail = trail;
+        } else {
+            this.weaponProjectileLook = look;
+            this.weaponProjectileTrail = trail;
+        }
+    }
+
+    syncProjectileVisualControls() {
+        if (!this.projectileLookSelect) return;
+        const isWeapon = this.currentPartType === PartType.WEAPON;
+        const isSpawnedDrone = this.currentPartType === PartType.DRONE && this.editorMode === 'spawned';
+        const projectileType = this.getActiveProjectileType();
+        const visible = isWeapon || isSpawnedDrone;
+        this.projectileVisualControls.style.display = visible ? 'flex' : 'none';
+        const look = isSpawnedDrone ? (this.droneProjectileLook || DEFAULT_PROJECTILE_LOOK) : this.weaponProjectileLook;
+        const trail = isSpawnedDrone ? (this.droneProjectileTrail || DEFAULT_PROJECTILE_TRAIL) : this.weaponProjectileTrail;
+        this.projectileLookSelect.value = look || DEFAULT_PROJECTILE_LOOK;
+        this.projectileTrailSelect.value = trail || DEFAULT_PROJECTILE_TRAIL;
+        const available = Boolean(projectileType);
+        const supported = available && supportsProjectileCosmetics(projectileType);
+        this.projectileLookSelect.disabled = !supported;
+        this.projectileTrailSelect.disabled = !supported;
+        this.projectileAvailability.textContent = !available
+            ? 'this drone has no projectile; cosmetics and fire test are unavailable.'
+            : supported
+                ? `live production preview: ${projectileType}`
+                : `${projectileType} uses native rendering; cosmetic look/trail are unavailable.`;
+        this.updatePreviewFireAnimation();
     }
 
     resizeGrid() {
@@ -507,6 +653,10 @@ export class Designer {
             canvas.style.width = `${canvas.width}px`;
             canvas.style.height = `${canvas.height}px`;
         }
+        this.droneCanvas.width = 8 * this.editorScale;
+        this.droneCanvas.height = 8 * this.editorScale;
+        this.droneCanvas.style.width = `${this.droneCanvas.width}px`;
+        this.droneCanvas.style.height = `${this.droneCanvas.height}px`;
         this.drawGrid();
     }
 
@@ -532,11 +682,22 @@ export class Designer {
         design.rawBarrel = this.turretMode && this.rawBarrel ? { ...this.rawBarrel } : null;
         design.rotationOffset = this.turretMode ? Number(this.facingSelect.value) : 0;
         design.projectileLook = this.turretMode
-            ? normalizeProjectileLook(this.projectileLookSelect.value)
+            ? normalizeProjectileLook(this.weaponProjectileLook)
             : DEFAULT_PROJECTILE_LOOK;
         design.projectileTrail = this.turretMode
-            ? normalizeProjectileTrail(this.projectileTrailSelect.value)
+            ? normalizeProjectileTrail(this.weaponProjectileTrail)
             : DEFAULT_PROJECTILE_TRAIL;
+        if (partType === PartType.DRONE) {
+            const drone = this.droneVisual || droneVisualFromBlueprint(this.importedStats.droneType || 'striker');
+            const hasProjectile = Boolean(resolveDroneBlueprint(drone.blueprintId).projectileType);
+            design.drone = {
+                blueprintId: drone.blueprintId,
+                grid: { width: 8, height: 8 },
+                layers: { base: [...this.droneGridData] },
+                projectileLook: hasProjectile ? normalizeProjectileLook(this.droneProjectileLook || DEFAULT_PROJECTILE_LOOK) : DEFAULT_PROJECTILE_LOOK,
+                projectileTrail: hasProjectile ? normalizeProjectileTrail(this.droneProjectileTrail || DEFAULT_PROJECTILE_TRAIL) : DEFAULT_PROJECTILE_TRAIL
+            };
+        }
         design.stats = { ...this.importedStats };
         design.notes = this.notesInput.value;
         return design;
@@ -567,10 +728,24 @@ export class Designer {
         this.turretPivot = this.rawAnchors.turret || (design.anchors.turret ? { ...design.anchors.turret } : null);
         this.barrelPos = this.rawBarrel || (design.barrel ? { ...design.barrel } : null);
         this.importedStats = { ...design.stats };
+        this.droneVisual = design.drone
+            ? {
+                blueprintId: design.drone.blueprintId,
+                grid: { width: 8, height: 8 },
+                layers: { base: [...design.drone.layers.base] },
+                projectileLook: design.drone.projectileLook,
+                projectileTrail: design.drone.projectileTrail
+            }
+            : (this.currentPartType === PartType.DRONE ? droneVisualFromBlueprint(design.stats?.droneType || 'striker') : null);
+        this.droneGridData = this.droneVisual ? [...this.droneVisual.layers.base] : new Array(64).fill(0);
+        this.editorMode = 'carrier';
+        this.droneEditModeSelect.value = this.editorMode;
+        this.weaponProjectileLook = design.projectileLook || DEFAULT_PROJECTILE_LOOK;
+        this.weaponProjectileTrail = design.projectileTrail || DEFAULT_PROJECTILE_TRAIL;
+        this.droneProjectileLook = this.droneVisual?.projectileLook || DEFAULT_PROJECTILE_LOOK;
+        this.droneProjectileTrail = this.droneVisual?.projectileTrail || DEFAULT_PROJECTILE_TRAIL;
         this.notesInput.value = design.notes || '';
         this.facingSelect.value = closestFacing(design.rotationOffset);
-        this.projectileLookSelect.value = design.projectileLook || DEFAULT_PROJECTILE_LOOK;
-        this.projectileTrailSelect.value = design.projectileTrail || DEFAULT_PROJECTILE_TRAIL;
         this.syncTypeAndTurret('type');
     }
 
@@ -665,6 +840,7 @@ export class Designer {
             const design = this.getValidatedDesignDocument();
             const id = `custom_${Date.now()}`;
             const definition = this.createDefinition(id, design);
+            if (definition.droneVisual) registerDroneVisualOverride(definition.droneVisual);
             PartsLibrary[id] = definition;
             AssetsData[id] = [...design.layers.turret || design.layers.base];
             AssetsData[`${id}_base`] = [...design.layers.base];
@@ -720,21 +896,32 @@ export class Designer {
         }
         definition.projectileLook = design.projectileLook || DEFAULT_PROJECTILE_LOOK;
         definition.projectileTrail = design.projectileTrail || DEFAULT_PROJECTILE_TRAIL;
+        if (definition.type === PartType.DRONE && design.drone) {
+            definition.droneVisual = {
+                blueprintId: design.drone.blueprintId,
+                layers: { base: [...design.drone.layers.base] },
+                projectileLook: design.drone.projectileLook,
+                projectileTrail: design.drone.projectileTrail
+            };
+        }
         return definition;
     }
 
     drawGrid() {
         this.drawEditorLayer(this.ctx, this.gridData, this.basePivot, null, '#4a9eff');
         if (this.turretMode) this.drawEditorLayer(this.turretCtx, this.turretGridData, this.turretPivot, this.barrelPos, '#ff9944');
+        if (this.currentPartType === PartType.DRONE && this.editorMode === 'spawned') {
+            this.drawEditorLayer(this.droneCtx, this.droneGridData, null, null, '#00ffff', 8, 8);
+        }
         this.drawPreview();
     }
 
-    drawEditorLayer(ctx, data, pivot, barrel, accent) {
+    drawEditorLayer(ctx, data, pivot, barrel, accent, width = this.gridWidth, height = this.gridHeight) {
         const scale = this.editorScale;
         ctx.fillStyle = '#05070d'; ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-        for (let y = 0; y < this.gridHeight; y++) for (let x = 0; x < this.gridWidth; x++) {
+        for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
             ctx.strokeStyle = '#303442'; ctx.lineWidth = 1; ctx.strokeRect(x * scale, y * scale, scale, scale);
-            const value = data[y * this.gridWidth + x];
+            const value = data[y * width + x];
             if (value) { ctx.fillStyle = COLORS[value] || accent; ctx.fillRect(x * scale + 1, y * scale + 1, scale - 2, scale - 2); }
         }
         if (pivot) drawMarker(ctx, pivot, scale, '#ff55ff');
@@ -762,21 +949,46 @@ export class Designer {
         try {
             definition = this.createDefinition('preview', design);
             if (definition.baseSprite) definition.baseSprite.draw(ctx, partX, partY, 0, .5, .5);
-            const followsAim = definition.type === PartType.WEAPON;
-            const aim = this.previewAim || { x: partX + TILE_SIZE * 2, y: partY };
-            const mount = getDesignerPreviewMount(definition, partX, partY, aim);
-            const aimAngle = Math.atan2(aim.y - mount.y, aim.x - mount.x);
+            const followsAim = definition.type === PartType.WEAPON ||
+                (definition.type === PartType.DRONE && this.editorMode === 'spawned');
+            const isSpawnedDrone = definition.type === PartType.DRONE && this.editorMode === 'spawned';
+            const mountAim = this.previewAim || { x: partX + TILE_SIZE * 2, y: partY };
+            const mount = getDesignerPreviewMount(definition, partX, partY, mountAim);
+            const fireOrigin = isSpawnedDrone
+                ? getDesignerPreviewDronePosition(partX, partY)
+                : mount;
+            const aim = this.previewAim || {
+                x: fireOrigin.x + TILE_SIZE * 2,
+                y: fireOrigin.y
+            };
+            const aimAngle = Math.atan2(aim.y - fireOrigin.y, aim.x - fireOrigin.x);
             definition.sprite.draw(
                 ctx,
                 mount.x,
                 mount.y,
-                followsAim ? aimAngle + (definition.rotationOffset || 0) : 0,
+                definition.type === PartType.WEAPON && followsAim
+                    ? aimAngle + (definition.rotationOffset || 0)
+                    : 0,
                 null,
                 null
             );
+            if (definition.type === PartType.DRONE) {
+                const drone = design.drone;
+                const droneSprite = new Sprite(
+                    [...(drone?.layers?.base || new Array(64).fill(0))],
+                    8,
+                    8,
+                    3,
+                    { 1: '#00ffff', 2: '#177777' }
+                );
+                const dronePosition = getDesignerPreviewDronePosition(partX, partY);
+                droneSprite.draw(ctx, dronePosition.x, dronePosition.y, 0, .5, .5);
+                ctx.fillStyle = '#00ffff'; ctx.font = '9px monospace'; ctx.textAlign = 'center';
+                ctx.fillText('deployed', dronePosition.x, partY + 28);
+            }
             if (followsAim) {
-                drawAimGuide(ctx, mount.x, mount.y, aim, aimAngle);
-                this.drawPreviewFire(ctx, definition, mount.x, mount.y, aimAngle, now);
+                drawAimGuide(ctx, fireOrigin.x, fireOrigin.y, aim, aimAngle);
+                this.drawPreviewFire(ctx, definition, fireOrigin.x, fireOrigin.y, aimAngle, now, isSpawnedDrone);
             }
         } catch { /* incomplete text fields are allowed while typing */ }
         ctx.strokeStyle = '#44ff88'; ctx.lineWidth = 3; ctx.beginPath();
@@ -799,56 +1011,88 @@ export class Designer {
 
     updateFireTestControl(definition = null) {
         if (!this.fireTestButton) return;
-        const isWeapon = (definition?.type || this.currentPartType) === PartType.WEAPON;
-        this.fireTestButton.disabled = !isWeapon;
-        this.fireTestButton.textContent = isWeapon ? 'fire test' : 'fire test (n/a)';
-        this.fireTestButton.style.opacity = isWeapon ? '1' : '.55';
-        this.fireTestButton.style.cursor = isWeapon ? 'pointer' : 'not-allowed';
+        const type = definition?.type || this.currentPartType;
+        const isWeapon = type === PartType.WEAPON;
+        const isDrone = type === PartType.DRONE && this.editorMode === 'spawned';
+        const projectileType = definition?.stats?.projectileType || this.getActiveProjectileType();
+        const available = (isWeapon || isDrone) && Boolean(projectileType);
+        this.fireTestButton.disabled = !available;
+        this.fireTestButton.textContent = available ? 'fire test' : 'fire test (n/a)';
+        this.fireTestButton.style.opacity = available ? '1' : '.55';
+        this.fireTestButton.style.cursor = available ? 'pointer' : 'not-allowed';
     }
 
     fireTest() {
-        if (this.currentPartType !== PartType.WEAPON) {
+        const projectileType = this.getActiveProjectileType();
+        const isWeapon = this.currentPartType === PartType.WEAPON;
+        const isDrone = this.currentPartType === PartType.DRONE && this.editorMode === 'spawned';
+        if ((!isWeapon && !isDrone) || !projectileType) {
             this.setStatus('fire test is not applicable to this part');
             return false;
         }
-        const aim = this.previewAim || { x: this.previewCanvas.width - 24, y: this.previewCanvas.height / 2 };
         const width = this.currentSize[0];
         const height = this.currentSize[1];
         const partX = 54 + (1 + (width - 1) / 2) * TILE_SIZE;
         const partY = this.previewCanvas.height / 2 + (-Math.floor((height - 1) / 2) + (height - 1) / 2) * TILE_SIZE;
         const definition = this.createDefinition('preview', this.toDesignDocument());
-        const mount = getDesignerPreviewMount(definition, partX, partY, aim);
-        const aimAngle = Math.atan2(aim.y - mount.y, aim.x - mount.x);
-        this.previewFire = { startedAt: nowMs(), partX: mount.x, partY: mount.y, aimAngle };
+        const mountAim = this.previewAim || { x: partX + TILE_SIZE * 2, y: partY };
+        const mount = getDesignerPreviewMount(definition, partX, partY, mountAim);
+        const origin = isDrone ? getDesignerPreviewDronePosition(partX, partY) : mount;
+        const aim = this.previewAim || { x: origin.x + TILE_SIZE * 2, y: origin.y };
+        const aimAngle = Math.atan2(aim.y - origin.y, aim.x - origin.x);
+        const blueprint = isDrone ? resolveDroneBlueprint(this.droneVisual?.blueprintId) : null;
+        this.previewFire = {
+            startedAt: nowMs(),
+            partX: origin.x,
+            partY: origin.y,
+            aimAngle,
+            spawnedDrone: isDrone,
+            projectileType,
+            projectileSpeed: blueprint?.projectileSpeed ?? definition.stats.projectileSpeed,
+            projectileLifetime: blueprint?.projectileLifetime ?? definition.stats.lifetime,
+            projectileLook: isDrone ? this.droneProjectileLook : this.weaponProjectileLook,
+            projectileTrail: isDrone ? this.droneProjectileTrail : this.weaponProjectileTrail
+        };
         this.setStatus('preview fire test — game state untouched');
         this.startPreviewAnimation();
         this.drawPreview();
         return true;
     }
 
-    drawPreviewFire(ctx, definition, partX, partY, aimAngle, now) {
+    drawPreviewFire(ctx, definition, partX, partY, aimAngle, now, spawnedDrone = false) {
         if (!this.previewFire) return;
         const elapsed = now - this.previewFire.startedAt;
         if (elapsed > 900) {
             this.previewFire = null;
             return;
         }
-        const barrel = getDesignerPreviewMuzzle(definition, partX, partY, aimAngle);
-        const travel = Math.min(300, Math.max(0, elapsed * 1.2));
-        const endX = barrel.x + Math.cos(aimAngle) * travel;
-        const endY = barrel.y + Math.sin(aimAngle) * travel;
+        const barrel = this.previewFire.spawnedDrone || spawnedDrone
+            ? getDesignerPreviewDroneMuzzle(partX, partY, aimAngle)
+            : getDesignerPreviewMuzzle(definition, partX, partY, aimAngle);
+        const elapsedSeconds = elapsed / 1000;
+        const projectile = new Projectile(
+            barrel.x,
+            barrel.y,
+            aimAngle,
+            this.previewFire.projectileType,
+            this.previewFire.projectileSpeed || 600,
+            'player',
+            definition.stats.damage || 1,
+            this.previewFire.projectileLifetime ?? null
+        );
+        projectile.projectileLook = this.previewFire.projectileLook || DEFAULT_PROJECTILE_LOOK;
+        projectile.projectileTrail = this.previewFire.projectileTrail || DEFAULT_PROJECTILE_TRAIL;
+        if (definition.stats.range) projectile.beamLength = definition.stats.range;
+        if (!projectile.isBeam) {
+            const travel = Math.min(300, Math.max(0, elapsedSeconds * (projectile.speed || 600)));
+            projectile.x = barrel.x + Math.cos(aimAngle) * travel;
+            projectile.y = barrel.y + Math.sin(aimAngle) * travel;
+        } else if (projectile.type === 'beam_sword') {
+            projectile.update(elapsedSeconds, null);
+        }
         ctx.save();
         ctx.globalAlpha = Math.max(0, 1 - elapsed / 900);
-        drawPreviewProjectile(ctx, definition, barrel, aimAngle, elapsed);
-        if (definition.projectileLook !== 'default' || definition.projectileTrail !== 'default') {
-            ctx.restore();
-            return;
-        }
-        ctx.strokeStyle = '#ffe58a';
-        ctx.shadowColor = '#ff9d2e';
-        ctx.shadowBlur = 10;
-        ctx.lineWidth = 3;
-        ctx.beginPath(); ctx.moveTo(barrel.x, barrel.y); ctx.lineTo(endX, endY); ctx.stroke();
+        drawProjectileOnContext(ctx, projectile);
         if (elapsed < 180) {
             ctx.fillStyle = '#fff5b0';
             ctx.beginPath(); ctx.arc(barrel.x, barrel.y, 7 + (180 - elapsed) / 12, 0, Math.PI * 2); ctx.fill();
@@ -860,11 +1104,62 @@ export class Designer {
         if (this.previewAnimationFrame !== null) return;
         const tick = () => {
             this.previewAnimationFrame = null;
-            if (!this.active || !this.previewFire) return;
-            this.drawPreview();
-            this.previewAnimationFrame = requestPreviewFrame(tick);
+            if (!this.active) return;
+            this.drawProjectileSelectorPreview();
+            if (this.previewFire) this.drawPreview();
+            if (this.previewFire || this.getActiveProjectileType()) {
+                this.previewAnimationFrame = requestPreviewFrame(tick);
+            }
         };
         this.previewAnimationFrame = requestPreviewFrame(tick);
+    }
+
+    updatePreviewFireAnimation() {
+        if (!this.active) return;
+        this.drawProjectileSelectorPreview();
+        if (this.getActiveProjectileType()) this.startPreviewAnimation();
+    }
+
+    drawProjectileSelectorPreview() {
+        if (!this.projectilePreviewCtx) return;
+        const ctx = this.projectilePreviewCtx;
+        ctx.fillStyle = '#080b14';
+        ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+        const type = this.getActiveProjectileType();
+        if (!type) {
+            ctx.fillStyle = '#7788aa';
+            ctx.font = '9px monospace';
+            ctx.textAlign = 'center';
+            ctx.fillText('no projectile', ctx.canvas.width / 2, 25);
+            return;
+        }
+        const blueprint = this.currentPartType === PartType.DRONE
+            ? resolveDroneBlueprint(this.droneVisual?.blueprintId)
+            : null;
+        const projectile = new Projectile(
+            74,
+            ctx.canvas.height / 2,
+            0,
+            type,
+            blueprint?.projectileSpeed ?? this.importedStats?.projectileSpeed ?? 600,
+            'player',
+            1,
+            blueprint?.projectileLifetime ?? this.importedStats?.lifetime ?? null
+        );
+        projectile.projectileLook = this.currentPartType === PartType.DRONE
+            ? this.droneProjectileLook
+            : this.weaponProjectileLook;
+        projectile.projectileTrail = this.currentPartType === PartType.DRONE
+            ? this.droneProjectileTrail
+            : this.weaponProjectileTrail;
+        if (this.importedStats?.range) projectile.beamLength = this.importedStats.range;
+        if (type === 'beam_sword') {
+            const elapsed = (nowMs() % 700) / 1000;
+            projectile.update(Math.min(elapsed, projectile.maxLife), null);
+        }
+        ctx.save();
+        drawProjectileOnContext(ctx, projectile);
+        ctx.restore();
     }
 
     stopPreviewAnimation() {
@@ -943,45 +1238,6 @@ export function getDesignerPreviewMount(definition, partX, partY, aim = { x: par
     return { x: partX + shifted.offsetX, y: partY + shifted.offsetY };
 }
 
-function drawPreviewProjectile(ctx, definition, barrel, angle, elapsed) {
-    const look = definition.projectileLook || DEFAULT_PROJECTILE_LOOK;
-    const trail = definition.projectileTrail || DEFAULT_PROJECTILE_TRAIL;
-    if (look === DEFAULT_PROJECTILE_LOOK && trail === DEFAULT_PROJECTILE_TRAIL) return;
-    ctx.save();
-    ctx.translate(barrel.x, barrel.y);
-    ctx.rotate(angle);
-    ctx.globalAlpha = Math.max(0, 1 - elapsed / 900);
-    if (trail === DEFAULT_PROJECTILE_TRAIL && look !== DEFAULT_PROJECTILE_LOOK) {
-        ctx.fillStyle = '#ff9d2e'; ctx.fillRect(-24, -1, 10, 2);
-    } else if (trail === 'sparks') {
-        ctx.fillStyle = '#fff0a6'; ctx.fillRect(-22, -1, 11, 2);
-        ctx.fillStyle = '#ff9d2e'; ctx.fillRect(-30, 2, 7, 2);
-    } else if (trail === 'smoke') {
-        ctx.fillStyle = '#87919c'; ctx.fillRect(-25, -4, 9, 7);
-        ctx.fillStyle = '#4b5560'; ctx.fillRect(-35, -2, 7, 5);
-    } else if (trail === 'ion') {
-        ctx.fillStyle = '#70f5ff'; ctx.fillRect(-26, -3, 16, 6);
-        ctx.fillStyle = '#e4ffff'; ctx.fillRect(-34, -1, 9, 2);
-    }
-    if (look === 'tracer') {
-        ctx.fillStyle = '#ffe58a'; ctx.fillRect(-14, -1, 28, 2);
-    } else if (look === 'heavy-slug') {
-        ctx.fillStyle = '#d5a36c'; ctx.fillRect(-10, -4, 20, 8);
-        ctx.fillStyle = '#fff0c4'; ctx.fillRect(5, -2, 6, 4);
-    } else if (look === 'plasma-bolt') {
-        ctx.fillStyle = '#7e62ff'; ctx.fillRect(-9, -5, 18, 10);
-        ctx.fillStyle = '#e8d9ff'; ctx.fillRect(-5, -2, 12, 4);
-    } else if (look === 'missile') {
-        ctx.fillStyle = '#c6d0da'; ctx.fillRect(-11, -3, 21, 6);
-        ctx.fillStyle = '#ffcf5c'; ctx.fillRect(8, -2, 5, 4);
-    } else if (look === 'needle') {
-        ctx.fillStyle = '#d8ffff'; ctx.fillRect(-15, -1, 30, 2);
-        ctx.fillStyle = '#ffffff'; ctx.fillRect(10, -2, 6, 4);
-    } else {
-        ctx.fillStyle = '#ffe58a'; ctx.fillRect(-14, -1, 28, 2);
-    }
-    ctx.restore();
-}
 function drawMarker(ctx, point, scale, color) {
     const x = point.x * scale; const y = point.y * scale;
     ctx.strokeStyle = color; ctx.fillStyle = color; ctx.lineWidth = 2;

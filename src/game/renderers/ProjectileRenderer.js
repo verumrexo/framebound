@@ -1,8 +1,13 @@
-import { normalizeProjectileVisuals } from '../../shared/combat/ProjectileVisuals.js';
+import {
+    normalizeProjectileVisuals,
+    PROJECTILE_BEAM_TYPES,
+    supportsProjectileCosmetics
+} from '../../shared/combat/ProjectileVisuals.js';
+import { beamSwordSweepAngle } from '../../shared/combat/BeamSword.js';
 
-const BEAM_TYPES = new Set([
-    'laser', 'small_laser', 'railgun', 'saber', 'beam_freeze', 'beam_sword', 'arc_welder'
-]);
+const BEAM_TYPES = new Set(PROJECTILE_BEAM_TYPES);
+
+export { supportsProjectileCosmetics };
 
 export function drawProjectile(renderer, projectile) {
     if (projectile.delay > 0) return;
@@ -13,7 +18,7 @@ export function drawProjectile(renderer, projectile) {
         look: projectile.projectileLook,
         trail: projectile.projectileTrail
     });
-    const customVisualsSupported = !BEAM_TYPES.has(projectile.type);
+    const customVisualsSupported = supportsProjectileCosmetics(projectile.type);
     if (customVisualsSupported && visuals.trail === 'default' && visuals.look !== 'default') {
         drawDefaultProjectileTrail(renderer, projectile);
     } else if (customVisualsSupported && visuals.trail !== 'default') {
@@ -35,7 +40,10 @@ export function drawProjectile(renderer, projectile) {
     ) {
         ctx.save();
         ctx.translate(projectile.x, projectile.y);
-        ctx.rotate(projectile.angle);
+        const renderAngle = projectile.type === 'beam_sword' && projectile.baseAngle !== undefined
+            ? beamSwordSweepAngle(projectile.baseAngle, projectile.maxLife - projectile.life)
+            : projectile.angle;
+        ctx.rotate(renderAngle);
 
         if (
             projectile.type === 'railgun' ||
@@ -77,11 +85,26 @@ export function drawProjectile(renderer, projectile) {
             renderer.drawRect(0, -coreWidth / 2, projectile.beamLength, coreWidth, '#ffffff');
         } else if (projectile.type === 'beam_sword' || projectile.type === 'arc_welder') {
             const isSword = projectile.type === 'beam_sword';
-            const glowWidth = isSword ? 7 : 5;
+            const glowWidth = isSword ? 8 : 5;
             const coreWidth = isSword ? 2 : 1.5;
-            const beamColor = isSword ? '#ff6bd6' : '#ffd166';
+            const beamColor = isSword ? '#ff4fc4' : '#ffd166';
+            const elapsed = projectile.maxLife - projectile.life;
+            if (isSword) {
+                ctx.globalAlpha = Math.min(1, Math.max(0, 1 - elapsed / projectile.maxLife));
+            }
             renderer.drawRect(0, -glowWidth / 2, projectile.beamLength, glowWidth, beamColor);
-            renderer.drawRect(0, -coreWidth / 2, projectile.beamLength, coreWidth, '#fff7d6');
+            renderer.drawRect(0, -coreWidth / 2, projectile.beamLength, coreWidth, '#fff7ff');
+            if (isSword) {
+                ctx.save();
+                ctx.strokeStyle = 'rgba(255, 128, 224, 0.8)';
+                ctx.shadowColor = '#ff4fc4';
+                ctx.shadowBlur = 8;
+                ctx.lineWidth = 2;
+                ctx.beginPath();
+                ctx.arc(0, 0, projectile.beamLength * 0.46, -0.22, 0.22);
+                ctx.stroke();
+                ctx.restore();
+            }
         } else if (projectile.type === 'small_laser') {
             renderer.drawRect(-12.5, -1.5, 25, 3, color);
         } else {
@@ -233,6 +256,20 @@ export function drawProjectile(renderer, projectile) {
             color
         );
     }
+}
+
+/**
+ * Draw a production projectile into a native 2d context. the adapter keeps
+ * the production renderer as the only source of projectile geometry.
+ */
+export function drawProjectileOnContext(ctx, projectile) {
+    drawProjectile({
+        ctx,
+        drawRect(x, y, width, height, color) {
+            ctx.fillStyle = color;
+            ctx.fillRect(x, y, width, height);
+        }
+    }, projectile);
 }
 
 function drawDefaultProjectileTrail(renderer, projectile) {

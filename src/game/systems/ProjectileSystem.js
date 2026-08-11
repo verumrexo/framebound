@@ -84,8 +84,7 @@ function updateProjectiles(dt, random) {
                     if (p.isBeam) {
                         if (Collision.beamCircle(p.x, p.y, p.angle, p.beamLength, p.radius || 10, enemy.x, enemy.y, enemy.radius || 20)) {
                             const now = this.projectileClock;
-                            const lastHit = p.targetHits.get(enemy);
-                            if (lastHit === undefined || now - lastHit > 0.1) {
+                            if (canBeamHitTarget(p, enemy, now, 0.1)) {
                                 if (p.type === 'hack_dart') {
                                     applyHack(enemy, p);
                                 }
@@ -154,8 +153,7 @@ function updateProjectiles(dt, random) {
                         const hitRange = (p.radius || 10) + (boss.radius || 60);
                         if (bx > 0 && bx < p.beamLength && Math.abs(by) < hitRange) {
                             const now = this.projectileClock;
-                            const lastHit = p.targetHits.get(boss);
-                            if (lastHit === undefined || now - lastHit > 0.1) {
+                            if (canBeamHitTarget(p, boss, now, 0.1)) {
                                 if (p.type !== 'hack_dart') {
                                     boss.takeDamage(p.damage, p.type);
                                     applyEnergyChain(this, p, boss);
@@ -220,8 +218,7 @@ function updateProjectiles(dt, random) {
                         // Beam vs Wreck parts
                         if (Collision.beamCircle(p.x, p.y, p.angle, p.beamLength, p.radius || 10, wreck.x, wreck.y, wreck.radius || 60)) {
                             const now = this.projectileClock;
-                            const lastHit = p.targetHits.get(wreck);
-                            if (lastHit === undefined || now - lastHit > 0.1) {
+                            if (canBeamHitTarget(p, wreck, now, 0.1)) {
                                 const hitResult = wreck.takeDamage(p.damage, wreck.x, wreck.y);
                                 p.targetHits.set(wreck, now);
                                 const isFreeze = p.type === 'beam_freeze';
@@ -257,8 +254,7 @@ function updateProjectiles(dt, random) {
                     if (p.isBeam) {
                         if (Collision.beamCircle(p.x, p.y, p.angle, p.beamLength, p.radius || 10, asteroid.x, asteroid.y, asteroid.radius)) {
                             const now = this.projectileClock;
-                            const lastHit = p.targetHits.get(asteroid);
-                            if (lastHit === undefined || now - lastHit > 0.1) {
+                            if (canBeamHitTarget(p, asteroid, now, 0.1)) {
                                 if (asteroid.takeDamage(p.damage)) this.spawnAsteroidLoot(asteroid);
                                 p.targetHits.set(asteroid, now);
                                 const isFreeze = p.type === 'beam_freeze';
@@ -293,8 +289,7 @@ function updateProjectiles(dt, random) {
                         const hitRange = (p.radius || 10) + crate.radius;
                         if (bx > 0 && bx < p.beamLength && Math.abs(by) < hitRange) {
                             const now = this.projectileClock;
-                            const lastHit = p.targetHits.get(crate);
-                            if (lastHit === undefined || now - lastHit > 0.1) {
+                            if (canBeamHitTarget(p, crate, now, 0.1)) {
                                 if (crate.takeDamage(p.damage)) this.spawnCrateLoot(crate);
                                 p.targetHits.set(crate, now);
                                 const isFreeze = p.type === 'beam_freeze';
@@ -330,8 +325,7 @@ function updateProjectiles(dt, random) {
                         const hitRange = (p.radius || 10) + (drone.radius || 8);
                         if (bx > 0 && bx < p.beamLength && Math.abs(by) < hitRange) {
                             const now = this.projectileClock;
-                            const lastHit = p.targetHits.get(drone);
-                            if (lastHit === undefined || now - lastHit > 0.1) {
+                            if (canBeamHitTarget(p, drone, now, 0.1)) {
                                 drone.takeDamage(p.damage);
                                 p.targetHits.set(drone, now);
                                 const isFreeze = p.type === 'beam_freeze';
@@ -390,8 +384,7 @@ function updateProjectiles(dt, random) {
 
                         if (!p.targetHits) p.targetHits = new Map();
                         const now = this.projectileClock;
-                        const lastHit = p.targetHits.get(decoy);
-                        if (lastHit !== undefined && now - lastHit <= 0.15) continue;
+                        if (!canBeamHitTarget(p, decoy, now, 0.15)) continue;
 
                         const damage = p.damage || 5;
                         decoy.takeDamage?.(damage);
@@ -866,8 +859,7 @@ function collideEnemyProjectileWithShip(game, projectile, target) {
             ) {
                 const now = game.projectileClock || 0;
                 const hitKey = `${target.id}:${key}`;
-                const lastHit = projectile.targetHits.get(hitKey);
-                if (lastHit === undefined || now - lastHit > 0.15) {
+                if (canBeamHitTarget(projectile, hitKey, now, 0.15)) {
                     hit = true;
                     projectile.targetHits.set(hitKey, now);
                 }
@@ -904,4 +896,11 @@ function collideEnemyProjectileWithShip(game, projectile, target) {
         return { hit: true, blocked: false };
     }
     return { hit: false, blocked: false };
+}
+
+function canBeamHitTarget(projectile, target, now, repeatInterval) {
+    const lastHit = projectile.targetHits.get(target);
+    return lastHit === undefined || (
+        projectile.type !== 'beam_sword' && now - lastHit > repeatInterval
+    );
 }
