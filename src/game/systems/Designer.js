@@ -119,6 +119,7 @@ export class Designer {
         this.nextPreviewShotAt = 0;
         this.strokeStart = null;
         this.strokePixels = null;
+        this.strokeTool = null;
         this.histories = new Map();
         this.turretVariants = new Map();
         this.stagedSaveCallback = null;
@@ -379,20 +380,19 @@ export class Designer {
         }
         this.strokeStart = point;
         this.strokePixels = [...this.activeRaster().pixels];
+        this.strokeTool = event.button === 2 ? 'eraser' : this.tool;
         if (this.tool === 'fill') return this.endStroke(event);
-        if (this.tool === 'pencil' || this.tool === 'eraser') this.paintStroke(point);
+        if (this.strokeTool === 'pencil' || this.strokeTool === 'eraser') this.paintStroke(point, this.strokeTool);
     }
 
     moveStroke(event) {
         if (!this.strokeStart || !this.strokePixels) return;
         const point = this.canvasPoint(event);
         if (!point) return;
-        if (this.tool === 'pencil' || this.tool === 'eraser') {
+        if (this.strokeTool === 'pencil' || this.strokeTool === 'eraser') {
             const start = this.lastStrokePoint || this.strokeStart;
             const raster = this.activeRaster();
-            const color = event.buttons === 2 ? 0 : this.colorIndex;
-            const tool = event.buttons === 2 ? 'eraser' : this.tool;
-            this.setActivePixels(drawRasterStroke(raster.pixels, raster.grid.width, raster.grid.height, tool, start, point, color));
+            this.setActivePixels(drawRasterStroke(raster.pixels, raster.grid.width, raster.grid.height, this.strokeTool, start, point, this.colorIndex));
             this.lastStrokePoint = point;
             this.drawAll();
         } else {
@@ -404,28 +404,30 @@ export class Designer {
         if (!this.strokeStart || !this.strokePixels) return;
         const point = this.canvasPoint(event) || this.strokeStart;
         const raster = this.activeRaster();
-        const rightClick = event?.button === 2 || event?.buttons === 2;
-        const tool = rightClick ? 'eraser' : this.tool;
-        const next = drawRasterStroke(
-            this.strokePixels,
-            raster.grid.width,
-            raster.grid.height,
-            tool,
-            this.strokeStart,
-            point,
-            this.colorIndex
-        );
+        const freehand = this.strokeTool === 'pencil' || this.strokeTool === 'eraser';
+        const next = freehand
+            ? [...raster.pixels]
+            : drawRasterStroke(
+                this.strokePixels,
+                raster.grid.width,
+                raster.grid.height,
+                this.strokeTool,
+                this.strokeStart,
+                point,
+                this.colorIndex
+            );
         this.setActivePixels(next);
         this.ensureHistory(this.layer).commit(next);
         this.strokeStart = null;
         this.strokePixels = null;
+        this.strokeTool = null;
         this.lastStrokePoint = null;
         this.changed('art updated');
     }
 
-    paintStroke(point) {
+    paintStroke(point, tool = this.tool) {
         const raster = this.activeRaster();
-        this.setActivePixels(drawRasterStroke(raster.pixels, raster.grid.width, raster.grid.height, this.tool, point, point, this.colorIndex));
+        this.setActivePixels(drawRasterStroke(raster.pixels, raster.grid.width, raster.grid.height, tool, point, point, this.colorIndex));
         this.lastStrokePoint = point;
         this.drawAll();
     }
@@ -434,6 +436,7 @@ export class Designer {
         if (this.strokePixels) this.setActivePixels(this.strokePixels);
         this.strokeStart = null;
         this.strokePixels = null;
+        this.strokeTool = null;
         this.lastStrokePoint = null;
         this.drawAll();
     }
