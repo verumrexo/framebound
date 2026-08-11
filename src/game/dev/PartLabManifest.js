@@ -1,5 +1,6 @@
 import { Sprite } from '../../engine/Sprite.js';
 import { parsePartDesign } from './PartDesignDocument.js';
+import { createCoreEffectSprite } from '../../shared/parts/CoreEffect.js';
 import {
     clearDroneVisualOverrides,
     registerDroneVisualOverride
@@ -226,6 +227,14 @@ export function applyVisualDesignOverride(definition, design) {
     definition.projectileLook = normalizeProjectileLook(design.projectileLook || DEFAULT_PROJECTILE_LOOK);
     definition.projectileTrail = normalizeProjectileTrail(design.projectileTrail || DEFAULT_PROJECTILE_TRAIL);
     if (Number.isFinite(design.rotationOffset)) definition.rotationOffset = design.rotationOffset;
+    if (Object.hasOwn(design, 'coreEffect')) {
+        definition.coreEffectSprite = design.coreEffect
+            ? createCoreEffectSprite(
+                design.coreEffect.color,
+                design.coreEffect.layers.base
+            )
+            : null;
+    }
     if (design.drone) registerDroneVisualOverride(design.drone);
     return true;
 }

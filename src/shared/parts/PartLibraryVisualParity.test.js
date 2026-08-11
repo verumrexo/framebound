@@ -51,6 +51,14 @@ test('auto aim is explicitly legendary and reuses the core effect geometry in re
     assert.deepEqual(autoAim.coreEffectSprite.colorMap, { 1: '#ff4444' });
 });
 
+test('stealth has a distinct hand-authored violet core effect', () => {
+    const core = PartsLibrary.core.coreEffectSprite;
+    const stealth = PartsLibrary.stealth.coreEffectSprite;
+    assert.ok(stealth);
+    assert.equal(stealth.colorMap[1], '#b56cff');
+    assert.notDeepEqual(stealth.data, core.data);
+});
+
 function snapshotSprite(sprite) {
     if (!sprite) return null;
     return {

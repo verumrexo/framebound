@@ -223,6 +223,17 @@ const REQUESTED_SPECS = [
             abilityCooldown: 14,
             abilityDuration: 4
         },
+        coreEffectColor: '#b56cff',
+        coreEffectRows: [
+            '00010000',
+            '00111000',
+            '01101100',
+            '11000110',
+            '01101100',
+            '00111000',
+            '00010000',
+            '00000000'
+        ],
         spriteRows: [
             '00000000',
             '00111000',

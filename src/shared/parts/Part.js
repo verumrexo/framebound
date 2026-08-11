@@ -12,6 +12,10 @@ import { REQUESTED_ARSENAL_PART_SPECS } from './arsenal/RequestedArsenalParts.js
 import { EXTRA_SUPPORT_PART_SPECS } from './arsenal/ExtraSupportParts.js';
 import { EXTRA_WEAPON_PART_SPECS } from './arsenal/ExtraWeaponParts.js';
 import { PART_DESCRIPTIONS } from './PartDescriptions.js';
+import {
+    CORE_EFFECT_PIXELS,
+    createCoreEffectSprite
+} from './CoreEffect.js';
 
 export { PartDef, PartType, TILE_SIZE };
 
@@ -55,23 +59,13 @@ function createArsenalPartDefinition(spec) {
     definition.baseSprite = sprite;
     if (spec.type === PartType.WEAPON) definition.drawTurretInInventory = true;
     if (spec.rarity) definition.rarity = spec.rarity;
-    if (spec.coreEffectColor) definition.coreEffectSprite = createCoreEffectSprite(spec.coreEffectColor);
+    if (spec.coreEffectColor || spec.coreEffectRows) {
+        const pixels = spec.coreEffectRows
+            ? spec.coreEffectRows.flatMap(row => [...row].map(Number))
+            : CORE_EFFECT_PIXELS;
+        definition.coreEffectSprite = createCoreEffectSprite(spec.coreEffectColor, pixels);
+    }
     return definition;
-}
-
-const CORE_EFFECT_PIXELS = [
-    0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 1, 1, 0, 0, 0,
-    0, 0, 1, 0, 0, 1, 0, 0,
-    0, 0, 1, 1, 0, 1, 0, 0,
-    0, 0, 1, 0, 0, 1, 0, 0,
-    0, 0, 0, 1, 1, 0, 0, 0,
-    0, 0, 0, 0, 0, 0, 0, 0
-];
-
-function createCoreEffectSprite(color) {
-    return new Sprite(CORE_EFFECT_PIXELS, 8, 8, 4, { 1: color });
 }
 
 /**

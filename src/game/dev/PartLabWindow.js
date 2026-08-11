@@ -290,6 +290,7 @@ export class PartLabWindow {
         this.hideCatalog();
         this.game.designer.openPart(partId, {
             draft: this.store.get(partId)?.visual || undefined,
+            fallbackDefinition: part,
             onDraftChange: design => this.stageVisual(partId, design),
             onStagedSave: design => this.stageVisual(partId, design),
             onNext: () => {

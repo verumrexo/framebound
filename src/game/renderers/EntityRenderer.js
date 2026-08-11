@@ -12,6 +12,7 @@ import {
     getShopItemState,
     getShopBobY
 } from './ShopPresentation.js';
+import { coreEffectRotation } from '../../shared/parts/CoreEffect.js';
 
 export class EntityRenderer {
 
@@ -88,7 +89,7 @@ export class EntityRenderer {
                 }
 
                 if (def.coreEffectSprite) {
-                    def.coreEffectSprite.draw(ctx, world.x, world.y, rotation + ((Date.now() % 10000) * 0.003));
+                    def.coreEffectSprite.draw(ctx, world.x, world.y, coreEffectRotation(rotation));
                 }
             }
         } finally {

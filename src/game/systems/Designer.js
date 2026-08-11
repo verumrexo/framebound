@@ -25,6 +25,13 @@ import {
     normalizeProjectileTrail,
     supportsProjectileCosmetics
 } from '../../shared/combat/ProjectileVisuals.js';
+import {
+    CORE_EFFECT_GRID,
+    DEFAULT_CORE_EFFECT_COLOR,
+    coreEffectFromSprite,
+    coreEffectRotation,
+    createCoreEffectSprite
+} from '../../shared/parts/CoreEffect.js';
 
 const COLORS = { 1: '#26d426', 2: '#333' };
 const TYPE_LABELS = [
@@ -89,6 +96,9 @@ export function partDefinitionToDesign(partId, definition) {
         : 0;
     design.projectileLook = definition.projectileLook || DEFAULT_PROJECTILE_LOOK;
     design.projectileTrail = definition.projectileTrail || DEFAULT_PROJECTILE_TRAIL;
+    if (definition.coreEffectSprite) {
+        design.coreEffect = coreEffectFromSprite(definition.coreEffectSprite);
+    }
     design.stats = cloneSerializable(definition.stats || {});
     if (definition.type === PartType.DRONE) {
         const blueprintId = definition.stats?.droneType || 'striker';
@@ -242,8 +252,11 @@ export class Designer {
         this.gridData = new Array(64).fill(0);
         this.turretGridData = new Array(64).fill(0);
         this.droneGridData = new Array(64).fill(0);
+        this.coreGridData = new Array(64).fill(0);
+        this.coreColor = DEFAULT_CORE_EFFECT_COLOR;
+        this.coreEnabled = false;
         this.droneVisual = null;
-        this.editorMode = 'carrier';
+        this.editorMode = 'part';
         this.weaponProjectileLook = DEFAULT_PROJECTILE_LOOK;
         this.weaponProjectileTrail = DEFAULT_PROJECTILE_TRAIL;
         this.droneProjectileLook = DEFAULT_PROJECTILE_LOOK;
@@ -303,11 +316,17 @@ export class Designer {
                 <canvas id="projectile-preview" width="190" height="42" aria-label="live projectile preview" style="${canvasStyle('#8b4cc7')};width:190px;height:42px;cursor:default"></canvas>
                 <span id="projectile-availability" style="color:#aabbff;font-size:9px;max-width:220px"></span>
             </div>
-            <div id="drone-visual-controls" style="display:none;margin:10px 0;color:#aabbff">
-                <label>drone visual mode <select id="drone-edit-mode" aria-label="drone visual mode" style="${fieldStyle()}">
-                    <option value="carrier">carrier</option><option value="spawned">spawned drone</option>
+            <div id="visual-layer-controls" style="display:none;margin:10px 0;color:#aabbff">
+                <label>visual layer <select id="visual-layer-select" aria-label="visual layer" style="${fieldStyle()}">
+                    <option value="part">part</option><option value="core">spinning core</option><option value="spawned">spawned drone</option>
                 </select></label>
                 <span id="drone-blueprint-label" style="font-size:9px;margin-left:8px"></span>
+            </div>
+            <div id="core-visual-controls" style="display:none;margin:10px 0;color:#d7b8ff;align-items:center;justify-content:center;gap:10px;flex-wrap:wrap">
+                <label><input type="checkbox" id="core-effect-enabled"> enabled</label>
+                <label>color <input type="color" id="core-effect-color" value="${DEFAULT_CORE_EFFECT_COLOR}" aria-label="spinning core color" style="width:38px;height:28px;padding:1px;border:1px solid #b56cff;background:#0f3460"></label>
+                <code id="core-effect-color-value" aria-label="spinning core hex color">${DEFAULT_CORE_EFFECT_COLOR}</code>
+                <span style="font-size:9px;color:#bda4d9">one color · right-click erases</span>
             </div>
             <div style="margin:10px 0;display:flex;gap:16px;justify-content:center;flex-wrap:wrap">
                 <label><input type="checkbox" id="turret-mode"> base + turret</label>
@@ -321,6 +340,8 @@ export class Designer {
                     <canvas id="turretCanvas" aria-label="turret art canvas" style="${canvasStyle('#ff9944')}"></canvas></div>
                 <div id="drone-canvas-wrapper" style="display:none"><div style="color:#00ffff;margin-bottom:4px">spawned drone art</div>
                     <canvas id="droneCanvas" aria-label="spawned drone art canvas" style="${canvasStyle('#00ffff')}"></canvas></div>
+                <div id="core-canvas-wrapper" style="display:none"><div style="color:#d7b8ff;margin-bottom:4px">spinning core art</div>
+                    <canvas id="coreCanvas" aria-label="spinning core art canvas" style="${canvasStyle('#b56cff')}"></canvas></div>
                 <div><div style="color:#aabbff;margin-bottom:4px">ship mount preview</div>
                     <canvas id="mount-preview" width="280" height="210" aria-label="ship mount preview" style="${canvasStyle('#aabbff')};width:280px;height:210px"></canvas>
                     <div style="color:#8899bb;font-size:9px;margin-top:5px">move over preview to aim · click fire test</div>
@@ -352,6 +373,8 @@ export class Designer {
         this.turretCtx = this.turretCanvas.getContext('2d');
         this.droneCanvas = this.ui.querySelector('#droneCanvas');
         this.droneCtx = this.droneCanvas.getContext('2d');
+        this.coreCanvas = this.ui.querySelector('#coreCanvas');
+        this.coreCtx = this.coreCanvas.getContext('2d');
         this.previewCanvas = this.ui.querySelector('#mount-preview');
         this.previewCtx = this.previewCanvas.getContext('2d');
         this.fireTestButton = this.ui.querySelector('#btn-fire-test');
@@ -371,10 +394,17 @@ export class Designer {
         this.projectilePreviewCanvas = this.ui.querySelector('#projectile-preview');
         this.projectilePreviewCtx = this.projectilePreviewCanvas.getContext('2d');
         this.projectileAvailability = this.ui.querySelector('#projectile-availability');
-        this.droneVisualControls = this.ui.querySelector('#drone-visual-controls');
-        this.droneEditModeSelect = this.ui.querySelector('#drone-edit-mode');
+        this.visualLayerControls = this.ui.querySelector('#visual-layer-controls');
+        this.droneVisualControls = this.visualLayerControls;
+        this.visualLayerSelect = this.ui.querySelector('#visual-layer-select');
+        this.droneEditModeSelect = this.visualLayerSelect;
         this.droneBlueprintLabel = this.ui.querySelector('#drone-blueprint-label');
         this.droneCanvasWrapper = this.ui.querySelector('#drone-canvas-wrapper');
+        this.coreVisualControls = this.ui.querySelector('#core-visual-controls');
+        this.coreCanvasWrapper = this.ui.querySelector('#core-canvas-wrapper');
+        this.coreEnabledCheckbox = this.ui.querySelector('#core-effect-enabled');
+        this.coreColorInput = this.ui.querySelector('#core-effect-color');
+        this.coreColorValue = this.ui.querySelector('#core-effect-color-value');
         this.projectileLookSelect.replaceChildren(...PROJECTILE_LOOK_PRESETS.map(preset => {
             const option = document.createElement('option');
             option.value = preset.id;
@@ -408,9 +438,23 @@ export class Designer {
         this.facingSelect.onchange = () => { this.drawGrid(); this.notifyDraftChange(); };
         this.projectileLookSelect.onchange = () => { this.captureProjectileSelectors(); this.drawPreview(); this.notifyDraftChange(); };
         this.projectileTrailSelect.onchange = () => { this.captureProjectileSelectors(); this.drawPreview(); this.notifyDraftChange(); };
-        this.droneEditModeSelect.onchange = () => {
-            this.editorMode = this.droneEditModeSelect.value;
+        this.visualLayerSelect.onchange = () => {
+            this.editorMode = normalizeEditorMode(this.visualLayerSelect.value);
             this.syncTypeAndTurret('mode');
+            this.drawGrid();
+            this.notifyDraftChange();
+        };
+        this.coreEnabledCheckbox.onchange = () => {
+            this.coreEnabled = this.coreEnabledCheckbox.checked;
+            this.clearStatus();
+            this.drawGrid();
+            this.reconcilePreviewAnimation();
+            this.notifyDraftChange();
+        };
+        this.coreColorInput.oninput = () => {
+            this.coreColor = normalizeCoreColor(this.coreColorInput.value);
+            this.coreColorValue.textContent = this.coreColor;
+            this.clearStatus();
             this.drawGrid();
             this.notifyDraftChange();
         };
@@ -435,6 +479,7 @@ export class Designer {
         this.bindCanvas(this.canvas, false);
         this.bindCanvas(this.turretCanvas, true);
         this.bindDroneCanvas();
+        this.bindCoreCanvas();
         window.addEventListener('resize', () => this.active && this.resizeCanvases());
     }
 
@@ -490,6 +535,28 @@ export class Designer {
         window.addEventListener('mouseup', () => { drawing = false; });
     }
 
+    bindCoreCanvas() {
+        let drawing = false;
+        const handle = event => {
+            const rect = this.coreCanvas.getBoundingClientRect();
+            const rawX = (event.clientX - rect.left) / rect.width * CORE_EFFECT_GRID.width;
+            const rawY = (event.clientY - rect.top) / rect.height * CORE_EFFECT_GRID.height;
+            const x = Math.floor(rawX); const y = Math.floor(rawY);
+            if (x < 0 || y < 0 || x >= CORE_EFFECT_GRID.width || y >= CORE_EFFECT_GRID.height) return;
+            if (event.buttons !== 1 && event.buttons !== 2) return;
+            this.coreGridData[y * CORE_EFFECT_GRID.width + x] = event.buttons === 1 ? 1 : 0;
+            if (event.buttons === 1) {
+                this.coreEnabled = true;
+                this.coreEnabledCheckbox.checked = true;
+            }
+            this.clearStatus(); this.drawGrid(); this.reconcilePreviewAnimation(); this.notifyDraftChange();
+        };
+        this.coreCanvas.onmousedown = event => { drawing = true; handle(event); };
+        this.coreCanvas.onmousemove = event => { if (drawing) handle(event); };
+        this.coreCanvas.oncontextmenu = event => event.preventDefault();
+        window.addEventListener('mouseup', () => { drawing = false; });
+    }
+
     /**
      * Open a blank designer (legacy behavior) or preload a stable library id.
      * Callbacks are intentionally per-open so normal dev-menu use cannot keep
@@ -502,7 +569,12 @@ export class Designer {
         }
         this.configureCallbacks(options || {});
         if (partId !== null && partId !== undefined) {
-            if (options?.draft) this.loadDesign(validateStagedDesignDocument(options.draft, partId));
+            if (options?.draft) {
+                this.loadDesign(
+                    validateStagedDesignDocument(options.draft, partId),
+                    options.fallbackDefinition || PartsLibrary[partId]
+                );
+            }
             else this.loadPart(partId);
         } else {
             this.loadDesign(createBlankPartDesign({
@@ -516,7 +588,7 @@ export class Designer {
         this.active = true;
         this.ui.style.display = 'block';
         this.resizeCanvases();
-        if (this.getActiveProjectileType()) this.startPreviewAnimation();
+        this.reconcilePreviewAnimation();
         if (this.game?.input) this.game.input.active = false;
         return this;
     }
@@ -543,7 +615,7 @@ export class Designer {
         assertStablePartId(partId);
         const definition = partsLibrary?.[partId];
         if (!definition) throw new Error(`unknown part id: ${partId}`);
-        this.loadDesign(partDefinitionToDesign(partId, definition));
+        this.loadDesign(partDefinitionToDesign(partId, definition), definition);
         return this;
     }
 
@@ -567,13 +639,22 @@ export class Designer {
         this.turretMode = this.turretModeCheckbox.checked;
         this.ui.querySelector('#turret-canvas-wrapper').style.display = this.turretMode ? 'block' : 'none';
         const isDrone = this.currentPartType === PartType.DRONE;
+        this.editorMode = normalizeEditorMode(this.editorMode);
+        if (!isDrone && this.editorMode === 'spawned') this.editorMode = 'part';
+        const visualLayerSelect = this.visualLayerSelect || this.droneEditModeSelect;
+        const spawnedOption = visualLayerSelect?.querySelector?.('option[value="spawned"]');
+        if (spawnedOption) spawnedOption.hidden = !isDrone;
+        if (visualLayerSelect) visualLayerSelect.value = this.editorMode;
         if (isDrone && !this.droneVisual) {
             this.droneVisual = droneVisualFromBlueprint(this.importedStats?.droneType || 'striker');
             this.droneGridData = [...this.droneVisual.layers.base];
         }
-        this.droneVisualControls.style.display = isDrone ? 'block' : 'none';
+        (this.visualLayerControls || this.droneVisualControls)?.style &&
+            ((this.visualLayerControls || this.droneVisualControls).style.display = 'block');
         this.droneCanvasWrapper.style.display = isDrone && this.editorMode === 'spawned' ? 'block' : 'none';
-        this.droneBlueprintLabel.textContent = isDrone && this.droneVisual
+        if (this.coreVisualControls) this.coreVisualControls.style.display = this.editorMode === 'core' ? 'flex' : 'none';
+        if (this.coreCanvasWrapper) this.coreCanvasWrapper.style.display = this.editorMode === 'core' ? 'block' : 'none';
+        this.droneBlueprintLabel.textContent = isDrone && this.editorMode === 'spawned' && this.droneVisual
             ? `blueprint: ${this.droneVisual.blueprintId}`
             : '';
         this.facingSelect.style.display = this.turretMode ? 'inline-block' : 'none';
@@ -584,14 +665,28 @@ export class Designer {
             this.barrelModeCheckbox.checked = false;
         }
         this.resizeCanvases();
+        this.reconcilePreviewAnimation();
     }
 
     getActiveProjectileType() {
-        if (this.currentPartType === PartType.WEAPON) return this.importedStats?.projectileType || null;
+        if (this.currentPartType === PartType.WEAPON && this.editorMode === 'part') return this.importedStats?.projectileType || null;
         if (this.currentPartType === PartType.DRONE && this.editorMode === 'spawned') {
             return resolveDroneBlueprint(this.droneVisual?.blueprintId || this.importedStats?.droneType).projectileType || null;
         }
         return null;
+    }
+
+    needsPreviewAnimation() {
+        return Boolean(this.previewFire || this.coreEnabled || this.getActiveProjectileType());
+    }
+
+    reconcilePreviewAnimation() {
+        if (!this.active || !this.needsPreviewAnimation()) {
+            this.stopPreviewAnimation();
+            return false;
+        }
+        this.startPreviewAnimation();
+        return true;
     }
 
     captureProjectileSelectors() {
@@ -608,7 +703,7 @@ export class Designer {
 
     syncProjectileVisualControls() {
         if (!this.projectileLookSelect) return;
-        const isWeapon = this.currentPartType === PartType.WEAPON;
+        const isWeapon = this.currentPartType === PartType.WEAPON && this.editorMode === 'part';
         const isSpawnedDrone = this.currentPartType === PartType.DRONE && this.editorMode === 'spawned';
         const projectileType = this.getActiveProjectileType();
         const visible = isWeapon || isSpawnedDrone;
@@ -657,6 +752,10 @@ export class Designer {
         this.droneCanvas.height = 8 * this.editorScale;
         this.droneCanvas.style.width = `${this.droneCanvas.width}px`;
         this.droneCanvas.style.height = `${this.droneCanvas.height}px`;
+        this.coreCanvas.width = CORE_EFFECT_GRID.width * this.editorScale;
+        this.coreCanvas.height = CORE_EFFECT_GRID.height * this.editorScale;
+        this.coreCanvas.style.width = `${this.coreCanvas.width}px`;
+        this.coreCanvas.style.height = `${this.coreCanvas.height}px`;
         this.drawGrid();
     }
 
@@ -687,6 +786,13 @@ export class Designer {
         design.projectileTrail = this.turretMode
             ? normalizeProjectileTrail(this.weaponProjectileTrail)
             : DEFAULT_PROJECTILE_TRAIL;
+        design.coreEffect = this.coreEnabled
+            ? {
+                grid: { ...CORE_EFFECT_GRID },
+                layers: { base: [...this.coreGridData] },
+                color: normalizeCoreColor(this.coreColor)
+            }
+            : null;
         if (partType === PartType.DRONE) {
             const drone = this.droneVisual || droneVisualFromBlueprint(this.importedStats.droneType || 'striker');
             const hasProjectile = Boolean(resolveDroneBlueprint(drone.blueprintId).projectileType);
@@ -703,7 +809,7 @@ export class Designer {
         return design;
     }
 
-    loadDesign(design) {
+    loadDesign(design, fallbackDefinition = null) {
         this.currentPartId = design.partId || null;
         this.currentPartType = design.partType || design.type;
         this.nameInput.value = design.name;
@@ -738,7 +844,20 @@ export class Designer {
             }
             : (this.currentPartType === PartType.DRONE ? droneVisualFromBlueprint(design.stats?.droneType || 'striker') : null);
         this.droneGridData = this.droneVisual ? [...this.droneVisual.layers.base] : new Array(64).fill(0);
-        this.editorMode = 'carrier';
+        const coreEffect = Object.hasOwn(design, 'coreEffect')
+            ? design.coreEffect
+            : fallbackDefinition?.coreEffectSprite
+                ? coreEffectFromSprite(fallbackDefinition.coreEffectSprite)
+                : null;
+        this.coreGridData = coreEffect?.layers?.base
+            ? [...coreEffect.layers.base]
+            : new Array(64).fill(0);
+        this.coreColor = normalizeCoreColor(coreEffect?.color || DEFAULT_CORE_EFFECT_COLOR);
+        this.coreEnabled = Boolean(coreEffect);
+        if (this.coreEnabledCheckbox) this.coreEnabledCheckbox.checked = this.coreEnabled;
+        if (this.coreColorInput) this.coreColorInput.value = this.coreColor;
+        if (this.coreColorValue) this.coreColorValue.textContent = this.coreColor;
+        this.editorMode = 'part';
         this.droneEditModeSelect.value = this.editorMode;
         this.weaponProjectileLook = design.projectileLook || DEFAULT_PROJECTILE_LOOK;
         this.weaponProjectileTrail = design.projectileTrail || DEFAULT_PROJECTILE_TRAIL;
@@ -896,6 +1015,12 @@ export class Designer {
         }
         definition.projectileLook = design.projectileLook || DEFAULT_PROJECTILE_LOOK;
         definition.projectileTrail = design.projectileTrail || DEFAULT_PROJECTILE_TRAIL;
+        definition.coreEffectSprite = design.coreEffect
+            ? createCoreEffectSprite(
+                design.coreEffect.color,
+                design.coreEffect.layers.base
+            )
+            : null;
         if (definition.type === PartType.DRONE && design.drone) {
             definition.droneVisual = {
                 blueprintId: design.drone.blueprintId,
@@ -913,7 +1038,28 @@ export class Designer {
         if (this.currentPartType === PartType.DRONE && this.editorMode === 'spawned') {
             this.drawEditorLayer(this.droneCtx, this.droneGridData, null, null, '#00ffff', 8, 8);
         }
+        if (this.editorMode === 'core') this.drawCoreEffectLayer();
         this.drawPreview();
+    }
+
+    drawCoreEffectLayer() {
+        const scale = this.editorScale;
+        const ctx = this.coreCtx;
+        ctx.fillStyle = '#05070d'; ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+        for (let y = 0; y < CORE_EFFECT_GRID.height; y++) for (let x = 0; x < CORE_EFFECT_GRID.width; x++) {
+            ctx.strokeStyle = '#303442'; ctx.lineWidth = 1;
+            ctx.strokeRect(x * scale, y * scale, scale, scale);
+            if (this.coreGridData[y * CORE_EFFECT_GRID.width + x]) {
+                ctx.fillStyle = this.coreColor;
+                ctx.fillRect(x * scale + 1, y * scale + 1, scale - 2, scale - 2);
+            }
+        }
+        if (!this.coreEnabled) {
+            ctx.fillStyle = 'rgba(5, 7, 13, .62)';
+            ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+            ctx.fillStyle = '#bda4d9'; ctx.font = `${Math.max(11, scale)}px monospace`;
+            ctx.textAlign = 'center'; ctx.fillText('disabled', ctx.canvas.width / 2, ctx.canvas.height / 2);
+        }
     }
 
     drawEditorLayer(ctx, data, pivot, barrel, accent, width = this.gridWidth, height = this.gridHeight) {
@@ -949,7 +1095,7 @@ export class Designer {
         try {
             definition = this.createDefinition('preview', design);
             if (definition.baseSprite) definition.baseSprite.draw(ctx, partX, partY, 0, .5, .5);
-            const followsAim = definition.type === PartType.WEAPON ||
+            const followsAim = (definition.type === PartType.WEAPON && this.editorMode === 'part') ||
                 (definition.type === PartType.DRONE && this.editorMode === 'spawned');
             const isSpawnedDrone = definition.type === PartType.DRONE && this.editorMode === 'spawned';
             const mountAim = this.previewAim || { x: partX + TILE_SIZE * 2, y: partY };
@@ -972,6 +1118,9 @@ export class Designer {
                 null,
                 null
             );
+            if (definition.coreEffectSprite) {
+                definition.coreEffectSprite.draw(ctx, partX, partY, coreEffectRotation());
+            }
             if (definition.type === PartType.DRONE) {
                 const drone = design.drone;
                 const droneSprite = new Sprite(
@@ -1012,7 +1161,7 @@ export class Designer {
     updateFireTestControl(definition = null) {
         if (!this.fireTestButton) return;
         const type = definition?.type || this.currentPartType;
-        const isWeapon = type === PartType.WEAPON;
+        const isWeapon = type === PartType.WEAPON && this.editorMode === 'part';
         const isDrone = type === PartType.DRONE && this.editorMode === 'spawned';
         const projectileType = definition?.stats?.projectileType || this.getActiveProjectileType();
         const available = (isWeapon || isDrone) && Boolean(projectileType);
@@ -1024,7 +1173,7 @@ export class Designer {
 
     fireTest() {
         const projectileType = this.getActiveProjectileType();
-        const isWeapon = this.currentPartType === PartType.WEAPON;
+        const isWeapon = this.currentPartType === PartType.WEAPON && this.editorMode === 'part';
         const isDrone = this.currentPartType === PartType.DRONE && this.editorMode === 'spawned';
         if ((!isWeapon && !isDrone) || !projectileType) {
             this.setStatus('fire test is not applicable to this part');
@@ -1101,13 +1250,16 @@ export class Designer {
     }
 
     startPreviewAnimation() {
-        if (this.previewAnimationFrame !== null) return;
+        if (!this.active || !this.needsPreviewAnimation() || this.previewAnimationFrame !== null) return;
         const tick = () => {
             this.previewAnimationFrame = null;
-            if (!this.active) return;
+            if (!this.active || !this.needsPreviewAnimation()) {
+                this.stopPreviewAnimation();
+                return;
+            }
             this.drawProjectileSelectorPreview();
-            if (this.previewFire) this.drawPreview();
-            if (this.previewFire || this.getActiveProjectileType()) {
+            if (this.previewFire || this.coreEnabled) this.drawPreview();
+            if (this.needsPreviewAnimation()) {
                 this.previewAnimationFrame = requestPreviewFrame(tick);
             }
         };
@@ -1117,7 +1269,7 @@ export class Designer {
     updatePreviewFireAnimation() {
         if (!this.active) return;
         this.drawProjectileSelectorPreview();
-        if (this.getActiveProjectileType()) this.startPreviewAnimation();
+        this.reconcilePreviewAnimation();
     }
 
     drawProjectileSelectorPreview() {
@@ -1163,7 +1315,10 @@ export class Designer {
     }
 
     stopPreviewAnimation() {
-        if (this.previewAnimationFrame === null) return;
+        if (this.previewAnimationFrame === null || this.previewAnimationFrame === undefined) {
+            this.previewAnimationFrame = null;
+            return;
+        }
         cancelPreviewFrame(this.previewAnimationFrame);
         this.previewAnimationFrame = null;
     }
@@ -1178,6 +1333,8 @@ function canvasStyle(color) { return `border:2px solid ${color};image-rendering:
 function safeName(value) { return (value || 'part').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'part'; }
 function closestFacing(value) { return [0, 1.5708, 3.1416, 4.7124].reduce((best, option) => Math.abs(option - value) < Math.abs(best - value) ? option : best, 0).toString(); }
 function facingArrow(rotation) { if (rotation > 4.7) return '↑'; if (rotation > 3.1) return '←'; if (rotation > 1.5) return '↓'; return '→'; }
+function normalizeEditorMode(value) { return value === 'carrier' ? 'part' : ['part', 'core', 'spawned'].includes(value) ? value : 'part'; }
+function normalizeCoreColor(value) { return typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value) ? value.toLowerCase() : DEFAULT_CORE_EFFECT_COLOR; }
 function snapPoint(x, y, maxX, maxY) { return { x: Math.max(0, Math.min(maxX, Math.round(x * 2) / 2)), y: Math.max(0, Math.min(maxY, Math.round(y * 2) / 2)) }; }
 function nowMs() { return globalThis.performance?.now?.() ?? Date.now(); }
 function clamp(value, min, max) { return Math.max(min, Math.min(max, value)); }

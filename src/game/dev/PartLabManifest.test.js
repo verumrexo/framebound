@@ -14,6 +14,7 @@ import {
     clearDroneVisualOverrides,
     getDroneBlueprintVisual
 } from '../../shared/combat/DroneBlueprints.js';
+import { createCoreEffectSprite } from '../../shared/parts/CoreEffect.js';
 
 function design() {
     const value = createBlankPartDesign({ name: 'dart', type: 'weapon' });
@@ -154,4 +155,34 @@ test('part lab manifests round-trip and apply nested drone visuals without mutat
     assert.equal(visual.projectileLook, 'heavy-slug');
     assert.equal(visual.projectileTrail, 'smoke');
     clearDroneVisualOverrides();
+});
+
+test('visual override preserves, removes, and replaces core effects by field presence', () => {
+    const original = createCoreEffectSprite('#55ccff');
+    const definition = {
+        id: 'hull', name: 'hull', type: 'hull', width: 1, height: 1,
+        stats: { hp: 22, mass: 4 },
+        sprite: { data: new Array(64).fill(1), width: 8, height: 8, scale: 4, anchorX: .5, anchorY: .5 },
+        coreEffectSprite: original
+    };
+    const absent = createBlankPartDesign({ name: 'hull', type: 'hull' });
+    delete absent.coreEffect;
+    applyVisualDesignOverride(definition, absent);
+    assert.equal(definition.coreEffectSprite, original);
+
+    const replacement = createBlankPartDesign({ name: 'hull', type: 'hull' });
+    replacement.coreEffect = {
+        grid: { width: 8, height: 8 },
+        layers: { base: new Array(64).fill(0).map((_, index) => index === 3 ? 1 : 0) },
+        color: '#B56CFF'
+    };
+    applyVisualDesignOverride(definition, replacement);
+    assert.notEqual(definition.coreEffectSprite, original);
+    assert.equal(definition.coreEffectSprite.colorMap[1], '#B56CFF');
+    assert.equal(definition.coreEffectSprite.data[3], 1);
+
+    const removed = createBlankPartDesign({ name: 'hull', type: 'hull' });
+    removed.coreEffect = null;
+    applyVisualDesignOverride(definition, removed);
+    assert.equal(definition.coreEffectSprite, null);
 });

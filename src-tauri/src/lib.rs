@@ -135,6 +135,8 @@ struct PartLabDesign {
     projectile_trail: Option<String>,
     #[serde(default)]
     drone: Option<PartLabDroneVisual>,
+    #[serde(default)]
+    core_effect: Option<PartLabCoreEffect>,
 }
 
 #[cfg(any(debug_assertions, feature = "part-lab"))]
@@ -148,6 +150,21 @@ struct PartLabDroneVisual {
     projectile_look: Option<String>,
     #[serde(default)]
     projectile_trail: Option<String>,
+}
+
+#[cfg(any(debug_assertions, feature = "part-lab"))]
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PartLabCoreEffect {
+    grid: PartLabSize,
+    layers: PartLabCoreLayers,
+    color: String,
+}
+
+#[cfg(any(debug_assertions, feature = "part-lab"))]
+#[derive(Deserialize)]
+struct PartLabCoreLayers {
+    base: Vec<u8>,
 }
 
 #[cfg(any(debug_assertions, feature = "part-lab"))]
@@ -515,10 +532,28 @@ fn validate_part_lab_design(part_id: &str, design: &PartLabDesign) -> Result<(),
             return Err(format!("visual design for {part_id} has invalid drone projectile visuals"));
         }
     }
+    if let Some(core) = &design.core_effect {
+        if core.grid.width != 8 || core.grid.height != 8 {
+            return Err(format!("visual design for {part_id} has an invalid core effect grid"));
+        }
+        if core.layers.base.len() != 64 || core.layers.base.iter().any(|pixel| *pixel > 1) {
+            return Err(format!("visual design for {part_id} has invalid core effect pixels"));
+        }
+        if !is_core_effect_color(&core.color) {
+            return Err(format!("visual design for {part_id} has an invalid core effect color"));
+        }
+    }
     if !design.rotation_offset.is_finite() || !design.stats.is_object() {
         return Err(format!("visual design for {part_id} has invalid metadata"));
     }
     Ok(())
+}
+
+#[cfg(any(debug_assertions, feature = "part-lab"))]
+fn is_core_effect_color(value: &str) -> bool {
+    value.len() == 7
+        && value.as_bytes()[0] == b'#'
+        && value.as_bytes()[1..].iter().all(|byte| byte.is_ascii_hexdigit())
 }
 
 #[cfg(any(debug_assertions, feature = "part-lab"))]
@@ -1065,6 +1100,30 @@ mod tests {
             .expect("allowed projectile presets should promote");
 
         valid["visuals"][0]["design"]["projectileLook"] = serde_json::json!("damage-buff");
+        assert!(promote_part_lab_manifest_to(&root, &valid.to_string()).is_err());
+        if root.parent().unwrap().exists() {
+            fs::remove_dir_all(root.parent().unwrap())
+                .expect("test directory should be removable");
+        }
+    }
+
+    #[test]
+    fn part_lab_promotion_validates_optional_core_effects() {
+        let root = test_path("generated-parts");
+        let mut valid = serde_json::from_str::<serde_json::Value>(&valid_part_lab_manifest())
+            .expect("fixture should parse");
+        valid["visuals"][0]["design"]["coreEffect"] = serde_json::json!({
+            "grid": { "width": 8, "height": 8 },
+            "layers": { "base": vec![0; 64] },
+            "color": "#b56cff"
+        });
+        promote_part_lab_manifest_to(&root, &valid.to_string())
+            .expect("valid core effect should promote");
+
+        valid["visuals"][0]["design"]["coreEffect"]["layers"]["base"][0] = serde_json::json!(2);
+        assert!(promote_part_lab_manifest_to(&root, &valid.to_string()).is_err());
+        valid["visuals"][0]["design"]["coreEffect"]["layers"]["base"][0] = serde_json::json!(0);
+        valid["visuals"][0]["design"]["coreEffect"]["color"] = serde_json::json!("cyan");
         assert!(promote_part_lab_manifest_to(&root, &valid.to_string()).is_err());
         if root.parent().unwrap().exists() {
             fs::remove_dir_all(root.parent().unwrap())

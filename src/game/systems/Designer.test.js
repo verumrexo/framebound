@@ -6,6 +6,7 @@ import {
     serializePartDesign
 } from '../dev/PartDesignDocument.js';
 import { TILE_SIZE } from '../../shared/parts/Part.js';
+import { createCoreEffectSprite } from '../../shared/parts/CoreEffect.js';
 
 const {
     Designer,
@@ -90,6 +91,19 @@ test('part definition conversion preserves art, anchors, barrel, rotation, and s
     assert.deepEqual(design.stats, stats);
     assert.notEqual(design.stats, stats);
     assert.deepEqual(definition.stats, stats);
+});
+
+test('designer conversion extracts exact custom core pixels and color', () => {
+    const corePixels = new Array(64).fill(0);
+    corePixels[9] = 1;
+    const design = partDefinitionToDesign('violet_hull', {
+        id: 'violet_hull', name: 'violet hull', type: 'hull', width: 1, height: 1,
+        stats: { hp: 20, mass: 2 },
+        sprite: { data: new Array(64).fill(1), width: 8, height: 8, scale: 4, anchorX: .5, anchorY: .5 },
+        coreEffectSprite: createCoreEffectSprite('#b56cff', corePixels)
+    });
+    assert.deepEqual(design.coreEffect.layers.base, corePixels);
+    assert.equal(design.coreEffect.color, '#b56cff');
 });
 
 test('conversion keeps library types that the shared document schema does not edit directly', () => {
@@ -240,6 +254,8 @@ test('designer keeps the workspace visible while switching carrier and spawned d
     worker.turretModeCheckbox = { checked: false };
     worker.droneVisualControls = { style: {} };
     worker.droneCanvasWrapper = droneWrapper;
+    worker.coreVisualControls = { style: {} };
+    worker.coreCanvasWrapper = { style: { display: 'none' } };
     worker.droneCanvas = { parentElement: { parentElement: workspace } };
     worker.droneBlueprintLabel = { textContent: '' };
     worker.facingSelect = { style: {} };
@@ -259,11 +275,141 @@ test('designer keeps the workspace visible while switching carrier and spawned d
     assert.equal(workspace.style.display, 'flex');
     assert.equal(droneWrapper.style.display, 'block');
     assert.equal(worker.droneVisualControls.style.display, 'block');
+    assert.equal(worker.droneBlueprintLabel.textContent, 'blueprint: striker');
 
     worker.editorMode = 'carrier';
     worker.syncTypeAndTurret('mode');
     assert.equal(workspace.style.display, 'flex');
     assert.equal(droneWrapper.style.display, 'none');
+    assert.equal(worker.droneBlueprintLabel.textContent, '');
+
+    worker.editorMode = 'core';
+    worker.syncTypeAndTurret('mode');
+    assert.equal(worker.droneBlueprintLabel.textContent, '');
+});
+
+test('enabled core continuously animates the mounted preview and stops when disabled', () => {
+    const worker = Object.create(Designer.prototype);
+    const frames = new Map();
+    const cancelled = [];
+    let nextFrameId = 0;
+    let mountedPreviewDraws = 0;
+    let projectilePreviewDraws = 0;
+    const originalRequestAnimationFrame = globalThis.requestAnimationFrame;
+    const originalCancelAnimationFrame = globalThis.cancelAnimationFrame;
+    globalThis.requestAnimationFrame = callback => {
+        const id = ++nextFrameId;
+        frames.set(id, callback);
+        return id;
+    };
+    globalThis.cancelAnimationFrame = id => {
+        cancelled.push(id);
+        frames.delete(id);
+    };
+    worker.active = true;
+    worker.previewFire = null;
+    worker.previewAnimationFrame = null;
+    worker.coreEnabled = true;
+    worker.getActiveProjectileType = () => null;
+    worker.drawPreview = () => { mountedPreviewDraws += 1; };
+    worker.drawProjectileSelectorPreview = () => { projectilePreviewDraws += 1; };
+
+    try {
+        assert.equal(worker.reconcilePreviewAnimation(), true);
+        assert.equal(frames.size, 1);
+        const firstFrame = frames.get(1);
+        frames.delete(1);
+        firstFrame();
+        assert.equal(projectilePreviewDraws, 1);
+        assert.equal(mountedPreviewDraws, 1);
+        assert.equal(frames.size, 1);
+
+        worker.coreEnabled = false;
+        assert.equal(worker.reconcilePreviewAnimation(), false);
+        assert.deepEqual(cancelled, [2]);
+        assert.equal(worker.previewAnimationFrame, null);
+        assert.equal(frames.size, 0);
+    } finally {
+        if (originalRequestAnimationFrame) globalThis.requestAnimationFrame = originalRequestAnimationFrame;
+        else delete globalThis.requestAnimationFrame;
+        if (originalCancelAnimationFrame) globalThis.cancelAnimationFrame = originalCancelAnimationFrame;
+        else delete globalThis.cancelAnimationFrame;
+    }
+});
+
+test('designer shows the core layer without drone or projectile controls', () => {
+    const worker = Object.create(Designer.prototype);
+    worker.ui = { querySelector: () => ({ style: {} }) };
+    worker.typeSelect = { value: 'weapon' };
+    worker.turretModeCheckbox = { checked: true };
+    worker.droneVisualControls = { style: {} };
+    worker.droneCanvasWrapper = { style: {} };
+    worker.coreVisualControls = { style: {} };
+    worker.coreCanvasWrapper = { style: {} };
+    worker.droneBlueprintLabel = { textContent: '' };
+    worker.facingSelect = { style: {} };
+    worker.barrelModeCheckbox = { disabled: false, checked: false };
+    worker.importedStats = { projectileType: 'laser' };
+    worker.droneVisual = null;
+    worker.editorMode = 'core';
+    worker.syncProjectileVisualControls = () => {};
+    worker.resizeCanvases = () => {};
+    worker.syncTypeAndTurret('type');
+    assert.equal(worker.coreVisualControls.style.display, 'flex');
+    assert.equal(worker.coreCanvasWrapper.style.display, 'block');
+    assert.equal(worker.droneCanvasWrapper.style.display, 'none');
+});
+
+test('designer documents keep core color and binary pixels without touching a definition during preview construction', () => {
+    const worker = Object.create(Designer.prototype);
+    worker.currentPartType = 'hull';
+    worker.currentPartId = 'hull';
+    worker.currentSize = [1, 1];
+    worker.nameInput = { value: 'violet hull' };
+    worker.typeSelect = { value: 'hull' };
+    worker.gridData = new Array(64).fill(0);
+    worker.turretGridData = new Array(64).fill(0);
+    worker.turretMode = false;
+    worker.basePivot = null;
+    worker.turretPivot = null;
+    worker.barrelPos = null;
+    worker.rawAnchors = { base: null, turret: null };
+    worker.rawBarrel = null;
+    worker.facingSelect = { value: '0' };
+    worker.weaponProjectileLook = 'default';
+    worker.weaponProjectileTrail = 'default';
+    worker.coreEnabled = true;
+    worker.coreGridData = new Array(64).fill(0);
+    worker.coreGridData[10] = 1;
+    worker.coreColor = '#b56cff';
+    worker.importedStats = { hp: 20, mass: 2 };
+    worker.notesInput = { value: '' };
+    const design = worker.toDesignDocument();
+    const definition = worker.createDefinition('preview', design);
+    assert.equal(design.coreEffect.color, '#b56cff');
+    assert.equal(design.coreEffect.layers.base[10], 1);
+    assert.equal(definition.coreEffectSprite.colorMap[1], '#b56cff');
+    assert.equal(definition.coreEffectSprite.data[10], 1);
+});
+
+test('old drafts without core effect inherit the current definition effect on load', () => {
+    const design = createBlankPartDesign({ name: 'core carrier', type: 'hull' });
+    delete design.coreEffect;
+    const worker = Object.create(Designer.prototype);
+    worker.nameInput = { value: '' };
+    worker.typeSelect = { value: '' };
+    worker.sizeSelect = { value: '' };
+    worker.turretModeCheckbox = { checked: false };
+    worker.droneEditModeSelect = { value: '' };
+    worker.facingSelect = { value: '' };
+    worker.notesInput = { value: '' };
+    worker.syncTypeAndTurret = () => {};
+    worker.loadDesign(design, {
+        coreEffectSprite: createCoreEffectSprite('#55ccff', new Array(64).fill(0).map((_, index) => index === 18 ? 1 : 0))
+    });
+    assert.equal(worker.coreEnabled, true);
+    assert.equal(worker.coreColor, '#55ccff');
+    assert.equal(worker.coreGridData[18], 1);
 });
 
 test('designer preview construction does not register staged drone visuals', () => {

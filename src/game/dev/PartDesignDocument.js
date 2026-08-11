@@ -4,6 +4,7 @@ import {
     normalizeProjectileLook,
     normalizeProjectileTrail
 } from '../../shared/combat/ProjectileVisuals.js';
+import { CORE_EFFECT_GRID } from '../../shared/parts/CoreEffect.js';
 
 const FORMAT = 'framebound-part-design';
 const VERSION = 1;
@@ -60,6 +61,7 @@ export function createBlankPartDesign({
         rotationOffset: 0,
         projectileLook: DEFAULT_PROJECTILE_LOOK,
         projectileTrail: DEFAULT_PROJECTILE_TRAIL,
+        coreEffect: null,
         drone: null,
         stats: {},
         notes: ''
@@ -158,6 +160,9 @@ export function normalizePartDesign(value) {
 
     const projectileLook = normalizeProjectileLook(value.projectileLook);
     const projectileTrail = normalizeProjectileTrail(value.projectileTrail);
+    const coreEffect = Object.hasOwn(value, 'coreEffect')
+        ? normalizeCoreEffect(value.coreEffect)
+        : undefined;
     const drone = normalizeDroneVisual(value.drone, type);
 
     const stats = normalizeJsonObject(value.stats ?? {}, 'stats');
@@ -179,9 +184,30 @@ export function normalizePartDesign(value) {
         rotationOffset,
         projectileLook,
         projectileTrail,
+        ...(coreEffect === undefined ? {} : { coreEffect }),
         drone,
         stats,
         notes
+    };
+}
+
+export function normalizeCoreEffect(value) {
+    if (value === null) return null;
+    if (!isPlainObject(value)) throw new Error('core effect must be an object or null');
+    if (!isPlainObject(value.grid) ||
+        value.grid.width !== CORE_EFFECT_GRID.width ||
+        value.grid.height !== CORE_EFFECT_GRID.height) {
+        throw new Error('core effect grid must be 8x8');
+    }
+    if (!isPlainObject(value.layers)) throw new Error('core effect layers are missing');
+    const base = normalizeBinaryPixels(value.layers.base, 64, 'core effect base');
+    if (typeof value.color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(value.color)) {
+        throw new Error('core effect color must be #RRGGBB');
+    }
+    return {
+        grid: { ...CORE_EFFECT_GRID },
+        layers: { base },
+        color: value.color.toLowerCase()
     };
 }
 
@@ -221,6 +247,18 @@ function normalizePixels(value, expectedLength, label) {
     }
     return value.map(pixel => {
         if (!Number.isInteger(pixel) || pixel < 0 || pixel > 2) {
+            throw new Error(`${label} layer contains an invalid pixel`);
+        }
+        return pixel;
+    });
+}
+
+function normalizeBinaryPixels(value, expectedLength, label) {
+    if (!Array.isArray(value) || value.length !== expectedLength) {
+        throw new Error(`${label} layer has the wrong pixel count`);
+    }
+    return value.map(pixel => {
+        if (!Number.isInteger(pixel) || (pixel !== 0 && pixel !== 1)) {
             throw new Error(`${label} layer contains an invalid pixel`);
         }
         return pixel;
