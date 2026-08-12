@@ -371,7 +371,9 @@ export class Designer {
     }
 
     beginStroke(event) {
-        const point = this.canvasPoint(event);
+        const point = this.pointMode
+            ? this.canvasGeometryPoint(event)
+            : this.canvasPoint(event);
         if (!point) return;
         this.canvas.setPointerCapture?.(event.pointerId);
         if (this.pointMode) {
@@ -442,12 +444,11 @@ export class Designer {
     }
 
     placePoint(point) {
-        const snapped = { x: point.x + 0.5, y: point.y + 0.5 };
-        if (this.pointMode === 'base') this.design.anchors.base = snapped;
-        if (this.pointMode === 'turret') this.design.anchors.turret = snapped;
+        if (this.pointMode === 'base') this.design.anchors.base = point;
+        if (this.pointMode === 'turret') this.design.anchors.turret = point;
         if (this.pointMode === 'muzzle') {
             if (this.design.muzzles.length >= 16) return this.setStatus('16 muzzles is already ridiculous', true);
-            this.design.muzzles.push(snapped);
+            this.design.muzzles.push(point);
         }
         this.pointMode = null;
         this.changed('geometry point updated');
@@ -892,6 +893,18 @@ export class Designer {
         const x = Math.floor((event.clientX - rect.left) * this.canvas.width / Math.max(1, rect.width) / this.editorScale);
         const y = Math.floor((event.clientY - rect.top) * this.canvas.height / Math.max(1, rect.height) / this.editorScale);
         return x >= 0 && y >= 0 && x < raster.grid.width && y < raster.grid.height ? { x, y } : null;
+    }
+
+    canvasGeometryPoint(event) {
+        const raster = this.activeRaster();
+        const rect = this.canvas.getBoundingClientRect();
+        const x = (event.clientX - rect.left) * this.canvas.width / Math.max(1, rect.width) / this.editorScale;
+        const y = (event.clientY - rect.top) * this.canvas.height / Math.max(1, rect.height) / this.editorScale;
+        if (x < 0 || y < 0 || x > raster.grid.width || y > raster.grid.height) return null;
+        return {
+            x: Math.round(x * 2) / 2,
+            y: Math.round(y * 2) / 2
+        };
     }
 
     setStatus(message, isError = false) {
