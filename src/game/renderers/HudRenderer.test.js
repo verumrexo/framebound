@@ -60,6 +60,7 @@ function createHarness(overrides = {}) {
         y: 360,
         rotation: 0,
         enemies: [],
+        drones: [],
         eyeCandy: false,
         combatTelemetry: { entriesFor: () => [] },
         peerNetwork: null,
@@ -199,6 +200,88 @@ test('eye candy lists every weapon and opens separate utility and damage panels'
     assert.ok(text.includes('dart @-1,0'));
 });
 
+test('drone telemetry filters local living drones into three columns and reports status and hp', () => {
+    const repairTarget = { name: 'pilot' };
+    const enemyTarget = { id: 'raider-7' };
+    const drones = [
+        {
+            owner: 'player', ownerPlayerId: 'guest-1', droneType: 'mender',
+            role: 'repair', hp: 65, maxHp: 90, target: repairTarget
+        },
+        {
+            owner: 'player', ownerPlayerId: 'guest-1', droneType: 'rammer',
+            role: 'ram', hp: 30, maxHp: 50, target: enemyTarget
+        },
+        {
+            owner: 'player', ownerPlayerId: 'guest-1', droneType: 'striker',
+            role: 'attack', hp: 12, maxHp: 20, target: { label: 'boss' }
+        },
+        {
+            owner: 'player', ownerPlayerId: 'guest-1', droneType: 'needle',
+            role: 'attack', hp: 20, maxHp: 20, state: 'orbit'
+        },
+        { owner: 'player', ownerPlayerId: 'host', droneType: 'wrong-owner' },
+        { owner: 'player', ownerPlayerId: 'guest-1', droneType: 'dead', isDead: true }
+    ];
+    const { game, calls, hud } = createHarness({
+        eyeCandy: true,
+        drones,
+        peerNetwork: { replicator: { selfId: 'guest-1' } }
+    });
+
+    hud.draw();
+
+    const text = calls.filter(call => call[0] === 'text').map(call => call[1]);
+    assert.ok(text.includes('drone telemetry // 4'));
+    assert.ok(text.includes('mender'));
+    assert.ok(text.includes('65/90'));
+    assert.ok(text.includes('repairing'));
+    assert.ok(text.includes('ramming'));
+    assert.ok(text.includes('engaged'));
+    assert.ok(text.includes('orbit'));
+    assert.ok(!text.includes('wrong-owner'));
+    assert.ok(!text.includes('dead'));
+
+    const dronePanel = calls.find(call =>
+        call[0] === 'text' && call[1] === 'drone telemetry // 4'
+    );
+    const cardRects = calls.filter(call =>
+        call[0] === 'strokeRect' &&
+        call[3] === 74 &&
+        call[4] === 64
+    );
+    assert.equal(cardRects.length, 4);
+    assert.deepEqual(cardRects.map(call => call[1]), [28, 106, 184, 28]);
+    assert.ok(dronePanel);
+    assert.equal(game.peerNetwork.replicator.selfId, 'guest-1');
+});
+
+test('drone telemetry returns its full height before damage telemetry', () => {
+    const { game, hud } = createHarness({
+        eyeCandy: true,
+        drones: Array.from({ length: 7 }, (_, index) => ({
+            owner: 'player',
+            ownerPlayerId: 'host',
+            droneType: `drone-${index}`,
+            hp: 10,
+            maxHp: 10
+        })),
+        combatTelemetry: {
+            entriesFor: () => [{
+                key: 'dart@0,0',
+                partId: 'dart',
+                label: 'dart',
+                family: 'velocity',
+                damage: 2
+            }]
+        }
+    });
+    const telemetryHeight = hud.drawDroneTelemetry(18, 300);
+    assert.equal(telemetryHeight, 30 + 3 * 64 + 8);
+    assert.equal(hud.drawDamageTelemetry(18, 300 + telemetryHeight + 10), 63);
+    assert.equal(game.drones.length, 7);
+});
+
 test('salvage sweep prompt remains visible without eye candy', () => {
     const { calls, hud } = createHarness({
         salvageSweep: {
@@ -248,6 +331,61 @@ test('active ability hud shows selection, cooldown, and edge controls', () => {
     const text = calls.filter(call => call[0] === 'text').map(call => call[1]);
     assert.ok(text.includes('warp gate // 2.5s'));
     assert.ok(text.includes('q // cycle   rmb // activate'));
+    const panel = calls.find(call => call[0] === 'fillRect' && call[4] === 38);
+    assert.deepEqual(panel.slice(1), [118, 168, 250, 38]);
+});
+
+test('active ability cursor indicator clamps to the bottom-right edge and shows ready state', () => {
+    const { game, calls, hud } = createHarness({
+        abilitySystem: {
+            selectedAbility: () => ({ id: 'emp', label: 'emp' }),
+            snapshotShipState: () => ({ cooldowns: { emp: 0 } })
+        },
+        input: { getMousePos: () => ({ x: 1270, y: 710 }) }
+    });
+
+    hud.drawActiveAbilityStatus();
+
+    const text = calls.filter(call => call[0] === 'text').map(call => call[1]);
+    assert.ok(text.includes('emp // ready'));
+    assert.ok(text.includes('q // cycle   rmb // activate'));
+    const panel = calls.find(call => call[0] === 'fillRect');
+    assert.deepEqual(panel.slice(1), [1002, 654, 250, 38]);
+});
+
+test('active ability cursor indicator flips before clamping and keeps its configured gap at every corner', () => {
+    const corners = [
+        { x: 0, y: 0 },
+        { x: 1279, y: 0 },
+        { x: 0, y: 719 },
+        { x: 1279, y: 719 }
+    ];
+
+    for (const cursor of corners) {
+        const { game, calls, hud } = createHarness({
+            abilitySystem: {
+                selectedAbility: () => ({ id: 'emp', label: 'emp' }),
+                snapshotShipState: () => ({ cooldowns: { emp: 0 } })
+            },
+            input: { getMousePos: () => cursor }
+        });
+
+        hud.drawActiveAbilityStatus();
+
+        const panel = calls.find(call => call[0] === 'fillRect');
+        const [, x, y, width, height] = panel;
+        assert.ok(x >= 8 && y >= 8);
+        assert.ok(x + width <= game.renderer.width - 8);
+        assert.ok(y + height <= game.renderer.height - 8);
+        assert.equal(
+            cursor.x < x || cursor.x > x + width || cursor.y < y || cursor.y > y + height,
+            true
+        );
+        assert.ok(
+            Math.abs(cursor.x - x) >= 18 || Math.abs(cursor.x - (x + width)) >= 18 ||
+            Math.abs(cursor.y - y) >= 18 || Math.abs(cursor.y - (y + height)) >= 18
+        );
+    }
 });
 
 test('hangar, ship builder, and game-over modes keep their original precedence', () => {

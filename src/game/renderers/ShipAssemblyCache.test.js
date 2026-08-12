@@ -9,6 +9,7 @@ const {
     SHIP_ASSEMBLY_PROFILES
 } = await import('./ShipAssemblyCache.js');
 const { drawShipAssembly, getMountedTurretPosition } = await import('./ShipAssemblyRenderer.js');
+const { TILE_SIZE } = await import('../../shared/parts/Part.js');
 
 function sprite(width = 20, height = 20, calls = []) {
     return {
@@ -182,4 +183,25 @@ test('enemy profile only caches explicit weapon bases', () => {
     const cache = getAssemblyCache({}, explicit, '#ff6666', SHIP_ASSEMBLY_PROFILES.enemy);
     assert.ok(cache);
     assert.equal(baseCalls.length, 1);
+});
+
+test('16px authored 1x1 parts render at 32 world px with exactly one source-pixel seam', () => {
+    const calls = [];
+    const authored = sprite(16, 16, calls);
+    authored.scale = 2;
+    const library = {
+        first: { id: 'first', type: 'hull', width: 1, height: 1, sprite: authored, stats: {} },
+        second: { id: 'second', type: 'hull', width: 1, height: 1, sprite: authored, stats: {} }
+    };
+    const parts = getValidatedAssemblyParts([
+        { partId: 'first', x: 0, y: 0, rotation: 0 },
+        { partId: 'second', x: 1, y: 0, rotation: 0 }
+    ], library);
+    getAssemblyCache({}, parts);
+
+    assert.equal(authored.width * authored.scale, 32);
+    assert.equal(TILE_SIZE, 30);
+    assert.equal(parts[1].localX - parts[0].localX, 30);
+    assert.equal((authored.width * authored.scale - TILE_SIZE) / authored.scale, 1);
+    assert.deepEqual(calls.map(call => call[1]), [17, 47]);
 });

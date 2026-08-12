@@ -3,17 +3,18 @@ import assert from 'node:assert/strict';
 import {
     createBlankPartDesign,
     gridDimensions,
+    normalizePartDesign,
     parsePartDesign,
     serializePartDesign,
     upgradeLegacyPartDesign
 } from './PartDesignDocument.js';
 
-test('v2 grids double source detail while preserving the two-pixel seam overlap', () => {
+test('v2 grids use exactly one authored-pixel seam overlap', () => {
     assert.deepEqual(gridDimensions(1, 1), { width: 16, height: 16 });
-    assert.deepEqual(gridDimensions(1, 2), { width: 16, height: 30 });
-    assert.deepEqual(gridDimensions(2, 1), { width: 30, height: 16 });
-    assert.deepEqual(gridDimensions(2, 2), { width: 30, height: 30 });
-    assert.deepEqual(gridDimensions(2, 4), { width: 30, height: 58 });
+    assert.deepEqual(gridDimensions(1, 2), { width: 16, height: 31 });
+    assert.deepEqual(gridDimensions(2, 1), { width: 31, height: 16 });
+    assert.deepEqual(gridDimensions(2, 2), { width: 31, height: 31 });
+    assert.deepEqual(gridDimensions(2, 4), { width: 31, height: 61 });
 });
 
 test('v2 documents preserve independent turret dimensions, palettes, and multiple muzzles', () => {
@@ -27,7 +28,105 @@ test('v2 documents preserve independent turret dimensions, palettes, and multipl
     design.stats = { damage: 7 };
     const restored = parsePartDesign(serializePartDesign(design));
     assert.deepEqual(restored, design);
-    assert.deepEqual(restored.turretGrid, { width: 30, height: 16 });
+    assert.deepEqual(restored.turretGrid, { width: 31, height: 16 });
+});
+
+test('old v2 30/58 rasters migrate to 31/61 without transparent seam scars', () => {
+    const old = createBlankPartDesign({ name: 'wide hull', type: 'hull', width: 2, height: 4 });
+    old.grid = { width: 30, height: 58 };
+    old.layers.base = new Array(30 * 58).fill(1);
+
+    const migrated = normalizePartDesign(old);
+
+    assert.deepEqual(migrated.grid, { width: 31, height: 61 });
+    assert.equal(migrated.layers.base.length, 31 * 61);
+    assert.ok(migrated.layers.base.every(pixel => pixel === 1));
+    assert.deepEqual(old.grid, { width: 30, height: 58 });
+    assert.equal(old.layers.base.length, 30 * 58);
+});
+
+test('old v2 seam expansion duplicates every 2x4 and 4x2 seam row or column', () => {
+    const old = createBlankPartDesign({
+        name: 'cross seam',
+        type: 'weapon',
+        width: 2,
+        height: 4,
+        turretWidth: 4,
+        turretHeight: 2
+    });
+    old.grid = { width: 30, height: 58 };
+    old.turretGrid = { width: 58, height: 30 };
+    old.layers.base = new Array(30 * 58).fill(1);
+    old.layers.turret = new Array(58 * 30).fill(1);
+    for (const y of [14, 28, 42]) {
+        for (let x = 0; x < 30; x++) old.layers.base[y * 30 + x] = 2;
+    }
+    for (const x of [14, 28, 42]) {
+        for (let y = 0; y < 30; y++) old.layers.turret[y * 58 + x] = 2;
+    }
+
+    const migrated = normalizePartDesign(old);
+
+    assert.deepEqual(migrated.grid, { width: 31, height: 61 });
+    assert.deepEqual(migrated.turretGrid, { width: 61, height: 31 });
+    assert.ok(migrated.layers.base.every(pixel => pixel > 0));
+    assert.ok(migrated.layers.turret.every(pixel => pixel > 0));
+    for (const destinationY of [14, 29, 44]) {
+        const row = migrated.layers.base.slice(destinationY * 31, (destinationY + 1) * 31);
+        assert.ok(row.every(pixel => pixel === 2));
+    }
+    for (const destinationX of [14, 29, 44]) {
+        for (let y = 0; y < 31; y++) assert.equal(migrated.layers.turret[y * 61 + destinationX], 2);
+    }
+    for (const sourceY of [14, 28, 42]) {
+        const destinationY = sourceY + [14, 28, 42].filter(seam => seam < sourceY).length + 1;
+        const row = migrated.layers.base.slice(destinationY * 31, (destinationY + 1) * 31);
+        assert.ok(row.every(pixel => pixel === 2));
+    }
+    for (const sourceX of [14, 28, 42]) {
+        const destinationX = sourceX + [14, 28, 42].filter(seam => seam < sourceX).length + 1;
+        for (let y = 0; y < 31; y++) assert.equal(migrated.layers.turret[y * 61 + destinationX], 2);
+    }
+});
+
+test('old v2 points migrate across every seam stride without shifting the source draft', () => {
+    for (const sourceY of [14, 28, 42]) {
+        const old = createBlankPartDesign({ name: 'base point', type: 'hull', width: 2, height: 4 });
+        old.grid = { width: 30, height: 58 };
+        old.layers.base = new Array(30 * 58).fill(1);
+        old.anchors.base = { x: 8, y: sourceY };
+
+        const migrated = normalizePartDesign(old);
+
+        assert.deepEqual(migrated.anchors.base, { x: 8, y: sourceY + 1 + [14, 28, 42].filter(seam => seam < sourceY).length });
+        assert.deepEqual(old.anchors.base, { x: 8, y: sourceY });
+    }
+
+    const old = createBlankPartDesign({
+        name: 'turret points',
+        type: 'weapon',
+        width: 1,
+        height: 1,
+        turretWidth: 4,
+        turretHeight: 2
+    });
+    old.turretGrid = { width: 58, height: 30 };
+    old.layers.turret = new Array(58 * 30).fill(1);
+    old.muzzles = [
+        { x: 14, y: 10 },
+        { x: 28, y: 10 },
+        { x: 42, y: 10 },
+        { x: 43, y: 10 }
+    ];
+
+    const migrated = normalizePartDesign(old);
+
+    assert.deepEqual(migrated.muzzles, [
+        { x: 15, y: 10 },
+        { x: 30, y: 10 },
+        { x: 45, y: 10 },
+        { x: 46, y: 10 }
+    ]);
 });
 
 test('v2 validation bounds palette indices, grids, and geometry points', () => {

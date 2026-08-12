@@ -3,6 +3,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 const { drawDebugHitboxes } = await import('./DebugHitboxRenderer.js');
+const { TILE_SIZE } = await import('../../shared/parts/Part.js');
 
 function createGame(showHitboxes) {
     const calls = [];
@@ -57,7 +58,7 @@ test('debug hitboxes preserve the player part rectangle geometry', () => {
         ['translate', 10, 20]
     ]);
     assert.deepEqual(calls.filter(([name]) => name === 'strokeRect'), [
-        ['strokeRect', -14, -14, 28, 28]
+        ['strokeRect', -TILE_SIZE / 2, -TILE_SIZE / 2, TILE_SIZE, TILE_SIZE]
     ]);
     assert.equal(calls[0][0], 'save');
     assert.equal(calls.at(-1)[0], 'restore');

@@ -80,6 +80,57 @@ test('visual override changes art while preserving gameplay stats and identity',
     assert.equal(definition.drawTurretInInventory, true);
 });
 
+test('v2 visual overrides use 31px two-cell rasters while keeping 1x1 art at 32 world px', () => {
+    const value = createBlankPartDesign({
+        name: 'wide hull',
+        type: 'hull',
+        width: 1,
+        height: 2
+    });
+    const definition = {
+        id: 'wide-hull',
+        name: 'wide hull',
+        type: PartType.HULL,
+        width: 1,
+        height: 2,
+        stats: {},
+        sprite: {
+            data: new Array(64).fill(0),
+            width: 8,
+            height: 8,
+            scale: 4,
+            anchorX: 0.5,
+            anchorY: 0.5
+        }
+    };
+
+    applyVisualDesignOverride(definition, value);
+
+    assert.deepEqual(value.grid, { width: 16, height: 31 });
+    assert.equal(definition.sprite.width, 16);
+    assert.equal(definition.sprite.height, 31);
+    assert.equal(definition.sprite.scale, 2);
+    assert.equal(definition.sprite.width * definition.sprite.scale, 32);
+    assert.equal(definition.visualGeometry, undefined);
+});
+
+test('part lab normalization migrates old v2 30px visual documents before applying them', () => {
+    const old = createBlankPartDesign({ name: 'old tall hull', type: 'hull', width: 1, height: 2 });
+    old.grid = { width: 16, height: 30 };
+    old.layers.base = new Array(16 * 30).fill(0);
+    const manifest = normalizePartLabManifest({
+        schemaVersion: 1,
+        version: 1,
+        modifiedAt: '2026-08-11T00:00:00.000Z',
+        visuals: [{ partId: 'old-tall-hull', design: old }],
+        sounds: [],
+        reviews: []
+    });
+
+    assert.deepEqual(manifest.visuals[0].design.grid, { width: 16, height: 31 });
+    assert.equal(manifest.visuals[0].design.layers.base.length, 16 * 31);
+});
+
 test('non-weapon visual overrides replace visible art and clear stale auxiliary layers', () => {
     const staleBase = {
         data: new Array(64).fill(2),

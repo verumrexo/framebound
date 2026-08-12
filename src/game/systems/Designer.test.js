@@ -60,18 +60,18 @@ test('opening a saved v1 draft upgrades it instead of stranding the standalone l
     assert.equal(migrated.version, 2);
     assert.equal(migrated.partId, 'scattr');
     assert.equal(migrated.partType, 'weapon');
-    assert.deepEqual(migrated.grid, { width: 16, height: 30 });
-    assert.equal(migrated.layers.base.length, 480);
-    assert.deepEqual(migrated.muzzles, [{ x: 15, y: 15 }]);
+    assert.deepEqual(migrated.grid, { width: 16, height: 31 });
+    assert.equal(migrated.layers.base.length, 496);
+    assert.deepEqual(migrated.muzzles, [{ x: 15, y: 15.5 }]);
 });
 
 test('a 1x2 base accepts a separately authored 2x1 turret', () => {
     const design = createBlankPartDesign({ name: 'wide turret', type: 'weapon', width: 1, height: 2, turretWidth: 2, turretHeight: 1 });
     design.partId = 'scattr'; design.partType = 'weapon';
-    design.layers.turret = new Array(30 * 16).fill(0);
+    design.layers.turret = new Array(31 * 16).fill(0);
     design.anchors.base = { x: 8, y: 15 };
     design.anchors.turret = { x: 15, y: 8 };
-    design.muzzles = [{ x: 29.5, y: 5 }, { x: 29.5, y: 11 }];
+    design.muzzles = [{ x: 30.5, y: 5 }, { x: 30.5, y: 11 }];
     const staged = validateStagedDesignDocument(design, 'scattr');
     assert.deepEqual(staged.turretFootprint, { width: 2, height: 1 });
     assert.equal(staged.muzzles.length, 2);

@@ -9,7 +9,8 @@ const FORMAT = 'framebound-part-design';
 const VERSION = 2;
 const LEGACY_VERSION = 1;
 const RESOLUTION = 16;
-const OVERLAP = 2;
+const OVERLAP = 1;
+const LEGACY_V2_OVERLAP = 2;
 const MAX_NAME_LENGTH = 64;
 const MAX_NOTES_LENGTH = 2000;
 const MAX_PALETTE_COLORS = 16;
@@ -31,9 +32,13 @@ export const PART_DESIGN_RESOLUTION = RESOLUTION;
 export const PART_DESIGN_OVERLAP = OVERLAP;
 export const PART_DESIGN_DEFAULT_PALETTE = DEFAULT_PALETTE;
 
-export function gridDimensions(width, height, resolution = RESOLUTION) {
+export function gridDimensions(
+    width,
+    height,
+    resolution = RESOLUTION,
+    overlap = resolution === RESOLUTION ? OVERLAP : 1
+) {
     assertFootprint(width, height, resolution === RESOLUTION ? SUPPORTED_FOOTPRINTS : SUPPORTED_BASE_FOOTPRINTS);
-    const overlap = resolution === RESOLUTION ? OVERLAP : 1;
     return {
         width: width * resolution - (width - 1) * overlap,
         height: height * resolution - (height - 1) * overlap
@@ -97,6 +102,11 @@ export function normalizePartDesign(value) {
     if (value.format !== FORMAT) throw new Error('unsupported part design format');
     if (value.version === LEGACY_VERSION) return normalizeLegacyPartDesign(value);
     if (value.version !== VERSION) throw new Error('unsupported part design format');
+
+    // v2 shipped briefly with a two-authored-pixel seam. Normalize those
+    // documents in memory when they are opened or saved; the source draft is
+    // not rewritten until the caller explicitly persists it.
+    value = migrateLegacyV2Overlap(value);
 
     const name = cleanText(value.name, MAX_NAME_LENGTH, 'part name');
     const type = cleanText(value.type, 32, 'part type');
@@ -169,6 +179,16 @@ export function upgradeLegacyPartDesign(value) {
         height: legacy.footprint.height,
         palette: ['#26d426', '#333333']
     });
+    // 2x upscaling produces the historical v2 30/58 seam. Let the same
+    // non-destructive v2 migration below expand it to the current 31/61
+    // contract before the upgraded document is returned.
+    upgraded.grid = gridDimensions(
+        legacy.footprint.width,
+        legacy.footprint.height,
+        RESOLUTION,
+        LEGACY_V2_OVERLAP
+    );
+    upgraded.turretGrid = { ...upgraded.grid };
     upgraded.layers.base = upscalePixels2x(legacy.layers.base, legacy.grid);
     if (legacy.layers.turret) {
         upgraded.layers.turret = upscalePixels2x(legacy.layers.turret, legacy.grid);
@@ -302,6 +322,147 @@ function normalizeDroneVisual(value, type) {
         projectileLook: normalizeProjectileLook(value.projectileLook),
         projectileTrail: normalizeProjectileTrail(value.projectileTrail)
     };
+}
+
+function migrateLegacyV2Overlap(value) {
+    const footprint = value.footprint;
+    if (!isSupportedFootprint(footprint, SUPPORTED_BASE_FOOTPRINTS)) return value;
+
+    const baseOldGrid = gridDimensions(
+        footprint.width,
+        footprint.height,
+        RESOLUTION,
+        LEGACY_V2_OVERLAP
+    );
+    const baseNewGrid = gridDimensions(footprint.width, footprint.height);
+    const baseIsLegacy = sameGrid(value.grid, baseOldGrid);
+    const baseIsCurrent = sameGrid(value.grid, baseNewGrid);
+    if (!baseIsLegacy && baseIsCurrent) {
+        // The base is already current, but a separately authored turret may
+        // still be an old 30/58 document. Handle that below.
+    } else if (!baseIsLegacy) {
+        return value;
+    }
+
+    const turretFootprint = isSupportedFootprint(
+        value.turretFootprint || footprint,
+        SUPPORTED_FOOTPRINTS
+    )
+        ? (value.turretFootprint || footprint)
+        : footprint;
+    const turretOldGrid = gridDimensions(
+        turretFootprint.width,
+        turretFootprint.height,
+        RESOLUTION,
+        LEGACY_V2_OVERLAP
+    );
+    const turretNewGrid = gridDimensions(
+        turretFootprint.width,
+        turretFootprint.height
+    );
+    const turretIsLegacy = sameGrid(value.turretGrid, turretOldGrid) ||
+        (!value.turretGrid && Array.isArray(value.layers?.turret) &&
+            value.layers.turret.length === turretOldGrid.width * turretOldGrid.height);
+    const needsBaseMigration = baseIsLegacy;
+    const needsTurretMigration = turretIsLegacy;
+    if (!needsBaseMigration && !needsTurretMigration) return value;
+
+    const migrated = clone(value);
+    if (needsBaseMigration) {
+        migrated.grid = baseNewGrid;
+        if (Array.isArray(migrated.layers?.base)) {
+            migrated.layers.base = expandV2Raster(
+                migrated.layers.base,
+                baseOldGrid,
+                footprint
+            );
+        }
+        if (isPlainObject(migrated.anchors) && migrated.anchors.base) {
+            migrated.anchors.base = migrateV2Point(
+                migrated.anchors.base,
+                baseOldGrid,
+                baseNewGrid,
+                footprint
+            );
+        }
+    }
+    if (needsTurretMigration) {
+        migrated.turretGrid = turretNewGrid;
+        if (Array.isArray(migrated.layers?.turret)) {
+            migrated.layers.turret = expandV2Raster(
+                migrated.layers.turret,
+                turretOldGrid,
+                turretFootprint
+            );
+        }
+        if (isPlainObject(migrated.anchors) && migrated.anchors.turret) {
+            migrated.anchors.turret = migrateV2Point(
+                migrated.anchors.turret,
+                turretOldGrid,
+                turretNewGrid,
+                turretFootprint
+            );
+        }
+        if (Array.isArray(migrated.muzzles)) {
+            migrated.muzzles = migrated.muzzles.map(point =>
+                migrateV2Point(point, turretOldGrid, turretNewGrid, turretFootprint)
+            );
+        }
+    }
+    return migrated;
+}
+
+function expandV2Raster(pixels, oldGrid, footprint) {
+    const seamColumns = seamPositions(footprint.width, RESOLUTION, LEGACY_V2_OVERLAP);
+    const seamRows = seamPositions(footprint.height, RESOLUTION, LEGACY_V2_OVERLAP);
+    const expanded = [];
+    for (let y = 0; y < oldGrid.height; y++) {
+        const row = [];
+        for (let x = 0; x < oldGrid.width; x++) {
+            const pixel = pixels[y * oldGrid.width + x];
+            // The old seam already belongs to authored art. Duplicate its
+            // nearest source pixel instead of inventing a transparent scar.
+            if (seamColumns.has(x)) row.push(pixel);
+            row.push(pixel);
+        }
+        expanded.push(...row);
+        // As above, duplicate the completed source row so both axes remain
+        // lossless for filled and patterned legacy rasters.
+        if (seamRows.has(y)) expanded.push(...row);
+    }
+    return expanded;
+}
+
+function migrateV2Point(point, oldGrid, newGrid, footprint) {
+    return {
+        x: migrateV2Coordinate(point.x, oldGrid.width, newGrid.width, footprint.width),
+        y: migrateV2Coordinate(point.y, oldGrid.height, newGrid.height, footprint.height)
+    };
+}
+
+function migrateV2Coordinate(value, oldSize, newSize, tiles) {
+    if (!Number.isFinite(value)) return value;
+    if (Math.abs(value - oldSize / 2) < 1e-9) return newSize / 2;
+    const seams = seamPositions(tiles, RESOLUTION, LEGACY_V2_OVERLAP);
+    return value + [...seams].filter(seam => value >= seam).length;
+}
+
+function seamPositions(tiles, resolution, overlap) {
+    return new Set(Array.from(
+        { length: Math.max(0, tiles - 1) },
+        (_, index) => (index + 1) * (resolution - overlap)
+    ));
+}
+
+function sameGrid(first, second) {
+    return isPlainObject(first) && first.width === second.width && first.height === second.height;
+}
+
+function isSupportedFootprint(value, allowed) {
+    return isPlainObject(value) &&
+        Number.isInteger(value.width) &&
+        Number.isInteger(value.height) &&
+        allowed.has(`${value.width}x${value.height}`);
 }
 
 function normalizeFootprint(value, label, allowed) {

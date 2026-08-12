@@ -1,11 +1,10 @@
 
 // @ts-check
 
-// Asset is 8x8 scaled by 4 = 32px.
-// Border is 1px scaled by 4 = 4px.
-// To have single-width walls, we must overlap by the border width (4px).
-// So effective tile stride is 32 - 4 = 28.
-export const TILE_SIZE = 28;
+// A 16x16 authored raster is rendered at 2x = 32 world px.
+// One authored-pixel seam overlap is 2 world px, so adjacent cell centers
+// are 32 - 2 = 30 world px apart. Legacy 8x8 sprites remain 32 world px.
+export const TILE_SIZE = 30;
 
 export const PartType = {
     HULL: 'hull',

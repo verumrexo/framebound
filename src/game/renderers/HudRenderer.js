@@ -14,6 +14,16 @@ import {
     VaultPhase
 } from '../../shared/vault/VaultDefinitions.js';
 
+function placeCursorPanelAxis(cursor, panelSize, screenSize, gap, edgeInset) {
+    const minimum = edgeInset;
+    const maximum = Math.max(minimum, screenSize - panelSize - edgeInset);
+    const preferred = cursor + gap;
+    if (preferred >= minimum && preferred <= maximum) return preferred;
+    const flipped = cursor - gap - panelSize;
+    if (flipped >= minimum && flipped <= maximum) return flipped;
+    return Math.max(minimum, Math.min(maximum, preferred));
+}
+
 export class HudRenderer {
     constructor(game, {
         partsLibrary = PartsLibrary,
@@ -202,27 +212,31 @@ export class HudRenderer {
         if (!selected) return;
 
         const ctx = game.renderer.ctx;
-        const x = 440;
-        const y = game.renderer.height - 48;
-        const width = 390;
+        const mouse = game.input.getMousePos();
+        const width = Math.min(250, Math.max(0, game.renderer.width - 16));
+        const height = 38;
+        const cursorGap = 18;
+        const edgeInset = 8;
+        const x = placeCursorPanelAxis(mouse.x, width, game.renderer.width, cursorGap, edgeInset);
+        const y = placeCursorPanelAxis(mouse.y, height, game.renderer.height, cursorGap, edgeInset);
         const cooldown = abilitySystem.snapshotShipState?.(
             game.playerShip
         )?.cooldowns?.[selected.id] || 0;
         const ready = cooldown <= 0;
         const accent = ready ? UI_COLORS.cyan : UI_COLORS.amber;
 
-        drawUiPanel(ctx, x, y, width, 30, accent);
+        drawUiPanel(ctx, x, y, width, height, accent);
         ctx.font = UI_FONTS.tiny;
         ctx.textAlign = 'left';
         ctx.fillStyle = accent;
         ctx.fillText(
             `${String(selected.label).toLowerCase()} // ${ready ? 'ready' : `${cooldown.toFixed(1)}s`}`,
-            x + 13,
-            y + 19
+            x + 12,
+            y + 16
         );
-        ctx.textAlign = 'right';
+        ctx.textAlign = 'left';
         ctx.fillStyle = UI_COLORS.muted;
-        ctx.fillText('q // cycle   rmb // activate', x + width - 13, y + 19);
+        ctx.fillText('q // cycle   rmb // activate', x + 12, y + 32);
     }
 
     drawNotifications() {
@@ -306,6 +320,8 @@ export class HudRenderer {
         leftPanelY += this.drawWeaponBank(18, leftPanelY) + 10;
         const utilityHeight = this.drawUtilityBank(18, leftPanelY);
         if (utilityHeight > 0) leftPanelY += utilityHeight + 10;
+        const droneHeight = this.drawDroneTelemetry(18, leftPanelY);
+        if (droneHeight > 0) leftPanelY += droneHeight + 10;
         this.drawDamageTelemetry(18, leftPanelY);
 
         const rightX = width - 268;
@@ -490,6 +506,114 @@ export class HudRenderer {
             );
         });
         return height;
+    }
+
+    drawDroneTelemetry(x, y) {
+        const game = this.game;
+        const selfId = game.peerNetwork?.replicator?.selfId || 'host';
+        const drones = (game.drones || []).filter(drone =>
+            drone &&
+            !drone.isDead &&
+            drone.owner === 'player' &&
+            (drone.ownerPlayerId || 'host') === selfId
+        );
+        if (drones.length === 0) return 0;
+
+        const ctx = game.renderer.ctx;
+        const columns = 3;
+        const cardWidth = 74;
+        const cardGap = 4;
+        const cardHeight = 64;
+        const headerHeight = 30;
+        const rows = Math.ceil(drones.length / columns);
+        const height = headerHeight + rows * cardHeight + 8;
+
+        drawUiPanel(ctx, x, y, 250, height, UI_COLORS.cyan);
+        ctx.font = UI_FONTS.tiny;
+        ctx.textAlign = 'left';
+        ctx.fillStyle = UI_COLORS.muted;
+        ctx.fillText(`drone telemetry // ${drones.length}`, x + 13, y + 20);
+
+        drones.forEach((drone, index) => {
+            const column = index % columns;
+            const row = Math.floor(index / columns);
+            const cardX = x + 10 + column * (cardWidth + cardGap);
+            const cardY = y + headerHeight + row * cardHeight;
+            const engagement = this.droneEngagement(drone);
+            const accent = engagement.target
+                ? drone.role === 'repair'
+                    ? UI_COLORS.green
+                    : drone.role === 'ram'
+                        ? UI_COLORS.orange
+                        : UI_COLORS.cyan
+                : UI_COLORS.muted;
+            const maxHp = Math.max(
+                1,
+                Number.isFinite(drone.maxHp) ? drone.maxHp : drone.hp
+            );
+            const hp = Math.max(0, Math.min(maxHp, Number(drone.hp) || 0));
+            const label = this.shortHudLabel(
+                drone.droneType || drone.sourcePartName || drone.sourcePartId || 'drone',
+                10
+            );
+
+            drawUiPanel(ctx, cardX, cardY, cardWidth, cardHeight, accent);
+            ctx.font = UI_FONTS.tiny;
+            ctx.textAlign = 'left';
+            ctx.fillStyle = accent === UI_COLORS.muted
+                ? UI_COLORS.bright
+                : accent;
+            ctx.fillText(label, cardX + 8, cardY + 14);
+            ctx.fillStyle = UI_COLORS.bright;
+            ctx.fillText(`${Math.ceil(hp)}/${Math.ceil(maxHp)}`, cardX + 8, cardY + 28);
+            drawUiBar(
+                ctx,
+                cardX + 8,
+                cardY + 34,
+                cardWidth - 16,
+                4,
+                hp / maxHp,
+                hp / maxHp <= 0.3 ? UI_COLORS.red : accent
+            );
+            ctx.fillStyle = accent;
+            ctx.fillText(engagement.state, cardX + 8, cardY + 49);
+            ctx.textAlign = 'right';
+            ctx.fillStyle = UI_COLORS.muted;
+            ctx.fillText(
+                engagement.target
+                    ? this.shortHudLabel(engagement.target, 10)
+                    : 'no target',
+                cardX + cardWidth - 8,
+                cardY + 60
+            );
+        });
+        return height;
+    }
+
+    droneEngagement(drone) {
+        const target = drone.target && !drone.target.isDead
+            ? this.droneTargetLabel(drone.target)
+            : null;
+        if (!target) {
+            return {
+                state: drone.state === 'orbit' ? 'orbit' : 'idle',
+                target: null
+            };
+        }
+        if (drone.role === 'repair') return { state: 'repairing', target };
+        if (drone.role === 'ram') return { state: 'ramming', target };
+        return { state: 'engaged', target };
+    }
+
+    droneTargetLabel(target) {
+        if (target === this.game.playerShip) return 'pilot';
+        return target.name || target.label || target.id || target.kind ||
+            (target.owner === 'player' ? 'ally' : 'target');
+    }
+
+    shortHudLabel(value, limit) {
+        const label = String(value).toLowerCase();
+        return label.length > limit ? `${label.slice(0, limit - 1)}…` : label;
     }
 
     drawDamageTelemetry(x, y) {

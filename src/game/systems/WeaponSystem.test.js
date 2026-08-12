@@ -183,7 +183,7 @@ test('v2 shots and bursts share authored geometry and alternate multiple muzzles
         visualGeometry: {
             version: 2, scale: 2,
             baseGrid: { width: 16, height: 16 },
-            turretGrid: { width: 30, height: 16 },
+            turretGrid: { width: 31, height: 16 },
             baseMount: { x: 8, y: 8 },
             turretPivot: { x: 4, y: 8 },
             muzzles: [{ x: 14, y: 5 }, { x: 14, y: 11 }]

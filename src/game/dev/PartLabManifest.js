@@ -1,5 +1,5 @@
 import { Sprite } from '../../engine/Sprite.js';
-import { parsePartDesign } from './PartDesignDocument.js';
+import { gridDimensions, parsePartDesign } from './PartDesignDocument.js';
 import { createCoreEffectSprite } from '../../shared/parts/CoreEffect.js';
 import {
     clearDroneVisualOverrides,
@@ -195,9 +195,8 @@ function makeSprite(existing, pixels, grid, anchor, {
 }
 
 function applyV2VisualDesignOverride(definition, design) {
-    const expectedWidth = definition.width * 16 - (definition.width - 1) * 2;
-    const expectedHeight = definition.height * 16 - (definition.height - 1) * 2;
-    if (design.grid.width !== expectedWidth || design.grid.height !== expectedHeight) {
+    const expectedGrid = gridDimensions(definition.width, definition.height);
+    if (design.grid.width !== expectedGrid.width || design.grid.height !== expectedGrid.height) {
         throw new Error(`visual override footprint does not match ${definition.id}`);
     }
     const scale = 2;
@@ -263,7 +262,15 @@ function applyV2VisualDesignOverride(definition, design) {
 
 export function applyVisualDesignOverride(definition, design) {
     if (!definition || !design) return false;
-    if (design.version === 2) return applyV2VisualDesignOverride(definition, design);
+    if (design.version === 2) {
+        // Keep this public application boundary safe for callers that pass a
+        // raw old-v2 document instead of one already normalized by a draft or
+        // manifest store.
+        return applyV2VisualDesignOverride(
+            definition,
+            parsePartDesign(JSON.stringify(design))
+        );
+    }
     if (definition.width * 8 - (definition.width - 1) !== design.grid.width || definition.height * 8 - (definition.height - 1) !== design.grid.height) {
         throw new Error(`visual override footprint does not match ${definition.id}`);
     }

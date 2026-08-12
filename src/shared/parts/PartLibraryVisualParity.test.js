@@ -38,8 +38,12 @@ test('existing part art and approved family metadata stay exact', () => {
     assert.equal(originalManifest.length, 40);
     assert.equal(
         hash,
-        '6527f3c4bb09f558617f9336bf127f5ce9f8791353f469f63268871255c8bee1'
+        '641dedaa54e52d5b17d44f5a42e9efceaaa1046d8a13d66cc77a3f4a68d74e7f'
     );
+});
+
+test('legacy laser turret offset follows the new renderer stride', () => {
+    assert.equal(PartsLibrary.custom_1767999386292.turretDrawOffset, 12);
 });
 
 test('auto aim is explicitly legendary and reuses the core effect geometry in red', () => {
