@@ -516,9 +516,9 @@ fn validate_part_lab_design(part_id: &str, design: &PartLabDesign) -> Result<(),
         (1, 2, 2) => (15, 15),
         (1, 2, 4) => (15, 29),
         (2, 1, 1) => (16, 16),
-        (2, 1, 2) => (16, 30),
-        (2, 2, 2) => (30, 30),
-        (2, 2, 4) => (30, 58),
+        (2, 1, 2) => (16, 31),
+        (2, 2, 2) => (31, 31),
+        (2, 2, 4) => (31, 61),
         _ => return Err(format!("visual design for {part_id} has an invalid footprint")),
     };
     if design.version == 2 && design.resolution != Some(16) {
@@ -605,9 +605,9 @@ fn validate_part_lab_design(part_id: &str, design: &PartLabDesign) -> Result<(),
 #[cfg(any(debug_assertions, feature = "part-lab"))]
 fn authored_grid_size(width: usize, height: usize) -> Option<(usize, usize)> {
     match (width, height) {
-        (1, 1) => Some((16, 16)), (1, 2) => Some((16, 30)),
-        (2, 1) => Some((30, 16)), (2, 2) => Some((30, 30)),
-        (2, 4) => Some((30, 58)), (4, 2) => Some((58, 30)),
+        (1, 1) => Some((16, 16)), (1, 2) => Some((16, 31)),
+        (2, 1) => Some((31, 16)), (2, 2) => Some((31, 31)),
+        (2, 4) => Some((31, 61)), (4, 2) => Some((61, 31)),
         _ => None,
     }
 }
@@ -1045,19 +1045,20 @@ mod tests {
         let design = &mut manifest["visuals"][0]["design"];
         design["version"] = serde_json::json!(2);
         design["resolution"] = serde_json::json!(16);
-        design["grid"] = serde_json::json!({ "width": 16, "height": 16 });
+        design["footprint"] = serde_json::json!({ "width": 1, "height": 2 });
+        design["grid"] = serde_json::json!({ "width": 16, "height": 31 });
         design["turretFootprint"] = serde_json::json!({ "width": 2, "height": 1 });
-        design["turretGrid"] = serde_json::json!({ "width": 30, "height": 16 });
+        design["turretGrid"] = serde_json::json!({ "width": 31, "height": 16 });
         design["palette"] = serde_json::json!(["#26d426", "#333333"]);
-        design["layers"]["base"] = serde_json::json!(vec![0; 256]);
-        design["layers"]["turret"] = serde_json::json!(vec![0; 480]);
+        design["layers"]["base"] = serde_json::json!(vec![0; 496]);
+        design["layers"]["turret"] = serde_json::json!(vec![0; 496]);
         design["anchors"] = serde_json::json!({
-            "base": { "x": 8, "y": 8 },
-            "turret": { "x": 15, "y": 8 }
+            "base": { "x": 8, "y": 15.5 },
+            "turret": { "x": 15.5, "y": 8 }
         });
         design["muzzles"] = serde_json::json!([
-            { "x": 29, "y": 6 },
-            { "x": 29, "y": 10 }
+            { "x": 30.5, "y": 6 },
+            { "x": 30.5, "y": 10 }
         ]);
         manifest.to_string()
     }
@@ -1177,9 +1178,47 @@ mod tests {
             .expect("valid v2 part lab manifest should promote");
         let saved = fs::read_to_string(root.join("part-lab-overrides.json"))
             .expect("v2 part lab manifest should be readable");
-        assert!(saved.contains("turretFootprint"));
+        let saved: serde_json::Value = serde_json::from_str(&saved)
+            .expect("promoted v2 manifest should remain valid json");
+        let design = &saved["visuals"][0]["design"];
+        assert_eq!(design["footprint"], serde_json::json!({ "width": 1, "height": 2 }));
+        assert_eq!(design["grid"], serde_json::json!({ "width": 16, "height": 31 }));
+        assert_eq!(design["layers"]["base"].as_array().unwrap().len(), 496);
+        assert_eq!(design["turretFootprint"], serde_json::json!({ "width": 2, "height": 1 }));
+        assert_eq!(design["turretGrid"], serde_json::json!({ "width": 31, "height": 16 }));
+        assert_eq!(design["layers"]["turret"].as_array().unwrap().len(), 496);
+        assert_eq!(design["anchors"]["turret"], serde_json::json!({ "x": 15.5, "y": 8 }));
+        assert_eq!(
+            design["muzzles"],
+            serde_json::json!([
+                { "x": 30.5, "y": 6 },
+                { "x": 30.5, "y": 10 }
+            ])
+        );
         fs::remove_dir_all(root.parent().unwrap())
             .expect("test directory should be removable");
+    }
+
+    #[test]
+    fn part_lab_promotion_rejects_mismatched_v2_base_and_turret_grids() {
+        let root = test_path("generated-parts-v2-mismatch");
+        let mut mismatched_base = serde_json::from_str::<serde_json::Value>(&valid_v2_part_lab_manifest())
+            .expect("fixture should parse");
+        mismatched_base["visuals"][0]["design"]["grid"] =
+            serde_json::json!({ "width": 16, "height": 30 });
+        assert!(promote_part_lab_manifest_to(&root, &mismatched_base.to_string()).is_err());
+
+        let mut mismatched_turret = serde_json::from_str::<serde_json::Value>(&valid_v2_part_lab_manifest())
+            .expect("fixture should parse");
+        mismatched_turret["visuals"][0]["design"]["turretGrid"] =
+            serde_json::json!({ "width": 30, "height": 16 });
+        assert!(promote_part_lab_manifest_to(&root, &mismatched_turret.to_string()).is_err());
+
+        assert!(!root.join("part-lab-overrides.json").exists());
+        if root.parent().unwrap().exists() {
+            fs::remove_dir_all(root.parent().unwrap())
+                .expect("test directory should be removable");
+        }
     }
 
     #[test]
