@@ -1091,7 +1091,12 @@ select {
     position: fixed;
     z-index: 9999;
     display: none;
-    min-width: 190px;
+    box-sizing: border-box;
+    width: min(280px, calc(100vw - 20px));
+    max-height: calc(100vh - 20px);
+    overflow-x: hidden;
+    overflow-y: auto;
+    overflow-wrap: anywhere;
     padding: 14px;
     border-top: 1px solid var(--ui-line-strong);
     border-left: 2px solid var(--ui-mint);

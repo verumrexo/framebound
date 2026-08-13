@@ -69,8 +69,7 @@ export class Hangar {
 
         window.addEventListener('mousemove', (e) => {
             if (!this.active || this.tooltip.style.display === 'none') return;
-            this.tooltip.style.left = (e.clientX + 15) + 'px';
-            this.tooltip.style.top = (e.clientY + 15) + 'px';
+            Hangar.positionTooltip(this.tooltip, e.clientX, e.clientY);
         });
 
         this.updateUI();
@@ -131,12 +130,13 @@ export class Hangar {
                     this.updateUI();
                 };
 
-                itemWrapper.onmouseenter = () => {
+                itemWrapper.onmouseenter = (event) => {
                     this.tooltip.style.display = 'block';
                     this.updateTooltip(def);
                     if (isGhost) {
                         this.tooltip.innerHTML += `<div style="color:#f44; margin-top:5px; font-weight:bold;">out of stock</div>`;
                     }
+                    Hangar.positionTooltip(this.tooltip, event.clientX, event.clientY);
                 };
                 itemWrapper.onmouseleave = () => {
                     this.tooltip.style.display = 'none';
@@ -154,6 +154,26 @@ export class Hangar {
 
     updateTooltip(def) {
         Hangar.updateTooltip(this.tooltip, def, this.draftShip);
+    }
+
+    static positionTooltip(tooltipEl, pointerX, pointerY, viewport = null) {
+        const gap = 15;
+        const margin = 10;
+        const bounds = tooltipEl.getBoundingClientRect?.() || {};
+        const width = Number(bounds.width) || tooltipEl.offsetWidth || 0;
+        const height = Number(bounds.height) || tooltipEl.offsetHeight || 0;
+        const viewportWidth = viewport?.width ?? window.innerWidth;
+        const viewportHeight = viewport?.height ?? window.innerHeight;
+        let left = pointerX + gap;
+        let top = pointerY + gap;
+
+        if (left + width > viewportWidth - margin) left = pointerX - width - gap;
+        if (top + height > viewportHeight - margin) top = pointerY - height - gap;
+
+        left = clamp(left, margin, Math.max(margin, viewportWidth - width - margin));
+        top = clamp(top, margin, Math.max(margin, viewportHeight - height - margin));
+        tooltipEl.style.left = `${Math.round(left)}px`;
+        tooltipEl.style.top = `${Math.round(top)}px`;
     }
 
     static updateTooltip(tooltipEl, def, ship = null) {

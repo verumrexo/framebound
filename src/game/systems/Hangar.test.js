@@ -18,3 +18,22 @@ test('hangar tooltips show the part description', () => {
         /select with q, then right-click toward your cursor to blink a short distance\./
     );
 });
+
+test('hangar tooltips flip and stay inside every viewport wall', () => {
+    const tooltip = {
+        style: {},
+        getBoundingClientRect: () => ({ width: 280, height: 220 })
+    };
+
+    Hangar.positionTooltip(tooltip, 790, 590, { width: 800, height: 600 });
+    assert.deepEqual(
+        { left: tooltip.style.left, top: tooltip.style.top },
+        { left: '495px', top: '355px' }
+    );
+
+    Hangar.positionTooltip(tooltip, 2, 3, { width: 800, height: 600 });
+    assert.deepEqual(
+        { left: tooltip.style.left, top: tooltip.style.top },
+        { left: '17px', top: '18px' }
+    );
+});
