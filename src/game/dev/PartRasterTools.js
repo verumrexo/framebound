@@ -22,6 +22,18 @@ export function drawRasterStroke(pixels, width, height, tool, start, end, color)
     return next;
 }
 
+export function mirrorRasterPixels(pixels, width, height, axis) {
+    if (!Array.isArray(pixels) || pixels.length !== width * height) return [...pixels];
+    if (axis !== 'horizontal' && axis !== 'vertical') return [...pixels];
+    const mirrored = new Array(pixels.length).fill(0);
+    for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+        const sourceX = axis === 'horizontal' ? width - 1 - x : x;
+        const sourceY = axis === 'vertical' ? height - 1 - y : y;
+        mirrored[y * width + x] = pixels[sourceY * width + sourceX];
+    }
+    return mirrored;
+}
+
 export function rasterLine(start, end) {
     let x0 = Math.round(start.x);
     let y0 = Math.round(start.y);
@@ -93,6 +105,42 @@ export class RasterHistory {
     }
 }
 
+// part designer history stores the raster and the layer's geometry in the
+// same snapshot. keeping this separate from RasterHistory preserves the
+// small raster-only helper for other callers while making editor actions
+// impossible to desynchronise.
+export class LayerHistory {
+    constructor(initial, limit = 80) {
+        this.limit = limit;
+        this.past = [];
+        this.present = cloneHistoryValue(initial);
+        this.future = [];
+    }
+
+    commit(snapshot) {
+        if (sameHistoryValue(this.present, snapshot)) return cloneHistoryValue(this.present);
+        this.past.push(cloneHistoryValue(this.present));
+        if (this.past.length > this.limit) this.past.shift();
+        this.present = cloneHistoryValue(snapshot);
+        this.future = [];
+        return cloneHistoryValue(this.present);
+    }
+
+    undo() {
+        if (!this.past.length) return cloneHistoryValue(this.present);
+        this.future.push(cloneHistoryValue(this.present));
+        this.present = this.past.pop();
+        return cloneHistoryValue(this.present);
+    }
+
+    redo() {
+        if (!this.future.length) return cloneHistoryValue(this.present);
+        this.past.push(cloneHistoryValue(this.present));
+        this.present = this.future.pop();
+        return cloneHistoryValue(this.present);
+    }
+}
+
 function setPixel(pixels, width, height, x, y, value) {
     x = Math.round(x);
     y = Math.round(y);
@@ -101,4 +149,26 @@ function setPixel(pixels, width, height, x, y, value) {
 
 function samePixels(left, right) {
     return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+function cloneHistoryValue(value) {
+    if (Array.isArray(value)) return value.map(cloneHistoryValue);
+    if (value && typeof value === 'object') {
+        return Object.fromEntries(Object.entries(value).map(([key, entry]) => [key, cloneHistoryValue(entry)]));
+    }
+    return value;
+}
+
+function sameHistoryValue(left, right) {
+    if (left === right) return true;
+    if (Array.isArray(left) || Array.isArray(right)) {
+        return Array.isArray(left) && Array.isArray(right) && left.length === right.length && left.every((value, index) => sameHistoryValue(value, right[index]));
+    }
+    if (left && typeof left === 'object' || right && typeof right === 'object') {
+        if (!left || !right || typeof left !== 'object' || typeof right !== 'object') return false;
+        const leftKeys = Object.keys(left);
+        const rightKeys = Object.keys(right);
+        return leftKeys.length === rightKeys.length && leftKeys.every(key => Object.hasOwn(right, key) && sameHistoryValue(left[key], right[key]));
+    }
+    return false;
 }

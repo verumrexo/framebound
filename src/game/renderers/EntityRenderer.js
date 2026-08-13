@@ -12,7 +12,7 @@ import {
     getShopItemState,
     getShopBobY
 } from './ShopPresentation.js';
-import { coreEffectRotation } from '../../shared/parts/CoreEffect.js';
+import { coreEffectDrawAnchor, coreEffectRotation } from '../../shared/parts/CoreEffect.js';
 
 export class EntityRenderer {
 
@@ -90,7 +90,15 @@ export class EntityRenderer {
                 }
 
                 if (def.coreEffectSprite) {
-                    def.coreEffectSprite.draw(ctx, world.x, world.y, coreEffectRotation(rotation));
+                    const anchor = coreEffectDrawAnchor(def.coreEffectSprite, def.coreEffectSpinPivot);
+                    def.coreEffectSprite.draw(
+                        ctx,
+                        world.x,
+                        world.y,
+                        coreEffectRotation(rotation),
+                        anchor.x,
+                        anchor.y
+                    );
                 }
             }
         } finally {

@@ -31,6 +31,13 @@ export function coreEffectRotation(baseRotation = 0, now = Date.now()) {
     return baseRotation + ((now % 10000) * 0.003);
 }
 
+export function coreEffectDrawAnchor(sprite, spinPivot = null) {
+    const width = Number(sprite?.width) || CORE_EFFECT_GRID.width;
+    const height = Number(sprite?.height) || CORE_EFFECT_GRID.height;
+    const pivot = spinPivot || { x: width / 2, y: height / 2 };
+    return { x: pivot.x / width, y: pivot.y / height };
+}
+
 export function coreEffectFromSprite(sprite) {
     if (!sprite || sprite.width !== CORE_EFFECT_GRID.width || sprite.height !== CORE_EFFECT_GRID.height) {
         throw new Error('core effect sprite must be 8x8');

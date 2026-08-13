@@ -153,12 +153,31 @@ test('drone and core art use full 16x16 palette rasters', () => {
     design.drone.layers.base[4] = 3;
     design.coreEffect = {
         resolution: 16, grid: { width: 16, height: 16 }, palette: ['#ff4444'],
-        layers: { base: new Array(256).fill(0) }
+        layers: { base: new Array(256).fill(0) },
+        spinPivot: { x: 7.5, y: 8.5 }
     };
     design.coreEffect.layers.base[90] = 1;
     const restored = parsePartDesign(serializePartDesign(design));
     assert.deepEqual(restored.drone, design.drone);
     assert.deepEqual(restored.coreEffect, design.coreEffect);
+});
+
+test('core spin pivots default to center and preserve half-pixel coordinates', () => {
+    const design = createBlankPartDesign({ name: 'pivot', type: 'core' });
+    design.coreEffect = {
+        resolution: 16,
+        grid: { width: 16, height: 16 },
+        palette: ['#55ccff'],
+        layers: { base: new Array(256).fill(0) }
+    };
+    const defaulted = parsePartDesign(serializePartDesign(design));
+    assert.deepEqual(defaulted.coreEffect.spinPivot, { x: 8, y: 8 });
+
+    design.coreEffect.spinPivot = { x: 7.5, y: 8.5 };
+    const restored = parsePartDesign(serializePartDesign(design));
+    assert.deepEqual(restored.coreEffect.spinPivot, { x: 7.5, y: 8.5 });
+    design.coreEffect.spinPivot = { x: 7.25, y: 8 };
+    assert.throws(() => serializePartDesign(design), /outside the design grid/);
 });
 
 test('v1 designs still load and upgrade losslessly at two source pixels per old pixel', () => {

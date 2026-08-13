@@ -117,3 +117,35 @@ test('enemy assemblies do not invent player fallback bases or core effects', () 
         delete PartsLibrary.cache_test_enemy_core;
     }
 });
+
+test('core effects pass their authored half-pixel pivot to the runtime sprite draw', () => {
+    const coreCalls = [];
+    PartsLibrary.cache_test_pivot_core = {
+        id: 'cache_test_pivot_core',
+        type: 'core',
+        width: 1,
+        height: 1,
+        baseSprite: countingSprite([]),
+        sprite: countingSprite([]),
+        coreEffectSprite: {
+            width: 16,
+            height: 16,
+            draw(...args) { coreCalls.push(args); }
+        },
+        coreEffectSpinPivot: { x: 7.5, y: 8.5 },
+        stats: {}
+    };
+
+    try {
+        const renderer = recordingRenderer();
+        EntityRenderer.drawShip(renderer.renderer, {
+            x: 100, y: 80, rotation: 0.25, isDead: false,
+            getUniqueParts: () => [{ partId: 'cache_test_pivot_core', x: 0, y: 0, rotation: 0 }]
+        });
+        assert.equal(coreCalls.length, 1);
+        assert.equal(coreCalls[0][4], 7.5 / 16);
+        assert.equal(coreCalls[0][5], 8.5 / 16);
+    } finally {
+        delete PartsLibrary.cache_test_pivot_core;
+    }
+});

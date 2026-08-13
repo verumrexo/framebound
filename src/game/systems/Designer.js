@@ -7,9 +7,14 @@ import {
     serializePartDesign,
     upgradeLegacyPartDesign
 } from '../dev/PartDesignDocument.js';
+import {
+    GUIDE_GRID_MODES,
+    guideLineWeight,
+    normalizeGuideGridMode
+} from '../dev/PartGuideGrid.js';
 import { parseLegacyPartDesign } from '../dev/LegacyPartDesignImport.js';
 import { applyVisualDesignOverride } from '../dev/PartLabManifest.js';
-import { drawRasterStroke, RasterHistory } from '../dev/PartRasterTools.js';
+import { drawRasterStroke, mirrorRasterPixels, LayerHistory } from '../dev/PartRasterTools.js';
 import {
     DEFAULT_PROJECTILE_LOOK,
     DEFAULT_PROJECTILE_TRAIL,
@@ -28,7 +33,7 @@ import {
     pointOffset,
     rotateVector
 } from '../../shared/parts/PartVisualGeometry.js';
-import { coreEffectRotation } from '../../shared/parts/CoreEffect.js';
+import { coreEffectDrawAnchor, coreEffectRotation } from '../../shared/parts/CoreEffect.js';
 import { resolveDroneBlueprint } from '../../shared/combat/DroneBlueprints.js';
 
 const PART_ID_PATTERN = /^[a-zA-Z0-9_-]{1,80}$/;
@@ -120,6 +125,7 @@ export class Designer {
         this.strokeStart = null;
         this.strokePixels = null;
         this.strokeTool = null;
+        this.guideGrid = 'regular';
         this.histories = new Map();
         this.turretVariants = new Map();
         this.stagedSaveCallback = null;
@@ -143,13 +149,14 @@ export class Designer {
                     <section class="pd-section"><span class="pd-label">drawing tool</span><div class="pd-row" data-role="tools"></div></section>
                     <section class="pd-section"><span class="pd-label">palette · empty cells are transparent</span><div class="pd-palette" data-role="palette"></div></section>
                     <section class="pd-section"><span class="pd-label">geometry points</span><div class="pd-row">
-                        <button class="pd-btn" data-point="base">set base mount</button><button class="pd-btn" data-point="turret">set turret pivot</button><button class="pd-btn" data-point="muzzle">add muzzle</button><button class="pd-btn is-warn" data-action="clear-muzzles">clear muzzles</button>
+                        <button class="pd-btn" data-point="base">set base mount</button><button class="pd-btn" data-point="turret">set turret pivot</button><button class="pd-btn" data-point="core">set core spin pivot</button><button class="pd-btn" data-point="muzzle">add muzzle</button><button class="pd-btn is-warn" data-action="clear-muzzles">clear muzzles</button>
                     </div><div class="pd-marker-list" data-role="markers"></div></section>
+                    <section class="pd-section"><span class="pd-label">mirror active layer</span><div class="pd-row"><button class="pd-btn" data-action="mirror-horizontal">mirror horizontal</button><button class="pd-btn" data-action="mirror-vertical">mirror vertical</button></div></section>
                     <section class="pd-section"><span class="pd-label">history</span><div class="pd-row"><button class="pd-btn" data-action="undo">undo</button><button class="pd-btn" data-action="redo">redo</button><button class="pd-btn is-warn" data-action="clear-layer">clear layer</button><button class="pd-btn is-warn" data-action="remove-core">remove core</button></div></section>
                 </aside>
                 <section class="pd-canvas-wrap"><canvas class="pd-canvas" data-role="canvas"></canvas></section>
                 <aside class="pd-side pd-preview-side">
-                    <section class="pd-section"><span class="pd-label">canvas</span><div class="pd-row"><label>base <select class="pd-select" data-role="base-size">${BASE_SIZES.map(size => `<option>${size}</option>`).join('')}</select></label><label>turret <select class="pd-select" data-role="turret-size"></select></label></div></section>
+                    <section class="pd-section"><span class="pd-label">canvas</span><div class="pd-row"><label>base <select class="pd-select" data-role="base-size">${BASE_SIZES.map(size => `<option>${size}</option>`).join('')}</select></label><label>turret <select class="pd-select" data-role="turret-size"></select></label><label>guides <select class="pd-select" data-role="guide-grid">${GUIDE_GRID_MODES.map(mode => `<option value="${mode.id}">${mode.label}</option>`).join('')}</select></label></div></section>
                     <section class="pd-section"><span class="pd-label">exact runtime mount preview</span><canvas width="408" height="260" class="pd-preview" data-role="preview"></canvas><div class="pd-row" style="margin-top:7px"><label>installed <select class="pd-select" data-role="rotation"><option value="0">0°</option><option value="1">90°</option><option value="2">180°</option><option value="3">270°</option></select></label><label>fire <select class="pd-select" data-role="fire-mode"><option value="single">single</option><option value="burst">burst</option><option value="continuous">continuous</option></select></label><button class="pd-btn" data-action="fire">fire test</button></div></section>
                     <section class="pd-section" data-role="projectile-controls"><span class="pd-label">projectile cosmetics</span><div class="pd-row"><label>look <select class="pd-select" data-role="projectile-look"></select></label><label>trail <select class="pd-select" data-role="projectile-trail"></select></label></div><canvas width="390" height="56" class="pd-projectile-preview" data-role="projectile-preview"></canvas><div class="pd-help" data-role="projectile-help">trail = the glow or particles left behind a projectile.</div></section>
                     <section class="pd-section"><span class="pd-label">notes</span><textarea class="pd-input pd-text" maxlength="2000" data-role="notes"></textarea></section>
@@ -168,6 +175,7 @@ export class Designer {
         this.identity = this.ui.querySelector('[data-role="identity"]');
         this.baseSizeSelect = this.ui.querySelector('[data-role="base-size"]');
         this.turretSizeSelect = this.ui.querySelector('[data-role="turret-size"]');
+        this.guideGridSelect = this.ui.querySelector('[data-role="guide-grid"]');
         this.rotationSelect = this.ui.querySelector('[data-role="rotation"]');
         this.fireModeSelect = this.ui.querySelector('[data-role="fire-mode"]');
         this.projectileLookSelect = this.ui.querySelector('[data-role="projectile-look"]');
@@ -202,6 +210,8 @@ export class Designer {
                 undo: () => this.undo(),
                 redo: () => this.redo(),
                 'clear-layer': () => this.clearLayer(),
+                'mirror-horizontal': () => this.mirrorActiveLayer('horizontal'),
+                'mirror-vertical': () => this.mirrorActiveLayer('vertical'),
                 'remove-core': () => this.removeCore(),
                 'clear-muzzles': () => this.clearMuzzles(),
                 fire: () => this.fireTest(),
@@ -213,6 +223,10 @@ export class Designer {
         });
         this.baseSizeSelect.onchange = () => this.changeBaseSize(this.baseSizeSelect.value);
         this.turretSizeSelect.onchange = () => this.changeTurretSize(this.turretSizeSelect.value);
+        this.guideGridSelect.onchange = () => {
+            this.guideGrid = normalizeGuideGridMode(this.guideGridSelect.value);
+            this.drawAll();
+        };
         this.rotationSelect.onchange = () => { this.installRotation = Number(this.rotationSelect.value); this.drawPreview(); };
         this.projectileLookSelect.onchange = () => this.changeProjectileCosmetics();
         this.projectileTrailSelect.onchange = () => this.changeProjectileCosmetics();
@@ -291,6 +305,8 @@ export class Designer {
         this.turretSizeSelect.value = footprintKey(this.design.turretFootprint);
         this.projectileLookSelect.value = this.design.projectileLook;
         this.projectileTrailSelect.value = this.design.projectileTrail;
+        this.guideGrid = normalizeGuideGridMode(this.guideGrid);
+        this.guideGridSelect.value = this.guideGrid;
         this.identity.textContent = `${this.currentPartId || 'new part'} · ${this.design.name}`;
         this.ensureHistory('base');
         this.ensureHistory('turret');
@@ -330,6 +346,7 @@ export class Designer {
     setPointMode(mode) {
         if (mode === 'base') this.setLayer('base');
         else if (mode === 'turret' || mode === 'muzzle') this.setLayer('turret');
+        else if (mode === 'core') this.setLayer('core');
         if (!this.layerAvailable(this.layer)) return;
         this.pointMode = this.pointMode === mode ? null : mode;
         this.syncControls();
@@ -342,32 +359,76 @@ export class Designer {
     }
 
     activeRaster() {
-        if (this.layer === 'base') return { pixels: this.design.layers.base, grid: this.design.grid, palette: this.design.palette };
-        if (this.layer === 'turret') return { pixels: this.design.layers.turret, grid: this.design.turretGrid, palette: this.design.palette };
-        if (this.layer === 'core') {
-            return { pixels: this.coreScratch.layers.base, grid: this.coreScratch.grid, palette: this.coreScratch.palette };
-        }
+        return this.rasterForLayer(this.layer);
+    }
+
+    rasterForLayer(layer) {
+        if (layer === 'base') return { pixels: this.design.layers.base, grid: this.design.grid, palette: this.design.palette };
+        if (layer === 'turret') return { pixels: this.design.layers.turret, grid: this.design.turretGrid, palette: this.design.palette };
+        if (layer === 'core') return { pixels: this.coreScratch.layers.base, grid: this.coreScratch.grid, palette: this.coreScratch.palette };
         return { pixels: this.design.drone.layers.base, grid: this.design.drone.grid, palette: this.design.drone.palette };
     }
 
     ensureHistory(layer) {
         if (!this.layerAvailable(layer) && layer !== 'core') return null;
-        const previous = this.layer;
-        this.layer = layer;
-        const raster = this.activeRaster();
-        this.layer = previous;
-        if (!this.histories.has(layer)) this.histories.set(layer, new RasterHistory(raster.pixels));
+        if (!this.histories.has(layer)) this.histories.set(layer, new LayerHistory(this.captureLayerState(layer)));
         return this.histories.get(layer);
     }
 
     setActivePixels(pixels) {
-        if (this.layer === 'base') this.design.layers.base = [...pixels];
-        else if (this.layer === 'turret') this.design.layers.turret = [...pixels];
-        else if (this.layer === 'core') {
+        this.setLayerPixels(this.layer, pixels);
+    }
+
+    setLayerPixels(layer, pixels) {
+        if (layer === 'base') this.design.layers.base = [...pixels];
+        else if (layer === 'turret') this.design.layers.turret = [...pixels];
+        else if (layer === 'core') {
             this.coreScratch.layers.base = [...pixels];
             this.design.coreEffect = clone(this.coreScratch);
         }
         else this.design.drone.layers.base = [...pixels];
+    }
+
+    captureLayerState(layer = this.layer) {
+        return {
+            pixels: [...this.rasterForLayer(layer).pixels],
+            geometry: this.captureLayerGeometry(layer)
+        };
+    }
+
+    restoreLayerState(snapshot, layer = this.layer) {
+        if (!snapshot) return;
+        this.setLayerPixels(layer, snapshot.pixels || []);
+        this.restoreLayerGeometry(snapshot.geometry, layer);
+    }
+
+    captureLayerGeometry(layer = this.layer) {
+        if (layer === 'base') return { base: this.design.anchors.base ? { ...this.design.anchors.base } : null };
+        if (layer === 'turret') return {
+            turret: this.design.anchors.turret ? { ...this.design.anchors.turret } : null,
+            muzzles: this.design.muzzles.map(point => ({ ...point }))
+        };
+        if (layer === 'core') return {
+            present: Boolean(this.design.coreEffect),
+            spinPivot: { ...this.coreScratch.spinPivot }
+        };
+        return {};
+    }
+
+    restoreLayerGeometry(snapshot, layer = this.layer) {
+        if (!snapshot) return;
+        if (layer === 'base') this.design.anchors.base = snapshot.base ? { ...snapshot.base } : null;
+        else if (layer === 'turret') {
+            this.design.anchors.turret = snapshot.turret ? { ...snapshot.turret } : null;
+            this.design.muzzles = (snapshot.muzzles || []).map(point => ({ ...point }));
+        } else if (layer === 'core') {
+            if (snapshot.spinPivot) this.coreScratch.spinPivot = { ...snapshot.spinPivot };
+            this.design.coreEffect = snapshot.present === false ? null : clone(this.coreScratch);
+        }
+    }
+
+    commitLayer(layer = this.layer) {
+        this.ensureHistory(layer)?.commit(this.captureLayerState(layer));
     }
 
     beginStroke(event) {
@@ -419,7 +480,7 @@ export class Designer {
                 this.colorIndex
             );
         this.setActivePixels(next);
-        this.ensureHistory(this.layer).commit(next);
+        this.commitLayer(this.layer);
         this.strokeStart = null;
         this.strokePixels = null;
         this.strokeTool = null;
@@ -444,29 +505,62 @@ export class Designer {
     }
 
     placePoint(point) {
+        const layer = this.layer;
         if (this.pointMode === 'base') this.design.anchors.base = point;
         if (this.pointMode === 'turret') this.design.anchors.turret = point;
+        if (this.pointMode === 'core') {
+            this.coreScratch.spinPivot = point;
+            this.design.coreEffect = clone(this.coreScratch);
+        }
         if (this.pointMode === 'muzzle') {
             if (this.design.muzzles.length >= 16) return this.setStatus('16 muzzles is already ridiculous', true);
             this.design.muzzles.push(point);
         }
         this.pointMode = null;
+        this.ensureHistory(layer)?.commit(this.captureLayerState(layer));
         this.changed('geometry point updated');
     }
 
-    clearMuzzles() { this.design.muzzles = []; this.changed('muzzles cleared'); }
+    mirrorActiveLayer(axis) {
+        const raster = this.activeRaster();
+        const { width, height } = raster.grid;
+        const mirrored = mirrorRasterPixels(raster.pixels, width, height, axis);
+        this.setActivePixels(mirrored);
+        if (this.layer === 'base' && this.design.anchors.base) {
+            this.design.anchors.base = mirrorPoint(this.design.anchors.base, width, height, axis);
+        } else if (this.layer === 'turret') {
+            if (this.design.anchors.turret) {
+                this.design.anchors.turret = mirrorPoint(this.design.anchors.turret, width, height, axis);
+            }
+            this.design.muzzles = this.design.muzzles.map(point => mirrorPoint(point, width, height, axis));
+        } else if (this.layer === 'core') {
+            this.coreScratch.spinPivot = mirrorPoint(this.coreScratch.spinPivot, width, height, axis);
+            this.design.coreEffect = clone(this.coreScratch);
+        }
+        this.commitLayer(this.layer);
+        this.changed(`${this.layer} mirrored ${axis}`);
+    }
+
+    clearMuzzles() {
+        const previousLayer = this.layer;
+        this.layer = 'turret';
+        this.design.muzzles = [];
+        this.ensureHistory('turret')?.commit(this.captureLayerState('turret'));
+        this.layer = previousLayer;
+        this.changed('muzzles cleared');
+    }
 
     undo() {
         const history = this.ensureHistory(this.layer);
         if (!history) return;
-        this.setActivePixels(history.undo());
+        this.restoreLayerState(history.undo(), this.layer);
         this.changed('undo');
     }
 
     redo() {
         const history = this.ensureHistory(this.layer);
         if (!history) return;
-        this.setActivePixels(history.redo());
+        this.restoreLayerState(history.redo(), this.layer);
         this.changed('redo');
     }
 
@@ -474,15 +568,17 @@ export class Designer {
         const raster = this.activeRaster();
         const next = new Array(raster.grid.width * raster.grid.height).fill(0);
         this.setActivePixels(next);
-        this.ensureHistory(this.layer).commit(next);
+        this.commitLayer(this.layer);
         this.changed(`${this.layer} cleared`);
     }
 
     removeCore() {
+        const previousLayer = this.layer;
+        this.layer = 'core';
         this.design.coreEffect = null;
         this.coreScratch = blankRasterVisual(this.design.palette);
-        this.histories.delete('core');
-        this.ensureHistory('core');
+        this.commitLayer('core');
+        this.layer = previousLayer;
         this.changed('spinning core removed');
     }
 
@@ -591,6 +687,7 @@ export class Designer {
         const markers = [];
         if (this.design.anchors.base) markers.push(`base mount: ${formatPoint(this.design.anchors.base)}`);
         if (this.design.anchors.turret) markers.push(`turret pivot: ${formatPoint(this.design.anchors.turret)}`);
+        if (this.coreScratch?.spinPivot) markers.push(`core spin pivot: ${formatPoint(this.coreScratch.spinPivot)}`);
         this.design.muzzles.forEach((point, index) => markers.push(`muzzle ${index + 1}: ${formatPoint(point)}`));
         this.ui.querySelector('[data-role="markers"]').innerHTML = markers.join('<br>') || 'no points set';
         this.drawAll();
@@ -622,12 +719,27 @@ export class Designer {
         for (let y = 0; y < raster.grid.height; y++) for (let x = 0; x < raster.grid.width; x++) {
             const value = data[y * raster.grid.width + x];
             if (value) { ctx.fillStyle = raster.palette[value - 1] || '#ff00ff'; ctx.fillRect(x * scale, y * scale, scale, scale); }
-            ctx.strokeStyle = '#1d2939'; ctx.lineWidth = 1; ctx.strokeRect(x * scale + .5, y * scale + .5, scale - 1, scale - 1);
+        }
+        for (let x = 0; x <= raster.grid.width; x++) {
+            const weight = guideLineWeight(x, raster.grid.width, this.guideGrid);
+            if (!weight) continue;
+            ctx.strokeStyle = weight > 1 ? '#526a84' : '#1d2939';
+            ctx.lineWidth = weight;
+            ctx.beginPath(); ctx.moveTo(x * scale + .5, 0); ctx.lineTo(x * scale + .5, raster.grid.height * scale); ctx.stroke();
+        }
+        for (let y = 0; y <= raster.grid.height; y++) {
+            const weight = guideLineWeight(y, raster.grid.height, this.guideGrid);
+            if (!weight) continue;
+            ctx.strokeStyle = weight > 1 ? '#526a84' : '#1d2939';
+            ctx.lineWidth = weight;
+            ctx.beginPath(); ctx.moveTo(0, y * scale + .5); ctx.lineTo(raster.grid.width * scale, y * scale + .5); ctx.stroke();
         }
         const markers = this.layer === 'base'
             ? [{ point: this.design.anchors.base, color: '#68b7ff', label: 'm' }]
             : this.layer === 'turret'
                 ? [{ point: this.design.anchors.turret, color: '#ff76de', label: 'p' }, ...this.design.muzzles.map((point, i) => ({ point, color: '#ffb45f', label: String(i + 1) }))]
+                : this.layer === 'core'
+                    ? [{ point: this.coreScratch.spinPivot, color: '#ff6b9d', label: 's' }]
                 : [];
         for (const marker of markers) if (marker.point) drawMarker(ctx, marker.point, scale, marker.color, marker.label);
     }
@@ -655,7 +767,17 @@ export class Designer {
         const mount = getAuthoredTurretMount(definition, center.x, center.y, baseAngle);
         const aimAngle = Math.atan2(aim.y - mount.y, aim.x - mount.x);
         if (definition.type === PartType.WEAPON && definition.sprite) definition.sprite.draw(ctx, mount.x, mount.y, aimAngle);
-        if (definition.coreEffectSprite) definition.coreEffectSprite.draw(ctx, center.x, center.y, coreEffectRotation(baseAngle));
+        if (definition.coreEffectSprite) {
+            const anchor = coreEffectDrawAnchor(definition.coreEffectSprite, definition.coreEffectSpinPivot);
+            definition.coreEffectSprite.draw(
+                ctx,
+                center.x,
+                center.y,
+                coreEffectRotation(baseAngle),
+                anchor.x,
+                anchor.y
+            );
+        }
         if (this.design.drone) this.drawDronePreview(ctx, definition, center, aimAngle);
         this.drawGeometryOverlay(ctx, definition, center, baseAngle, aimAngle);
         for (const projectile of this.previewProjectiles) drawProjectileOnContext(ctx, projectile);
@@ -980,7 +1102,42 @@ function authoredDefinitionToDesign(partId, definition) {
     design.stats = clone(definition.stats || {});
     design.projectileLook = definition.projectileLook || DEFAULT_PROJECTILE_LOOK;
     design.projectileTrail = definition.projectileTrail || DEFAULT_PROJECTILE_TRAIL;
+    if (definition.coreEffectSprite) {
+        const core = definition.coreEffectSprite;
+        const corePalette = spritePalette(core);
+        const isLegacyCore = core.width === 8 && core.height === 8;
+        const coreGrid = isLegacyCore
+            ? { width: 16, height: 16 }
+            : { width: core.width, height: core.height };
+        const authoredPivot = definition.coreEffectSpinPivot;
+        design.coreEffect = {
+            resolution: 16,
+            grid: coreGrid,
+            palette: corePalette,
+            layers: { base: isLegacyCore ? upscaleCorePixels(core.data) : [...core.data] },
+            spinPivot: authoredPivot
+                ? (isLegacyCore ? scaleCorePoint(authoredPivot) : { ...authoredPivot })
+                : { x: coreGrid.width / 2, y: coreGrid.height / 2 }
+        };
+    }
     return design;
+}
+
+function upscaleCorePixels(pixels) {
+    const result = new Array(16 * 16).fill(0);
+    for (let y = 0; y < 8; y++) for (let x = 0; x < 8; x++) {
+        const pixel = Number.isInteger(pixels?.[y * 8 + x]) ? pixels[y * 8 + x] : 0;
+        const target = (y * 2) * 16 + x * 2;
+        result[target] = pixel;
+        result[target + 1] = pixel;
+        result[target + 16] = pixel;
+        result[target + 17] = pixel;
+    }
+    return result;
+}
+
+function scaleCorePoint(point) {
+    return { x: point.x * 2, y: point.y * 2 };
 }
 
 export function getDesignerPreviewMount(definition, partX, partY, aim = { x: partX + 1, y: partY }, baseAngle = 0) {
@@ -1026,7 +1183,13 @@ function blankDroneVisual(blueprintId) {
 }
 
 function blankRasterVisual(palette) {
-    return { resolution: 16, grid: { width: 16, height: 16 }, palette: [...palette], layers: { base: new Array(256).fill(0) } };
+    return {
+        resolution: 16,
+        grid: { width: 16, height: 16 },
+        palette: [...palette],
+        layers: { base: new Array(256).fill(0) },
+        spinPivot: { x: 8, y: 8 }
+    };
 }
 
 function legacyPixels(sprite, grid) {
@@ -1051,6 +1214,11 @@ function spritePalette(sprite) {
 }
 function paletteMap(palette) { return Object.fromEntries(palette.map((color, index) => [index + 1, color])); }
 function centerPoint(grid) { return { x: grid.width / 2, y: grid.height / 2 }; }
+function mirrorPoint(point, width, height, axis) {
+    return axis === 'horizontal'
+        ? { x: width - point.x, y: point.y }
+        : { x: point.x, y: height - point.y };
+}
 function footprintKey(footprint) { return `${footprint.width}x${footprint.height}`; }
 function formatPoint(point) { return `${point.x}, ${point.y}`; }
 function makeButton(label, data = {}) { const button = document.createElement('button'); button.type = 'button'; button.className = 'pd-btn'; button.textContent = label; Object.assign(button.dataset, data); return button; }

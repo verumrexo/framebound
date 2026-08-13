@@ -141,7 +141,7 @@ export function normalizePartDesign(value) {
     }
 
     const coreEffect = Object.hasOwn(value, 'coreEffect')
-        ? normalizeRasterVisual(value.coreEffect, 'core effect', null)
+        ? normalizeRasterVisual(value.coreEffect, 'core effect', null, true)
         : undefined;
     const drone = normalizeDroneVisual(value.drone, type);
 
@@ -206,7 +206,8 @@ export function upgradeLegacyPartDesign(value) {
             resolution: RESOLUTION,
             grid: { width: RESOLUTION, height: RESOLUTION },
             palette: [legacy.coreEffect.color],
-            layers: { base: upscalePixels2x(legacy.coreEffect.layers.base, { width: 8, height: 8 }) }
+            layers: { base: upscalePixels2x(legacy.coreEffect.layers.base, { width: 8, height: 8 }) },
+            spinPivot: { x: RESOLUTION / 2, y: RESOLUTION / 2 }
         };
     }
     if (legacy.drone) {
@@ -272,7 +273,12 @@ function normalizeLegacyCoreEffect(value) {
     assertGrid(value.grid, grid, 'core effect grid');
     if (!isPlainObject(value.layers)) throw new Error('core effect layers are missing');
     const color = normalizeColor(value.color, 'core effect color');
-    return { grid, layers: { base: normalizePixels(value.layers.base, 64, 1, 'core effect base') }, color };
+    return {
+        grid,
+        layers: { base: normalizePixels(value.layers.base, 64, 1, 'core effect base') },
+        color,
+        spinPivot: { x: grid.width / 2, y: grid.height / 2 }
+    };
 }
 
 function normalizeLegacyDrone(value, type) {
@@ -293,7 +299,7 @@ function normalizeLegacyDrone(value, type) {
     };
 }
 
-function normalizeRasterVisual(value, label, requiredId) {
+function normalizeRasterVisual(value, label, requiredId, includeSpinPivot = false) {
     if (value === null) return null;
     if (!isPlainObject(value)) throw new Error(`${label} must be an object or null`);
     if (value.resolution !== RESOLUTION) throw new Error(`${label} resolution must be ${RESOLUTION}`);
@@ -307,6 +313,13 @@ function normalizeRasterVisual(value, label, requiredId) {
         palette,
         layers: { base: normalizePixels(value.layers.base, RESOLUTION * RESOLUTION, palette.length, `${label} base`) }
     };
+    if (includeSpinPivot) {
+        result.spinPivot = normalizePoint(
+            value.spinPivot || { x: grid.width / 2, y: grid.height / 2 },
+            grid,
+            `${label} spin pivot`
+        );
+    }
     if (requiredId) result.blueprintId = requiredId;
     return result;
 }

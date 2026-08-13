@@ -243,18 +243,26 @@ function applyV2VisualDesignOverride(definition, design) {
     definition.projectileLook = normalizeProjectileLook(design.projectileLook || DEFAULT_PROJECTILE_LOOK);
     definition.projectileTrail = normalizeProjectileTrail(design.projectileTrail || DEFAULT_PROJECTILE_TRAIL);
     if (Object.hasOwn(design, 'coreEffect')) {
-        definition.coreEffectSprite = design.coreEffect
-            ? makeSprite(
+        if (!design.coreEffect) {
+            definition.coreEffectSprite = null;
+            delete definition.coreEffectSpinPivot;
+        } else {
+            const spinPivot = design.coreEffect.spinPivot || {
+                x: design.coreEffect.grid.width / 2,
+                y: design.coreEffect.grid.height / 2
+            };
+            definition.coreEffectSprite = makeSprite(
                 null,
                 design.coreEffect.layers.base,
                 design.coreEffect.grid,
-                null,
+                spinPivot,
                 {
                     scale: 2,
                     colorMap: paletteColorMap(design.coreEffect.palette)
                 }
-            )
-            : null;
+            );
+            definition.coreEffectSpinPivot = { ...spinPivot };
+        }
     }
     if (design.drone) registerDroneVisualOverride(design.drone);
     return true;
@@ -310,12 +318,20 @@ export function applyVisualDesignOverride(definition, design) {
     definition.projectileTrail = normalizeProjectileTrail(design.projectileTrail || DEFAULT_PROJECTILE_TRAIL);
     if (Number.isFinite(design.rotationOffset)) definition.rotationOffset = design.rotationOffset;
     if (Object.hasOwn(design, 'coreEffect')) {
-        definition.coreEffectSprite = design.coreEffect
-            ? createCoreEffectSprite(
+        if (!design.coreEffect) {
+            definition.coreEffectSprite = null;
+            delete definition.coreEffectSpinPivot;
+        } else {
+            const spinPivot = design.coreEffect.spinPivot || {
+                x: design.coreEffect.grid.width / 2,
+                y: design.coreEffect.grid.height / 2
+            };
+            definition.coreEffectSprite = createCoreEffectSprite(
                 design.coreEffect.color,
                 design.coreEffect.layers.base
-            )
-            : null;
+            );
+            definition.coreEffectSpinPivot = { ...spinPivot };
+        }
     }
     if (design.drone) registerDroneVisualOverride(design.drone);
     return true;

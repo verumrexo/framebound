@@ -1,7 +1,7 @@
 import '../../tests/setup.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { drawRasterStroke, RasterHistory } from './PartRasterTools.js';
+import { drawRasterStroke, mirrorRasterPixels, RasterHistory } from './PartRasterTools.js';
 
 test('raster tools draw lines, outlined boxes, filled boxes, and bounded fills', () => {
     const blank = new Array(25).fill(0);
@@ -23,4 +23,11 @@ test('raster history supports undo and redo without aliasing snapshots', () => {
     assert.deepEqual(history.undo(), [1, 0]);
     assert.deepEqual(history.undo(), [0, 0]);
     assert.deepEqual(history.redo(), [1, 0]);
+});
+
+test('mirror operations flip only raster pixels on the requested axis', () => {
+    const pixels = [1, 2, 3, 4, 5, 6];
+    assert.deepEqual(mirrorRasterPixels(pixels, 3, 2, 'horizontal'), [3, 2, 1, 6, 5, 4]);
+    assert.deepEqual(mirrorRasterPixels(pixels, 3, 2, 'vertical'), [4, 5, 6, 1, 2, 3]);
+    assert.deepEqual(mirrorRasterPixels(pixels, 3, 2, 'diagonal'), pixels);
 });

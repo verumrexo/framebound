@@ -229,15 +229,59 @@ test('visual override preserves, removes, and replaces core effects by field pre
         resolution: 16,
         grid: { width: 16, height: 16 },
         palette: ['#b56cff'],
-        layers: { base: new Array(256).fill(0).map((_, index) => index === 3 ? 1 : 0) }
+        layers: { base: new Array(256).fill(0).map((_, index) => index === 3 ? 1 : 0) },
+        spinPivot: { x: 7.5, y: 8.5 }
     };
     applyVisualDesignOverride(definition, replacement);
     assert.notEqual(definition.coreEffectSprite, original);
     assert.equal(definition.coreEffectSprite.colorMap[1], '#b56cff');
     assert.equal(definition.coreEffectSprite.data[3], 1);
+    assert.deepEqual(definition.coreEffectSpinPivot, { x: 7.5, y: 8.5 });
+    assert.equal(definition.coreEffectSprite.anchorX, 7.5 / 16);
+    assert.equal(definition.coreEffectSprite.anchorY, 8.5 / 16);
 
     const removed = createBlankPartDesign({ name: 'hull', type: 'hull' });
     removed.coreEffect = null;
     applyVisualDesignOverride(definition, removed);
     assert.equal(definition.coreEffectSprite, null);
+});
+
+test('core pivot survives manifest round-trip and defaults old records to center', () => {
+    const value = createBlankPartDesign({ name: 'pivoted core', type: 'core' });
+    value.partId = 'core';
+    value.coreEffect = {
+        resolution: 16,
+        grid: { width: 16, height: 16 },
+        palette: ['#55ccff'],
+        layers: { base: new Array(256).fill(0) },
+        spinPivot: { x: 6.5, y: 9.5 }
+    };
+    const manifest = normalizePartLabManifest({
+        schemaVersion: 1,
+        version: 1,
+        modifiedAt: '2026-08-11T00:00:00.000Z',
+        visuals: [{ partId: 'core', design: value }],
+        sounds: [],
+        reviews: []
+    });
+    const restored = parsePartLabManifest(serializePartLabManifest(manifest));
+    assert.deepEqual(restored.visuals[0].design.coreEffect.spinPivot, { x: 6.5, y: 9.5 });
+
+    const old = createBlankPartDesign({ name: 'old core', type: 'core' });
+    old.partId = 'core';
+    old.coreEffect = {
+        resolution: 16,
+        grid: { width: 16, height: 16 },
+        palette: ['#55ccff'],
+        layers: { base: new Array(256).fill(0) }
+    };
+    const oldManifest = normalizePartLabManifest({
+        schemaVersion: 1,
+        version: 1,
+        modifiedAt: '2026-08-11T00:00:00.000Z',
+        visuals: [{ partId: 'core', design: old }],
+        sounds: [],
+        reviews: []
+    });
+    assert.deepEqual(oldManifest.visuals[0].design.coreEffect.spinPivot, { x: 8, y: 8 });
 });

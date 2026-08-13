@@ -182,6 +182,8 @@ struct PartLabCoreEffect {
     palette: Vec<String>,
     #[serde(default)]
     color: Option<String>,
+    #[serde(default)]
+    spin_pivot: Option<PartLabPoint>,
 }
 
 #[cfg(any(debug_assertions, feature = "part-lab"))]
@@ -652,6 +654,9 @@ fn validate_part_lab_design(part_id: &str, design: &PartLabDesign) -> Result<(),
                 return Err(format!("visual design for {part_id} has an invalid core effect color"));
             }
         }
+        if let Some(pivot) = &core.spin_pivot {
+            validate_part_lab_half_pixel_point(pivot, (core_size, core_size), part_id)?;
+        }
     }
     if design.rotation_offset.is_some_and(|value| !value.is_finite()) || !design.stats.is_object() {
         return Err(format!("visual design for {part_id} has invalid metadata"));
@@ -709,6 +714,16 @@ fn validate_part_lab_anchors(anchors: &PartLabAnchors, grid: (usize, usize), par
 fn validate_part_lab_point(point: &PartLabPoint, grid: (usize, usize), part_id: &str) -> Result<(), String> {
     if !point.x.is_finite() || !point.y.is_finite() || point.x < 0.0 || point.y < 0.0 || point.x > grid.0 as f64 || point.y > grid.1 as f64 {
         return Err(format!("visual design for {part_id} has an out-of-bounds point"));
+    }
+    Ok(())
+}
+
+#[cfg(any(debug_assertions, feature = "part-lab"))]
+fn validate_part_lab_half_pixel_point(point: &PartLabPoint, grid: (usize, usize), part_id: &str) -> Result<(), String> {
+    validate_part_lab_point(point, grid, part_id)?;
+    let aligned = |value: f64| ((value * 2.0).round() - value * 2.0).abs() <= f64::EPSILON * 8.0;
+    if !aligned(point.x) || !aligned(point.y) {
+        return Err(format!("visual design for {part_id} has a non-half-pixel core pivot"));
     }
     Ok(())
 }
@@ -1355,6 +1370,35 @@ mod tests {
             fs::remove_dir_all(root.parent().unwrap())
                 .expect("test directory should be removable");
         }
+    }
+
+    #[test]
+    fn part_lab_promotion_preserves_v2_half_pixel_core_spin_pivot() {
+        let root = test_path("generated-parts-v2-core-pivot");
+        let mut valid = serde_json::from_str::<serde_json::Value>(&valid_v2_part_lab_manifest())
+            .expect("v2 fixture should parse");
+        valid["visuals"][0]["design"]["coreEffect"] = serde_json::json!({
+            "resolution": 16,
+            "grid": { "width": 16, "height": 16 },
+            "palette": ["#55ccff"],
+            "layers": { "base": vec![0; 256] },
+            "spinPivot": { "x": 7.5, "y": 8.5 }
+        });
+        promote_part_lab_manifest_to(&root, &valid.to_string())
+            .expect("half-pixel core pivot should promote");
+        let saved = fs::read_to_string(root.join("part-lab-overrides.json"))
+            .expect("promoted manifest should be readable");
+        let saved: serde_json::Value = serde_json::from_str(&saved)
+            .expect("promoted manifest should remain valid json");
+        assert_eq!(
+            saved["visuals"][0]["design"]["coreEffect"]["spinPivot"],
+            serde_json::json!({ "x": 7.5, "y": 8.5 })
+        );
+
+        valid["visuals"][0]["design"]["coreEffect"]["spinPivot"]["x"] = serde_json::json!(7.25);
+        assert!(promote_part_lab_manifest_to(&root, &valid.to_string()).is_err());
+        fs::remove_dir_all(root.parent().unwrap())
+            .expect("test directory should be removable");
     }
 
     #[test]
