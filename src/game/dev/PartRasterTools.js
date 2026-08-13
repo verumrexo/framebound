@@ -2,13 +2,31 @@ export const PART_RASTER_TOOLS = Object.freeze([
     'pencil', 'eraser', 'line', 'box', 'box-fill', 'fill'
 ]);
 
-export function drawRasterStroke(pixels, width, height, tool, start, end, color) {
+export function drawRasterStroke(pixels, width, height, tool, start, end, color, symmetry = {}) {
     const next = [...pixels];
     const paint = tool === 'eraser' ? 0 : color;
-    if (tool === 'fill') return floodFill(next, width, height, end.x, end.y, paint);
+    const transforms = symmetryTransforms(width, height, symmetry);
+    const seen = new Set();
+
+    for (const transform of transforms) {
+        const transformedStart = transform(start);
+        const transformedEnd = transform(end);
+        const operationKey = `${transformedStart.x},${transformedStart.y}:${transformedEnd.x},${transformedEnd.y}`;
+        if (seen.has(operationKey)) continue;
+        seen.add(operationKey);
+        drawRasterStrokeOnce(next, width, height, tool, transformedStart, transformedEnd, paint);
+    }
+    return next;
+}
+
+function drawRasterStrokeOnce(pixels, width, height, tool, start, end, paint) {
+    if (tool === 'fill') {
+        floodFill(pixels, width, height, end.x, end.y, paint);
+        return;
+    }
     if (tool === 'line' || tool === 'pencil' || tool === 'eraser') {
-        for (const point of rasterLine(start, end)) setPixel(next, width, height, point.x, point.y, paint);
-        return next;
+        for (const point of rasterLine(start, end)) setPixel(pixels, width, height, point.x, point.y, paint);
+        return;
     }
     const minX = Math.min(start.x, end.x);
     const maxX = Math.max(start.x, end.x);
@@ -16,22 +34,19 @@ export function drawRasterStroke(pixels, width, height, tool, start, end, color)
     const maxY = Math.max(start.y, end.y);
     for (let y = minY; y <= maxY; y++) for (let x = minX; x <= maxX; x++) {
         if (tool === 'box-fill' || x === minX || x === maxX || y === minY || y === maxY) {
-            setPixel(next, width, height, x, y, paint);
+            setPixel(pixels, width, height, x, y, paint);
         }
     }
-    return next;
 }
 
-export function mirrorRasterPixels(pixels, width, height, axis) {
-    if (!Array.isArray(pixels) || pixels.length !== width * height) return [...pixels];
-    if (axis !== 'horizontal' && axis !== 'vertical') return [...pixels];
-    const mirrored = new Array(pixels.length).fill(0);
-    for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
-        const sourceX = axis === 'horizontal' ? width - 1 - x : x;
-        const sourceY = axis === 'vertical' ? height - 1 - y : y;
-        mirrored[y * width + x] = pixels[sourceY * width + sourceX];
-    }
-    return mirrored;
+function symmetryTransforms(width, height, symmetry = {}) {
+    const leftRight = Boolean(symmetry.leftRight ?? symmetry.horizontal);
+    const topBottom = Boolean(symmetry.topBottom ?? symmetry.vertical);
+    const transforms = [point => ({ x: point.x, y: point.y })];
+    if (leftRight) transforms.push(point => ({ x: width - 1 - point.x, y: point.y }));
+    if (topBottom) transforms.push(point => ({ x: point.x, y: height - 1 - point.y }));
+    if (leftRight && topBottom) transforms.push(point => ({ x: width - 1 - point.x, y: height - 1 - point.y }));
+    return transforms;
 }
 
 export function rasterLine(start, end) {

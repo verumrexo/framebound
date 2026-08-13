@@ -137,52 +137,27 @@ test('designer save callbacks receive validated v2 copies', () => {
     assert.notEqual(saved, design);
 });
 
-test('designer mirror keeps geometry coherent and supports undo/redo', () => {
-    const design = createBlankPartDesign({ name: 'mirror', type: 'weapon' });
-    design.layers.turret = new Array(256).fill(0);
-    design.layers.turret.splice(0, 4, 1, 2, 3, 4);
-    design.anchors.turret = { x: 3.5, y: 8 };
-    design.muzzles = [{ x: 14.5, y: 6.5 }];
+test('designer symmetry is live drawing-only and one stroke undoes as one operation', () => {
+    const design = createBlankPartDesign({ name: 'symmetry', type: 'weapon', width: 1, height: 1 });
+    design.layers.turret = new Array(25).fill(0);
+    design.turretGrid = { width: 5, height: 5 };
+    design.anchors.turret = { x: 1.5, y: 2.5 };
+    design.muzzles = [{ x: 4.5, y: 2.5 }];
     const worker = Object.create(Designer.prototype);
     worker.layer = 'turret';
+    worker.tool = 'pencil';
+    worker.colorIndex = 2;
+    worker.symmetry = { leftRight: true, topBottom: true };
     worker.design = design;
-    worker.coreScratch = { spinPivot: { x: 8, y: 8 } };
+    worker.coreScratch = { spinPivot: { x: 2.5, y: 2.5 } };
     worker.histories = new Map([['turret', new LayerHistory({
         pixels: design.layers.turret,
         geometry: { turret: { ...design.anchors.turret }, muzzles: design.muzzles.map(point => ({ ...point })) }
     })]]);
     worker.ensureHistory = () => worker.histories.get('turret');
     worker.changed = () => {};
-
-    worker.mirrorActiveLayer('horizontal');
-    assert.deepEqual(worker.design.layers.turret.slice(12, 16), [4, 3, 2, 1]);
-    assert.deepEqual(worker.design.anchors.turret, { x: 12.5, y: 8 });
-    assert.deepEqual(worker.design.muzzles, [{ x: 1.5, y: 6.5 }]);
-
-    worker.undo();
-    assert.deepEqual(worker.design.layers.turret.slice(0, 4), [1, 2, 3, 4]);
-    assert.deepEqual(worker.design.anchors.turret, { x: 3.5, y: 8 });
-    assert.deepEqual(worker.design.muzzles, [{ x: 14.5, y: 6.5 }]);
-    worker.redo();
-    assert.deepEqual(worker.design.layers.turret.slice(12, 16), [4, 3, 2, 1]);
-});
-
-test('designer history keeps mirror geometry through an interleaved paint undo and redo timeline', () => {
-    const design = createBlankPartDesign({ name: 'interleaved mirror', type: 'weapon' });
-    design.layers.turret = new Array(256).fill(0);
-    design.layers.turret[0] = 1;
-    design.anchors.turret = { x: 3.5, y: 8 };
-    design.muzzles = [{ x: 14.5, y: 6.5 }];
-    const worker = Object.create(Designer.prototype);
-    worker.layer = 'turret';
-    worker.design = design;
-    worker.coreScratch = { spinPivot: { x: 8, y: 8 } };
-    worker.histories = new Map([['turret', new LayerHistory({
-        pixels: design.layers.turret,
-        geometry: { turret: { ...design.anchors.turret }, muzzles: design.muzzles.map(point => ({ ...point })) }
-    })]]);
-    worker.ensureHistory = () => worker.histories.get('turret');
-    worker.changed = () => {};
+    worker.drawAll = () => {};
+    worker.activeRaster = Designer.prototype.activeRaster.bind(worker);
     worker.setActivePixels = Designer.prototype.setActivePixels.bind(worker);
     worker.commitLayer = Designer.prototype.commitLayer.bind(worker);
     worker.captureLayerState = Designer.prototype.captureLayerState.bind(worker);
@@ -191,26 +166,25 @@ test('designer history keeps mirror geometry through an interleaved paint undo a
     worker.restoreLayerState = Designer.prototype.restoreLayerState.bind(worker);
     worker.restoreLayerGeometry = Designer.prototype.restoreLayerGeometry.bind(worker);
 
-    worker.mirrorActiveLayer('horizontal');
-    worker.setActivePixels(worker.design.layers.turret.map((pixel, index) => index === 1 ? 2 : pixel));
+    worker.paintStroke({ x: 1, y: 1 });
     worker.commitLayer('turret');
+    for (const [x, y] of [[1, 1], [3, 1], [1, 3], [3, 3]]) assert.equal(worker.design.layers.turret[y * 5 + x], 2);
+    assert.deepEqual(worker.design.anchors.turret, { x: 1.5, y: 2.5 });
+    assert.deepEqual(worker.design.muzzles, [{ x: 4.5, y: 2.5 }]);
 
     worker.undo();
-    assert.equal(worker.design.layers.turret[15], 1);
-    assert.equal(worker.design.layers.turret[1], 0);
-    assert.deepEqual(worker.design.anchors.turret, { x: 12.5, y: 8 });
-    assert.deepEqual(worker.design.muzzles, [{ x: 1.5, y: 6.5 }]);
-
-    worker.undo();
-    assert.equal(worker.design.layers.turret[0], 1);
-    assert.deepEqual(worker.design.anchors.turret, { x: 3.5, y: 8 });
-    assert.deepEqual(worker.design.muzzles, [{ x: 14.5, y: 6.5 }]);
-
+    assert.equal(worker.design.layers.turret.some(Boolean), false);
+    assert.deepEqual(worker.design.anchors.turret, { x: 1.5, y: 2.5 });
+    assert.deepEqual(worker.design.muzzles, [{ x: 4.5, y: 2.5 }]);
     worker.redo();
-    assert.deepEqual(worker.design.anchors.turret, { x: 12.5, y: 8 });
-    assert.deepEqual(worker.design.muzzles, [{ x: 1.5, y: 6.5 }]);
-    worker.redo();
-    assert.equal(worker.design.layers.turret[1], 2);
-    assert.deepEqual(worker.design.anchors.turret, { x: 12.5, y: 8 });
-    assert.deepEqual(worker.design.muzzles, [{ x: 1.5, y: 6.5 }]);
+    assert.equal(worker.design.layers.turret[1 * 5 + 3], 2);
+});
+
+test('designer symmetry toggles do not move geometry or alter existing pixels', () => {
+    const worker = Object.create(Designer.prototype);
+    worker.symmetry = { leftRight: false, topBottom: false };
+    worker.syncControls = () => {};
+    worker.toggleSymmetry('leftRight');
+    worker.toggleSymmetry('topBottom');
+    assert.deepEqual(worker.symmetry, { leftRight: true, topBottom: true });
 });

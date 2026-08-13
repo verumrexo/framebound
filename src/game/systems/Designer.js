@@ -14,7 +14,7 @@ import {
 } from '../dev/PartGuideGrid.js';
 import { parseLegacyPartDesign } from '../dev/LegacyPartDesignImport.js';
 import { applyVisualDesignOverride } from '../dev/PartLabManifest.js';
-import { drawRasterStroke, mirrorRasterPixels, LayerHistory } from '../dev/PartRasterTools.js';
+import { drawRasterStroke, LayerHistory } from '../dev/PartRasterTools.js';
 import {
     DEFAULT_PROJECTILE_LOOK,
     DEFAULT_PROJECTILE_TRAIL,
@@ -126,6 +126,7 @@ export class Designer {
         this.strokePixels = null;
         this.strokeTool = null;
         this.guideGrid = 'regular';
+        this.symmetry = { leftRight: false, topBottom: false };
         this.histories = new Map();
         this.turretVariants = new Map();
         this.stagedSaveCallback = null;
@@ -151,7 +152,7 @@ export class Designer {
                     <section class="pd-section"><span class="pd-label">geometry points</span><div class="pd-row">
                         <button class="pd-btn" data-point="base">set base mount</button><button class="pd-btn" data-point="turret">set turret pivot</button><button class="pd-btn" data-point="core">set core spin pivot</button><button class="pd-btn" data-point="muzzle">add muzzle</button><button class="pd-btn is-warn" data-action="clear-muzzles">clear muzzles</button>
                     </div><div class="pd-marker-list" data-role="markers"></div></section>
-                    <section class="pd-section"><span class="pd-label">mirror active layer</span><div class="pd-row"><button class="pd-btn" data-action="mirror-horizontal">mirror horizontal</button><button class="pd-btn" data-action="mirror-vertical">mirror vertical</button></div></section>
+                    <section class="pd-section"><span class="pd-label">live symmetry · drawing only</span><div class="pd-row"><button class="pd-btn" data-symmetry="leftRight" data-action="symmetry-left-right" aria-pressed="false">left-right symmetry</button><button class="pd-btn" data-symmetry="topBottom" data-action="symmetry-top-bottom" aria-pressed="false">top-bottom symmetry</button></div><div class="pd-help">every stroke is copied across the selected axis. turn on both for four-way symmetry.</div></section>
                     <section class="pd-section"><span class="pd-label">history</span><div class="pd-row"><button class="pd-btn" data-action="undo">undo</button><button class="pd-btn" data-action="redo">redo</button><button class="pd-btn is-warn" data-action="clear-layer">clear layer</button><button class="pd-btn is-warn" data-action="remove-core">remove core</button></div></section>
                 </aside>
                 <section class="pd-canvas-wrap"><canvas class="pd-canvas" data-role="canvas"></canvas></section>
@@ -210,8 +211,8 @@ export class Designer {
                 undo: () => this.undo(),
                 redo: () => this.redo(),
                 'clear-layer': () => this.clearLayer(),
-                'mirror-horizontal': () => this.mirrorActiveLayer('horizontal'),
-                'mirror-vertical': () => this.mirrorActiveLayer('vertical'),
+                'symmetry-left-right': () => this.toggleSymmetry('leftRight'),
+                'symmetry-top-bottom': () => this.toggleSymmetry('topBottom'),
                 'remove-core': () => this.removeCore(),
                 'clear-muzzles': () => this.clearMuzzles(),
                 fire: () => this.fireTest(),
@@ -343,6 +344,12 @@ export class Designer {
         this.syncControls();
     }
 
+    toggleSymmetry(axis) {
+        if (!Object.hasOwn(this.symmetry, axis)) return;
+        this.symmetry[axis] = !this.symmetry[axis];
+        this.syncControls();
+    }
+
     setPointMode(mode) {
         if (mode === 'base') this.setLayer('base');
         else if (mode === 'turret' || mode === 'muzzle') this.setLayer('turret');
@@ -455,7 +462,7 @@ export class Designer {
         if (this.strokeTool === 'pencil' || this.strokeTool === 'eraser') {
             const start = this.lastStrokePoint || this.strokeStart;
             const raster = this.activeRaster();
-            this.setActivePixels(drawRasterStroke(raster.pixels, raster.grid.width, raster.grid.height, this.strokeTool, start, point, this.colorIndex));
+            this.setActivePixels(drawRasterStroke(raster.pixels, raster.grid.width, raster.grid.height, this.strokeTool, start, point, this.colorIndex, this.symmetry));
             this.lastStrokePoint = point;
             this.drawAll();
         } else {
@@ -477,7 +484,8 @@ export class Designer {
                 this.strokeTool,
                 this.strokeStart,
                 point,
-                this.colorIndex
+                this.colorIndex,
+                this.symmetry
             );
         this.setActivePixels(next);
         this.commitLayer(this.layer);
@@ -490,7 +498,7 @@ export class Designer {
 
     paintStroke(point, tool = this.tool) {
         const raster = this.activeRaster();
-        this.setActivePixels(drawRasterStroke(raster.pixels, raster.grid.width, raster.grid.height, tool, point, point, this.colorIndex));
+        this.setActivePixels(drawRasterStroke(raster.pixels, raster.grid.width, raster.grid.height, tool, point, point, this.colorIndex, this.symmetry));
         this.lastStrokePoint = point;
         this.drawAll();
     }
@@ -519,26 +527,6 @@ export class Designer {
         this.pointMode = null;
         this.ensureHistory(layer)?.commit(this.captureLayerState(layer));
         this.changed('geometry point updated');
-    }
-
-    mirrorActiveLayer(axis) {
-        const raster = this.activeRaster();
-        const { width, height } = raster.grid;
-        const mirrored = mirrorRasterPixels(raster.pixels, width, height, axis);
-        this.setActivePixels(mirrored);
-        if (this.layer === 'base' && this.design.anchors.base) {
-            this.design.anchors.base = mirrorPoint(this.design.anchors.base, width, height, axis);
-        } else if (this.layer === 'turret') {
-            if (this.design.anchors.turret) {
-                this.design.anchors.turret = mirrorPoint(this.design.anchors.turret, width, height, axis);
-            }
-            this.design.muzzles = this.design.muzzles.map(point => mirrorPoint(point, width, height, axis));
-        } else if (this.layer === 'core') {
-            this.coreScratch.spinPivot = mirrorPoint(this.coreScratch.spinPivot, width, height, axis);
-            this.design.coreEffect = clone(this.coreScratch);
-        }
-        this.commitLayer(this.layer);
-        this.changed(`${this.layer} mirrored ${axis}`);
     }
 
     clearMuzzles() {
@@ -669,6 +657,11 @@ export class Designer {
             button.classList.toggle('is-on', button.dataset.layer === this.layer);
         }
         for (const button of this.ui.querySelectorAll('[data-tool]')) button.classList.toggle('is-on', button.dataset.tool === this.tool && !this.pointMode);
+        for (const button of this.ui.querySelectorAll('[data-symmetry]')) {
+            const active = Boolean(this.symmetry[button.dataset.symmetry]);
+            button.classList.toggle('is-on', active);
+            button.setAttribute('aria-pressed', String(active));
+        }
         for (const button of this.ui.querySelectorAll('[data-point]')) button.classList.toggle('is-on', button.dataset.point === this.pointMode);
         const projectileType = this.activeProjectileType();
         const projectileLayer = this.currentPartType === PartType.WEAPON || (this.currentPartType === PartType.DRONE && this.layer === 'drone');
@@ -746,7 +739,7 @@ export class Designer {
 
     drawCanvasPreview(end) {
         const raster = this.activeRaster();
-        const preview = drawRasterStroke(this.strokePixels, raster.grid.width, raster.grid.height, this.tool, this.strokeStart, end, this.colorIndex);
+        const preview = drawRasterStroke(this.strokePixels, raster.grid.width, raster.grid.height, this.strokeTool || this.tool, this.strokeStart, end, this.colorIndex, this.symmetry);
         this.drawCanvas(preview);
     }
 
@@ -1214,11 +1207,6 @@ function spritePalette(sprite) {
 }
 function paletteMap(palette) { return Object.fromEntries(palette.map((color, index) => [index + 1, color])); }
 function centerPoint(grid) { return { x: grid.width / 2, y: grid.height / 2 }; }
-function mirrorPoint(point, width, height, axis) {
-    return axis === 'horizontal'
-        ? { x: width - point.x, y: point.y }
-        : { x: point.x, y: height - point.y };
-}
 function footprintKey(footprint) { return `${footprint.width}x${footprint.height}`; }
 function formatPoint(point) { return `${point.x}, ${point.y}`; }
 function makeButton(label, data = {}) { const button = document.createElement('button'); button.type = 'button'; button.className = 'pd-btn'; button.textContent = label; Object.assign(button.dataset, data); return button; }
