@@ -40,7 +40,8 @@ test('stored settings reject markup and clamp malformed numeric values', (t) => 
         })]
     ]);
     globalThis.localStorage = {
-        getItem: key => values.get(key) ?? null
+        getItem: key => values.get(key) ?? null,
+        setItem: () => {}
     };
 
     try {
@@ -58,7 +59,7 @@ test('stored settings reject markup and clamp malformed numeric values', (t) => 
         assert.equal(game.showDamageNumbers, true);
         assert.equal(game.damageNumberMode, 'singular');
         assert.equal(game.eyeCandy, true);
-        assert.equal(game.rasterScale, 3);
+        assert.equal(game.rasterScale, 2);
         assert.equal(game.showFps, true);
         assert.equal(settings.sliderStates.cursorThickness.current, 10);
         assert.equal(settings.sliderStates.cursorLength.current, 5);
@@ -102,7 +103,7 @@ test('eye candy is persisted with the other game settings', () => {
                 showDamageNumbers: true,
                 damageNumberMode: 'singular',
                 eyeCandy: false,
-                rasterScale: 3,
+                rasterScale: 2,
                 showFps: true
             }
         ]);
@@ -111,7 +112,7 @@ test('eye candy is persisted with the other game settings', () => {
     }
 });
 
-test('game settings normalize supported raster scales and preserve legacy defaults', () => {
+test('game settings always normalize gameplay raster scale to the fixed 2x mode', () => {
     const settings = Object.create(Settings.prototype);
     settings.defaults = {
         showDamageNumbers: true,
@@ -125,15 +126,72 @@ test('game settings normalize supported raster scales and preserve legacy defaul
         showDamageNumbers: true,
         damageNumberMode: 'singular',
         eyeCandy: true,
-        rasterScale: 1,
+        rasterScale: 2,
         showFps: false
     });
     assert.deepEqual(settings.normalizeGameSettings({}), {
         showDamageNumbers: true,
         damageNumberMode: 'singular',
         eyeCandy: true,
-        rasterScale: 3,
+        rasterScale: 2,
         showFps: true
     });
-    assert.equal(settings.normalizeGameSettings({ rasterScale: 2.5 }).rasterScale, 3);
+    assert.equal(settings.normalizeGameSettings({ rasterScale: 2.5 }).rasterScale, 2);
+});
+
+test('stored 1x, 3x, and invalid gameplay scales migrate to 2x', () => {
+    const originalStorage = globalThis.localStorage;
+    try {
+        for (const storedScale of [1, 3, 99]) {
+            const migrated = [];
+            globalThis.localStorage = {
+                getItem: key => key === 'framebound_game_settings'
+                    ? JSON.stringify({ rasterScale: storedScale })
+                    : null,
+                setItem: (key, value) => migrated.push([key, JSON.parse(value)])
+            };
+
+            const game = {};
+            new Settings(game);
+            assert.equal(game.rasterScale, 2);
+            assert.equal(migrated[0][1].rasterScale, 2);
+        }
+    } finally {
+        globalThis.localStorage = originalStorage;
+    }
+});
+
+test('settings markup exposes fixed gameplay scale without selector controls', () => {
+    const settings = Object.create(Settings.prototype);
+    settings.game = {
+        rasterScale: 2,
+        cursorSettings: {
+            shape: '4-lines', thickness: 2, length: 15, gap: 3,
+            color: '#00ffff', outline: true
+        },
+        audio: {
+            masterGain: { gain: { value: 0.8 } },
+            musicGain: { gain: { value: 0.4 } },
+            sfxGain: { gain: { value: 0.6 } }
+        }
+    };
+    settings.defaults = {
+        masterVolume: 0.8, musicVolume: 0.4, sfxVolume: 0.6,
+        rasterScale: 2, showFps: true, cursorShape: '4-lines', cursorThickness: 2,
+        cursorLength: 15, cursorGap: 3, cursorColor: '#00ffff', cursorOutline: true,
+        showDamageNumbers: true, damageNumberMode: 'singular', eyeCandy: true
+    };
+    settings.sliderStates = {
+        master: { current: 80, target: 80 }, music: { current: 40, target: 40 },
+        sfx: { current: 60, target: 60 }, cursorThickness: { current: 2, target: 2 },
+        cursorLength: { current: 15, target: 15 }, cursorGap: { current: 3, target: 3 }
+    };
+
+    const overlay = { innerHTML: '' };
+    settings.render(overlay, () => {});
+    assert.match(overlay.innerHTML, /2x fixed/);
+    assert.match(overlay.innerHTML, /developer visual proofs/);
+    assert.doesNotMatch(overlay.innerHTML, /data-raster-scale/);
+    assert.doesNotMatch(overlay.innerHTML, /raster-options/);
+    settings.stopUpdating();
 });

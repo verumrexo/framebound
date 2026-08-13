@@ -716,8 +716,7 @@ select {
     accent-color: var(--ui-mint);
 }
 
-.setting-control,
-.raster-option {
+.setting-control {
     min-height: 32px;
     padding: 7px 12px;
     border: 1px solid var(--ui-line);
@@ -728,19 +727,10 @@ select {
 }
 
 .setting-control:hover,
-.setting-control:focus-visible,
-.raster-option:hover,
-.raster-option:focus-visible,
-.raster-option.is-selected {
+.setting-control:focus-visible {
     border-color: var(--ui-cyan);
     color: var(--ui-bright);
     background: rgba(53, 242, 255, 0.12);
-}
-
-.raster-options {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 4px;
 }
 
 .reticle-layout {
