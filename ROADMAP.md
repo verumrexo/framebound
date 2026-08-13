@@ -379,8 +379,8 @@ completed on 2026-07-25:
 - github actions run `30706641165` proved the clean-install, test, coverage,
   source, native-save, and macos/windows artifact gates on 2026-08-01.
 
-- reworked settings into display, audio, gameplay, and reticle tabs with a
-  fixed 2x gameplay hard-raster mode, fullscreen control, fps visibility,
+- reworked settings into display, audio, gameplay, and reticle tabs with
+  selectable 1x/2x gameplay hard-raster modes (2x recommended), fullscreen control, fps visibility,
   scoped reset defaults, preserved legacy storage compatibility, and a live
   reticle preview without changing gameplay or default visuals; developer
   visual proofs retain independent 1x/2x/3x comparison controls.
@@ -802,9 +802,10 @@ goal: replace the accidental browser-scaled canvas presentation with a deliberat
 pixel renderer: continuously rotated assembled ships, a webgl world compositor,
 and a completely independent native-resolution hud.
 
-status: completed locally on 2026-08-08. normal gameplay now uses the fixed 2x
-pixel scale after reviewing the normal-size 1x/2x/3x comparison; developer proof
-routes retain those independent comparison scales. phases 9.0 through 9.6,
+status: completed locally on 2026-08-08. normal gameplay now offers selectable
+1x/2x pixel scales, with 2x recommended after reviewing the normal-size
+1x/2x/3x comparison; developer proof routes retain those independent comparison scales.
+phases 9.0 through 9.6,
 the complete automated gate, browser gameplay and live-resize smoke, signed macos
 build, artifact verification, and packaged-app launch smoke all pass.
 

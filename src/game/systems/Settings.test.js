@@ -112,7 +112,7 @@ test('eye candy is persisted with the other game settings', () => {
     }
 });
 
-test('game settings always normalize gameplay raster scale to the fixed 2x mode', () => {
+test('game settings preserve 1x and 2x while migrating legacy scales to 2x', () => {
     const settings = Object.create(Settings.prototype);
     settings.defaults = {
         showDamageNumbers: true,
@@ -126,7 +126,7 @@ test('game settings always normalize gameplay raster scale to the fixed 2x mode'
         showDamageNumbers: true,
         damageNumberMode: 'singular',
         eyeCandy: true,
-        rasterScale: 2,
+        rasterScale: 1,
         showFps: false
     });
     assert.deepEqual(settings.normalizeGameSettings({}), {
@@ -137,12 +137,13 @@ test('game settings always normalize gameplay raster scale to the fixed 2x mode'
         showFps: true
     });
     assert.equal(settings.normalizeGameSettings({ rasterScale: 2.5 }).rasterScale, 2);
+    assert.equal(settings.normalizeGameSettings({ rasterScale: '1' }).rasterScale, 2);
 });
 
-test('stored 1x, 3x, and invalid gameplay scales migrate to 2x', () => {
+test('stored 1x and 2x persist while 3x and invalid gameplay scales migrate to 2x', () => {
     const originalStorage = globalThis.localStorage;
     try {
-        for (const storedScale of [1, 3, 99]) {
+        for (const storedScale of [1, 2, 3, 99]) {
             const migrated = [];
             globalThis.localStorage = {
                 getItem: key => key === 'framebound_game_settings'
@@ -153,15 +154,17 @@ test('stored 1x, 3x, and invalid gameplay scales migrate to 2x', () => {
 
             const game = {};
             new Settings(game);
-            assert.equal(game.rasterScale, 2);
-            assert.equal(migrated[0][1].rasterScale, 2);
+            const expectedScale = storedScale === 1 || storedScale === 2 ? storedScale : 2;
+            assert.equal(game.rasterScale, expectedScale);
+            if (storedScale === 1 || storedScale === 2) assert.equal(migrated.length, 0);
+            else assert.equal(migrated[0][1].rasterScale, 2);
         }
     } finally {
         globalThis.localStorage = originalStorage;
     }
 });
 
-test('settings markup exposes fixed gameplay scale without selector controls', () => {
+test('settings markup exposes clear 1x and 2x gameplay controls', () => {
     const settings = Object.create(Settings.prototype);
     settings.game = {
         rasterScale: 2,
@@ -189,9 +192,49 @@ test('settings markup exposes fixed gameplay scale without selector controls', (
 
     const overlay = { innerHTML: '' };
     settings.render(overlay, () => {});
-    assert.match(overlay.innerHTML, /2x fixed/);
+    assert.match(overlay.innerHTML, /data-raster-scale="1"/);
+    assert.match(overlay.innerHTML, /data-raster-scale="2"/);
+    assert.match(overlay.innerHTML, /2x recommended/);
     assert.match(overlay.innerHTML, /developer visual proofs/);
-    assert.doesNotMatch(overlay.innerHTML, /data-raster-scale/);
-    assert.doesNotMatch(overlay.innerHTML, /raster-options/);
+    assert.doesNotMatch(overlay.innerHTML, /data-raster-scale="3"/);
     settings.stopUpdating();
+});
+
+test('raster controls apply and persist the selected gameplay scale', () => {
+    const originalStorage = globalThis.localStorage;
+    const originalDocument = globalThis.document;
+    const saved = [];
+    globalThis.localStorage = { setItem: (key, value) => saved.push([key, JSON.parse(value)]) };
+    globalThis.document = { addEventListener: () => {} };
+    try {
+        const applied = [];
+        const settings = Object.create(Settings.prototype);
+        settings.game = {
+            rasterScale: 2,
+            renderer: { setRasterScale: scale => applied.push(scale) }
+        };
+        settings.applyRasterScale = Settings.prototype.applyRasterScale.bind(settings);
+        settings.saveGameSettings = Settings.prototype.saveGameSettings.bind(settings);
+        settings.updateRasterScaleUI = () => {};
+        const buttons = [{ dataset: { rasterScale: '1' }, onclick: null }, { dataset: { rasterScale: '2' }, onclick: null }];
+        const controls = new Map([
+            ['#sel-cursorShape', {}], ['#clr-cursorColor', {}], ['#chk-cursorOutline', {}],
+            ['#chk-showDamage', {}], ['#sel-damageMode', {}], ['#chk-eyeCandy', {}],
+            ['#chk-showFps', {}], ['#btn-fullscreen', {}], ['#btn-settings-reset', {}],
+            ['#btn-settings-back', {}]
+        ]);
+        settings.settingsMenu = {
+            querySelectorAll: selector => selector === '[data-raster-scale]' ? buttons : [],
+            querySelector: selector => controls.get(selector) || null
+        };
+        settings.bindControls({});
+        buttons[0].onclick();
+
+        assert.equal(settings.game.rasterScale, 1);
+        assert.deepEqual(applied, [1]);
+        assert.equal(saved.at(-1)[1].rasterScale, 1);
+    } finally {
+        globalThis.localStorage = originalStorage;
+        globalThis.document = originalDocument;
+    }
 });

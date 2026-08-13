@@ -733,6 +733,37 @@ select {
     background: rgba(53, 242, 255, 0.12);
 }
 
+.raster-options {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 7px;
+}
+
+.raster-option {
+    display: flex;
+    min-height: 42px;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 3px;
+    text-align: left;
+}
+
+.raster-option small {
+    color: var(--ui-muted);
+    font-size: 8px;
+}
+
+.raster-option.is-selected,
+.raster-option[aria-pressed="true"] {
+    border-color: var(--ui-cyan);
+    color: var(--ui-cyan-bright);
+    background: rgba(53, 242, 255, 0.12);
+}
+
+.raster-option.is-selected small,
+.raster-option[aria-pressed="true"] small { color: var(--ui-cyan); }
+
 .reticle-layout {
     display: grid;
     grid-template-columns: 150px minmax(0, 1fr);

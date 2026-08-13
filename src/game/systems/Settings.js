@@ -1,4 +1,9 @@
 const GAMEPLAY_RASTER_SCALE = 2;
+const GAMEPLAY_RASTER_SCALES = new Set([1, 2]);
+
+function normalizeGameplayRasterScale(value) {
+    return GAMEPLAY_RASTER_SCALES.has(value) ? value : GAMEPLAY_RASTER_SCALE;
+}
 
 export class Settings {
     constructor(game) {
@@ -61,11 +66,11 @@ export class Settings {
             this.game.damageNumberMode = normalized.damageNumberMode;
             this.game.eyeCandy = normalized.eyeCandy;
             this.game.showFps = normalized.showFps;
-            this.applyRasterScale();
-            if (saved && parsed?.rasterScale !== GAMEPLAY_RASTER_SCALE) this.saveGameSettings();
+            this.applyRasterScale(normalized.rasterScale);
+            if (saved && parsed?.rasterScale !== normalized.rasterScale) this.saveGameSettings();
         } catch (e) {
             console.warn('[Settings] Failed to load game settings:', e);
-            this.applyRasterScale();
+            this.applyRasterScale(GAMEPLAY_RASTER_SCALE);
         }
     }
 
@@ -106,13 +111,13 @@ export class Settings {
                 ? settings.damageNumberMode
                 : this.defaults.damageNumberMode,
             eyeCandy: typeof settings.eyeCandy === 'boolean' ? settings.eyeCandy : this.defaults.eyeCandy,
-            rasterScale: GAMEPLAY_RASTER_SCALE,
+            rasterScale: normalizeGameplayRasterScale(settings.rasterScale),
             showFps: typeof settings.showFps === 'boolean' ? settings.showFps : this.defaults.showFps
         };
     }
 
-    applyRasterScale() {
-        const rasterScale = GAMEPLAY_RASTER_SCALE;
+    applyRasterScale(rasterScale = this.game.rasterScale) {
+        rasterScale = normalizeGameplayRasterScale(rasterScale);
         if (this.game.renderer?.setRasterScale) this.game.renderer.setRasterScale(rasterScale);
         else if (this.game.renderer?.viewport) {
             this.game.renderer.viewport.setWorldPixelScale?.(rasterScale);
@@ -128,7 +133,7 @@ export class Settings {
                 showDamageNumbers: this.game.showDamageNumbers,
                 damageNumberMode: this.game.damageNumberMode,
                 eyeCandy: this.game.eyeCandy !== false,
-                rasterScale: GAMEPLAY_RASTER_SCALE,
+                rasterScale: normalizeGameplayRasterScale(this.game.rasterScale),
                 showFps: this.game.showFps !== false
             }));
         } catch (e) {
@@ -165,7 +170,7 @@ export class Settings {
         this.sliderStates.sfx.current = this.sliderStates.sfx.target = Math.round(audio.sfxGain.gain.value * 100);
         this.game.cursorSettings = this.normalizeCursorSettings(this.game.cursorSettings);
         this.syncCursorSliderStates();
-        this.applyRasterScale();
+        const rasterScale = this.applyRasterScale();
 
         const settings = this.game.cursorSettings;
         const tab = name => `
@@ -186,8 +191,12 @@ export class Settings {
                     <section id="settings-panel-display" class="settings-panel" role="tabpanel" aria-labelledby="settings-tab-display" data-settings-panel="display">
                         <div class="setting-group-label">display // presentation</div>
                         <div class="setting-row">
-                            <div class="label-row"><span>hard-raster scale</span><span class="val-display" id="txt-rasterScale">2x fixed</span></div>
-                            <div class="setting-help">normal gameplay uses 2x for smooth motion and complete 16px ship lines. developer visual proofs can still compare 1x, 2x, and 3x.</div>
+                            <div class="label-row"><span>hard-raster scale</span><span class="val-display" id="txt-rasterScale">${rasterScale}x${rasterScale === GAMEPLAY_RASTER_SCALE ? ' recommended' : ''}</span></div>
+                            <div class="raster-options" role="radiogroup" aria-label="gameplay hard-raster scale">
+                                <button type="button" class="setting-control raster-option" data-raster-scale="1" aria-pressed="${rasterScale === 1}">1x <small>lighter</small></button>
+                                <button type="button" class="setting-control raster-option" data-raster-scale="2" aria-pressed="${rasterScale === 2}">2x <small>recommended</small></button>
+                            </div>
+                            <div class="setting-help">1x is lighter on older hardware. 2x is recommended for smoother motion and complete 16px ship lines. developer visual proofs can still compare 1x, 2x, and 3x.</div>
                         </div>
                         <div class="setting-row setting-row-inline">
                             <div><div class="label-row"><span>browser fullscreen</span></div><div class="setting-help">not saved; browsers require a user gesture</div></div>
@@ -265,6 +274,13 @@ export class Settings {
         query('#sel-damageMode').onchange = event => { this.game.damageNumberMode = event.target.value; this.saveGameSettings(); };
         query('#chk-eyeCandy').onchange = event => { this.game.eyeCandy = event.target.checked; this.saveGameSettings(); };
         query('#chk-showFps').onchange = event => { this.game.showFps = event.target.checked; this.saveGameSettings(); };
+        this.settingsMenu.querySelectorAll('[data-raster-scale]').forEach(button => {
+            button.onclick = () => {
+                this.applyRasterScale(Number(button.dataset.rasterScale));
+                this.saveGameSettings();
+                this.updateRasterScaleUI();
+            };
+        });
 
         this.settingsMenu.querySelectorAll('[data-settings-tab]').forEach(button => {
             button.onclick = () => this.setActiveTab(button.dataset.settingsTab);
@@ -274,6 +290,7 @@ export class Settings {
         this.fullscreenChangeHandler = () => this.updateFullscreenLabel();
         document.addEventListener?.('fullscreenchange', this.fullscreenChangeHandler);
         this.updateFullscreenLabel();
+        this.updateRasterScaleUI();
         this.updateReticlePreview();
 
         query('#btn-settings-reset').onclick = () => {
@@ -330,7 +347,7 @@ export class Settings {
         this.game.damageNumberMode = defaults.damageNumberMode;
         this.game.eyeCandy = defaults.eyeCandy;
         this.game.showFps = defaults.showFps;
-        this.applyRasterScale();
+        this.applyRasterScale(defaults.rasterScale);
         this.sliderStates.master.current = this.sliderStates.master.target = defaults.masterVolume * 100;
         this.sliderStates.music.current = this.sliderStates.music.target = defaults.musicVolume * 100;
         this.sliderStates.sfx.current = this.sliderStates.sfx.target = defaults.sfxVolume * 100;
@@ -374,5 +391,16 @@ export class Settings {
         preview.style.setProperty('--reticle-length', `${Math.max(8, settings.length * 1.25)}px`);
         preview.style.setProperty('--reticle-gap', `${Math.max(1, settings.gap / 2)}px`);
         preview.classList.toggle('has-outline', settings.outline);
+    }
+
+    updateRasterScaleUI() {
+        const rasterScale = normalizeGameplayRasterScale(this.game.rasterScale);
+        const value = this.settingsMenu?.querySelector?.('#txt-rasterScale');
+        if (value) value.textContent = `${rasterScale}x${rasterScale === GAMEPLAY_RASTER_SCALE ? ' recommended' : ''}`;
+        this.settingsMenu?.querySelectorAll?.('[data-raster-scale]').forEach(button => {
+            const selected = Number(button.dataset.rasterScale) === rasterScale;
+            button.setAttribute('aria-pressed', String(selected));
+            button.classList.toggle('is-selected', selected);
+        });
     }
 }
