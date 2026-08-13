@@ -24,6 +24,24 @@ function randomSuffix() {
     return Math.random().toString(36).slice(2, 10);
 }
 
+function cloneRecipe(recipe) {
+    if (typeof structuredClone === 'function') return structuredClone(recipe);
+    return JSON.parse(JSON.stringify(recipe));
+}
+
+function cloneWavBytes(bytes) {
+    return new Uint8Array(bytes);
+}
+
+function nextCopyName(sounds, sourceName) {
+    const base = `${String(sourceName || 'sound').trim().toLowerCase()} copy`;
+    const names = new Set([...sounds.values()].map(sound => String(sound.name || '').toLowerCase()));
+    if (!names.has(base)) return base;
+    let index = 2;
+    while (names.has(`${base} ${index}`)) index += 1;
+    return `${base} ${index}`;
+}
+
 export class SignalForgeRuntime {
     constructor(audio, {
         store = new SignalForgeStore(),
@@ -95,8 +113,8 @@ export class SignalForgeRuntime {
             schemaVersion: SIGNAL_FORGE_SCHEMA_VERSION,
             jfxrVersion: rendered.jfxrVersion,
             name: String(name || 'untitled').toLowerCase().slice(0, 64),
-            recipe,
-            wavBytes: rendered.wavBytes,
+            recipe: cloneRecipe(recipe),
+            wavBytes: cloneWavBytes(rendered.wavBytes),
             sampleRate: rendered.sampleRate,
             channels: 1,
             duration: rendered.duration,
@@ -107,6 +125,36 @@ export class SignalForgeRuntime {
         await this.store.putSound(record);
         this.audio.replace(this.audioName(soundId), this.createAudioBuffer(rendered));
         this.sounds.set(soundId, record);
+        this.modifiedAt = record.modifiedAt;
+        await this.mirrorNative();
+        return record;
+    }
+
+    async updateRendered({ id, name, recipe, rendered }) {
+        if (!id || !this.sounds.has(id)) throw new Error(`unknown forged sound: ${id}`);
+        return this.saveRendered({ name, recipe, rendered, id });
+    }
+
+    async duplicateSound(soundId, { name = null } = {}) {
+        const source = this.sounds.get(soundId);
+        if (!source) throw new Error(`unknown forged sound: ${soundId}`);
+        const copyName = String(name || nextCopyName(this.sounds, source.name)).toLowerCase().slice(0, 64);
+        let copyId = `${slugify(copyName)}-${randomSuffix()}`;
+        while (this.sounds.has(copyId)) copyId = `${slugify(copyName)}-${randomSuffix()}`;
+        const now = new Date().toISOString();
+        const record = {
+            ...source,
+            id: copyId,
+            name: copyName,
+            recipe: cloneRecipe(source.recipe),
+            wavBytes: cloneWavBytes(source.wavBytes),
+            createdAt: now,
+            modifiedAt: now
+        };
+        await this.store.putSound(record);
+        const audioBuffer = await this.audio.decodeAudioBytes(record.wavBytes);
+        this.audio.replace(this.audioName(record.id), audioBuffer);
+        this.sounds.set(record.id, record);
         this.modifiedAt = record.modifiedAt;
         await this.mirrorNative();
         return record;

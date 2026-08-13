@@ -19,7 +19,30 @@ const CONTROL_KEYS = new Set([
     'normalization', 'amplification'
 ]);
 
-export const PART_SOUND_EDITOR_INTRO = 'focused signal forge for this part. only sounds this part actually uses are shown; save all promotes source changes.';
+const PARAMETER_GROUPS = [
+    {
+        id: 'envelope',
+        label: 'envelope',
+        keys: new Set(['attack', 'sustain', 'sustainPunch', 'decay'])
+    },
+    {
+        id: 'pitch',
+        label: 'pitch',
+        keys: new Set(['waveform', 'frequency', 'frequencySweep', 'frequencyDeltaSweep', 'repeatFrequency', 'frequencyJump1Onset', 'frequencyJump1Amount'])
+    },
+    {
+        id: 'texture',
+        label: 'texture + modulation',
+        keys: new Set(['harmonics', 'harmonicsFalloff', 'vibratoDepth', 'vibratoFrequency', 'squareDuty', 'squareDutySweep', 'flangerOffset', 'flangerOffsetSweep', 'bitCrush', 'bitCrushSweep'])
+    },
+    {
+        id: 'output',
+        label: 'filters + output',
+        keys: new Set(['lowPassCutoff', 'lowPassCutoffSweep', 'highPassCutoff', 'highPassCutoffSweep', 'compression', 'normalization', 'amplification'])
+    }
+];
+
+export const PART_SOUND_EDITOR_INTRO = 'only this part\'s sound slots are shown. choose a slot, listen or create a sound, then use it for that slot. library sounds are shared; duplicate before shaping. save sound stores audio, save part commits slot assignments, and save all promotes source changes.';
 
 function cloneDraft(draft) {
     return {
@@ -91,6 +114,8 @@ export class PartSoundEditorWindow {
         this.recipe = null;
         this.rendered = null;
         this.currentSound = null;
+        this.composerOwnsSound = false;
+        this.composerDirty = false;
         this.renderGeneration = 0;
         this.renderTimer = null;
         this.handleKeyDown = this.handleKeyDown.bind(this);
@@ -114,6 +139,8 @@ export class PartSoundEditorWindow {
         this.recipe = null;
         this.rendered = null;
         this.currentSound = null;
+        this.composerOwnsSound = false;
+        this.composerDirty = false;
         this.opened = true;
         this.wasPaused = Boolean(this.game?.paused);
         this.game && (this.game.paused = true);
@@ -168,33 +195,38 @@ export class PartSoundEditorWindow {
                     <p class="part-sound-intro">${PART_SOUND_EDITOR_INTRO}</p>
                     <div class="part-sound-slots"></div>
                     <div class="part-sound-forge-layout">
-                        <section class="part-sound-panel part-sound-composer">
-                            <h3>make a sound</h3>
-                            <div class="part-sound-fields"></div>
-                            <div class="part-sound-actions"></div>
-                            <div class="part-sound-editor-state"></div>
-                            <canvas class="part-sound-wave" width="640" height="100"></canvas>
-                            <div class="part-sound-meter"></div>
-                        </section>
-                        <details class="part-sound-panel part-sound-parameters">
-                            <summary>advanced sound shaping</summary>
-                            <div class="part-sound-params"></div>
-                        </details>
-                        <section class="part-sound-panel part-sound-saved">
-                            <h3>saved sounds</h3>
-                            <div class="part-sound-library"></div>
-                        </section>
-                        <section class="part-sound-panel part-sound-assignment">
-                            <h3>selected slot</h3>
-                            <div class="part-sound-assignment-body"></div>
-                        </section>
+                        <div class="part-sound-left-column">
+                            <section class="part-sound-panel part-sound-composer">
+                                <h3>sound composer</h3>
+                                <div class="part-sound-fields"></div>
+                                <div class="part-sound-actions"></div>
+                                <div class="part-sound-editor-state"></div>
+                                <canvas class="part-sound-wave" width="640" height="100"></canvas>
+                                <div class="part-sound-meter"></div>
+                            </section>
+                            <details class="part-sound-panel part-sound-parameters">
+                                <summary>advanced sound shaping</summary>
+                                <div class="part-sound-params"></div>
+                            </details>
+                        </div>
+                        <div class="part-sound-right-column">
+                            <section class="part-sound-panel part-sound-saved">
+                                <h3>saved sound library</h3>
+                                <p class="part-sound-panel-help">shared choices live here. listen, use, or duplicate before editing.</p>
+                                <div class="part-sound-library"></div>
+                            </section>
+                            <section class="part-sound-panel part-sound-assignment">
+                                <h3>use a sound for this slot</h3>
+                                <div class="part-sound-assignment-body"></div>
+                            </section>
+                        </div>
                     </div>
                 </div>
                 <footer class="part-sound-footer">
                     <span class="part-sound-status" role="status"></span>
                     <button type="button" data-action="cancel">cancel</button>
-                    <button type="button" data-action="save-next">save + next</button>
-                    <button type="button" data-action="save">save</button>
+                    <button type="button" data-action="save-next">save part + next</button>
+                    <button type="button" data-action="save">save part</button>
                 </footer>
             </section>
         `;
@@ -224,7 +256,10 @@ export class PartSoundEditorWindow {
         this.nameInput.type = 'text';
         this.nameInput.maxLength = 64;
         this.nameInput.placeholder = 'sound name';
-        this.nameInput.oninput = () => this.updateComposerState(true);
+        this.nameInput.oninput = () => {
+            this.composerDirty = true;
+            this.updateComposerState(true);
+        };
         this.presetSelect = this.document.createElement('select');
         this.fields.append(
             this.makeField('name', this.nameInput),
@@ -232,10 +267,10 @@ export class PartSoundEditorWindow {
         );
         this.actions.append(
             button(this.document, 'new from preset', () => this.newFromPreset()),
-            button(this.document, 'mutate', () => this.mutate(), 'is-amber'),
-            button(this.document, 'preview draft [space]', () => this.previewDraft(), 'is-cyan'),
-            button(this.document, 'stop audio', () => this.audio?.stopPreview?.(), 'is-muted'),
-            button(this.document, 'save generated sound', () => this.saveGenerated(), 'is-pink')
+            button(this.document, 'mutate into new sound', () => this.mutate(), 'is-amber'),
+            button(this.document, 'listen to draft [space]', () => this.previewDraft(), 'is-cyan'),
+            button(this.document, 'stop listening', () => this.audio?.stopPreview?.(), 'is-muted'),
+            button(this.document, 'save sound', () => this.saveGenerated(), 'is-pink')
         );
 
         for (const type of ['pointerdown', 'mousedown', 'mouseup', 'click', 'contextmenu', 'wheel']) {
@@ -320,22 +355,27 @@ export class PartSoundEditorWindow {
         this.assignmentBody.replaceChildren();
         const copy = this.document.createElement('div');
         copy.className = `part-sound-assignment-state is-${state.status}`;
-        copy.textContent = `${slot.label}: ${state.label} // ${state.detail}`.toLowerCase();
+        copy.innerHTML = `<strong>1. choose this slot</strong><span>${slot.label}: ${state.label} // ${state.detail}</span>`;
         const actions = this.document.createElement('div');
         actions.className = 'part-sound-assignment-actions';
         actions.append(
-            button(this.document, 'preview slot', () => this.previewSlot(slot.id), 'is-cyan'),
-            button(this.document, 'restore default', () => this.assignSlot(slot.id, null), 'is-danger')
+            button(this.document, 'listen to slot', () => this.previewSlot(slot.id), 'is-cyan'),
+            button(this.document, 'use built-in default', () => this.assignSlot(slot.id, null), 'is-danger')
         );
         if (this.currentSound) {
             actions.appendChild(button(
                 this.document,
-                `assign ${this.currentSound.name}`,
+                `3. use ${this.currentSound.name} for slot`,
                 () => this.assignSlot(slot.id, { source: 'signal-forge', soundId: this.currentSound.id }),
                 'is-pink'
             ));
         }
-        this.assignmentBody.append(copy, actions);
+        const steps = this.document.createElement('div');
+        steps.className = 'part-sound-assignment-steps';
+        const choose = this.document.createElement('div');
+        choose.textContent = '2. listen or choose/create a sound in the library';
+        steps.append(choose, copy);
+        this.assignmentBody.append(steps, actions);
     }
 
     renderSavedSounds() {
@@ -359,25 +399,43 @@ export class PartSoundEditorWindow {
             detail.textContent = `${Number(sound.duration || 0).toFixed(3)}s`;
             copy.append(name, detail);
             const actions = this.document.createElement('div');
-            actions.append(
-                button(this.document, 'listen', () => this.previewSaved(sound.id), 'is-cyan'),
-                button(this.document, 'select', () => this.selectSaved(sound.id)),
-                button(this.document, 'use', () => this.assignSlot(this.activeSlotId, { source: 'signal-forge', soundId: sound.id }), 'is-pink')
-            );
+            const listen = button(this.document, 'listen', () => this.previewSaved(sound.id), 'is-cyan');
+            const use = button(this.document, 'use for slot', () => this.assignSlot(this.activeSlotId, { source: 'signal-forge', soundId: sound.id }), 'is-pink');
+            const duplicate = button(this.document, 'duplicate + edit', () => this.duplicateSaved(sound.id), 'is-amber');
+            use.disabled = !this.activeSlotId;
+            use.title = this.activeSlotId ? 'use this sound for the chosen slot' : 'choose a slot first';
+            actions.append(listen, use, duplicate);
             row.append(copy, actions);
             this.library.appendChild(row);
         }
     }
 
-    async selectSaved(soundId) {
+    async duplicateSaved(soundId) {
         const sound = this.signalForge?.sounds?.get?.(soundId);
         if (!sound) return;
+        if (typeof this.signalForge?.duplicateSound !== 'function') {
+            this.setStatus('duplicate is unavailable in this Signal Forge runtime.');
+            return null;
+        }
+        try {
+            const copy = await this.signalForge.duplicateSound(soundId);
+            await this.loadOwnedSound(copy, 'duplicated');
+            return copy;
+        } catch (error) {
+            this.setStatus(`duplicate failed: ${error.message}`);
+            return null;
+        }
+    }
+
+    async loadOwnedSound(sound, action = 'loaded') {
         this.currentSound = sound;
-        this.recipe = JSON.parse(JSON.stringify(sound.recipe));
+        this.composerOwnsSound = true;
+        this.composerDirty = false;
+        this.recipe = structuredClone(sound.recipe);
         this.nameInput.value = sound.name;
         await this.refreshRecipe(false);
         this.render();
-        this.setStatus(`selected saved sound: ${sound.name}.`);
+        this.setStatus(`${action} ${sound.name}. save sound changes this copy only.`);
     }
 
     assignSlot(slotId, assignment) {
@@ -385,7 +443,7 @@ export class PartSoundEditorWindow {
         this.draft = withPartSoundAssignment(this.draft, slotId, assignment);
         this.onChange?.(cloneDraft(this.draft), { part: this.part, slotId });
         this.render();
-        this.setStatus(`${slotId}: staged assignment changed. save all promotes it.`);
+        this.setStatus(`${slotId}: assignment staged. save part commits it; save all promotes it.`);
     }
 
     previewSlot(slotId) {
@@ -422,46 +480,71 @@ export class PartSoundEditorWindow {
 
     renderParameters(parameters) {
         this.parameterGrid.replaceChildren();
-        for (const param of parameters.filter(item => CONTROL_KEYS.has(item.key))) {
-            const row = this.document.createElement('div');
-            row.className = 'part-sound-param';
-            const label = this.document.createElement('label');
-            const name = this.document.createElement('span');
-            const value = this.document.createElement('span');
-            name.textContent = param.label;
-            value.textContent = `${param.value}${param.unit || ''}`;
-            label.append(name, value);
-            let input;
-            if (param.type === 'boolean') {
-                input = this.document.createElement('input');
-                input.type = 'checkbox';
-                input.checked = param.value;
-            } else if (param.type === 'enum') {
-                input = this.document.createElement('select');
-                for (const [entryValue, entryLabel] of Object.entries(param.values || {})) {
-                    input.appendChild(option(this.document, entryValue, String(entryLabel).toLowerCase()));
-                }
-                input.value = param.value;
-            } else {
-                input = this.document.createElement('input');
-                input.type = 'range';
-                input.min = param.min;
-                input.max = param.max;
-                input.step = param.step === 'any' ? 'any' : param.step;
-                input.value = param.value;
-            }
-            input.oninput = () => {
-                const next = param.type === 'boolean'
-                    ? input.checked
-                    : (param.type === 'enum' ? input.value : Number(input.value));
-                this.recipe = { ...this.recipe, [param.key]: next };
-                value.textContent = `${next}${param.unit || ''}`;
-                this.updateComposerState(true);
-                this.scheduleRender();
-            };
-            row.append(label, input);
-            this.parameterGrid.appendChild(row);
+        const usable = parameters.filter(item => CONTROL_KEYS.has(item.key));
+        for (const group of PARAMETER_GROUPS) {
+            const entries = usable.filter(param => group.keys.has(param.key));
+            if (!entries.length) continue;
+            const section = this.document.createElement('details');
+            section.className = 'part-sound-param-group';
+            const summary = this.document.createElement('summary');
+            summary.textContent = group.label;
+            section.appendChild(summary);
+            for (const param of entries) section.appendChild(this.makeParameterRow(param));
+            this.parameterGrid.appendChild(section);
         }
+        const grouped = new Set(PARAMETER_GROUPS.flatMap(group => [...group.keys]));
+        const ungrouped = usable.filter(param => !grouped.has(param.key));
+        if (ungrouped.length) {
+            const section = this.document.createElement('details');
+            section.className = 'part-sound-param-group';
+            const summary = this.document.createElement('summary');
+            summary.textContent = 'other controls';
+            section.appendChild(summary);
+            for (const param of ungrouped) section.appendChild(this.makeParameterRow(param));
+            this.parameterGrid.appendChild(section);
+        }
+    }
+
+    makeParameterRow(param) {
+        const row = this.document.createElement('div');
+        row.className = 'part-sound-param';
+        const label = this.document.createElement('label');
+        const name = this.document.createElement('span');
+        const value = this.document.createElement('span');
+        name.textContent = param.label;
+        value.textContent = `${param.value}${param.unit || ''}`;
+        label.append(name, value);
+        let input;
+        if (param.type === 'boolean') {
+            input = this.document.createElement('input');
+            input.type = 'checkbox';
+            input.checked = param.value;
+        } else if (param.type === 'enum') {
+            input = this.document.createElement('select');
+            for (const [entryValue, entryLabel] of Object.entries(param.values || {})) {
+                input.appendChild(option(this.document, entryValue, String(entryLabel).toLowerCase()));
+            }
+            input.value = param.value;
+        } else {
+            input = this.document.createElement('input');
+            input.type = 'range';
+            input.min = param.min;
+            input.max = param.max;
+            input.step = param.step === 'any' ? 'any' : param.step;
+            input.value = param.value;
+        }
+        input.oninput = () => {
+            const next = param.type === 'boolean'
+                ? input.checked
+                : (param.type === 'enum' ? input.value : Number(input.value));
+            this.recipe = { ...this.recipe, [param.key]: next };
+            this.composerDirty = true;
+            value.textContent = `${next}${param.unit || ''}`;
+            this.updateComposerState(true);
+            this.scheduleRender();
+        };
+        row.append(label, input);
+        return row;
     }
 
     async refreshRecipe(autoPreview = false) {
@@ -536,7 +619,7 @@ export class PartSoundEditorWindow {
         return true;
     }
 
-    async saveGenerated() {
+    async saveGenerated({ forceNew = false, reason = 'saved' } = {}) {
         if (!this.rendered || !this.signalForge) return null;
         const name = this.nameInput.value.trim();
         if (!name) {
@@ -545,14 +628,23 @@ export class PartSoundEditorWindow {
             return null;
         }
         try {
-            this.currentSound = await this.signalForge.saveRendered({
-                name,
-                recipe: this.recipe,
-                rendered: this.rendered,
-                id: this.currentSound?.id || null
-            });
+            const canUpdateOwned = !forceNew && this.composerOwnsSound && this.currentSound?.id;
+            this.currentSound = canUpdateOwned && typeof this.signalForge.updateRendered === 'function'
+                ? await this.signalForge.updateRendered({
+                    id: this.currentSound.id,
+                    name,
+                    recipe: this.recipe,
+                    rendered: this.rendered
+                })
+                : await this.signalForge.saveRendered({
+                    name,
+                    recipe: this.recipe,
+                    rendered: this.rendered
+                });
+            this.composerOwnsSound = true;
+            this.composerDirty = false;
             this.render();
-            this.setStatus(`saved ${this.currentSound.name}. select a slot and assign it.`);
+            this.setStatus(`${reason}: ${this.currentSound.name} is now in the saved sound library. use for slot when ready.`);
             return this.currentSound;
         } catch (error) {
             this.setStatus(`save generated sound failed: ${error.message}`);
@@ -563,10 +655,12 @@ export class PartSoundEditorWindow {
     async newFromPreset() {
         try {
             this.recipe = await this.adapter.create(this.presetSelect.value);
-            this.nameInput.value = `${this.part.id} ${this.activeSlotId || 'sound'}`.toLowerCase();
+            this.nameInput.value = `${this.part.id} ${this.activeSlotId || 'sound'} preset`.toLowerCase();
             this.currentSound = null;
-            await this.refreshRecipe(true);
-            this.updateComposerState();
+            this.composerOwnsSound = false;
+            this.composerDirty = true;
+            await this.refreshRecipe(false);
+            await this.saveGenerated({ forceNew: true, reason: 'new preset saved' });
         } catch (error) {
             this.setStatus(`preset failed: ${error.message}`);
         }
@@ -576,18 +670,22 @@ export class PartSoundEditorWindow {
         if (!this.recipe) return;
         try {
             this.recipe = await this.adapter.mutate(this.recipe);
-            await this.refreshRecipe(true);
-            this.updateComposerState(true);
+            this.nameInput.value = `${this.currentSound?.name || this.part.id} variant`.toLowerCase();
+            this.currentSound = null;
+            this.composerOwnsSound = false;
+            this.composerDirty = true;
+            await this.refreshRecipe(false);
+            await this.saveGenerated({ forceNew: true, reason: 'mutated sound saved' });
         } catch (error) {
             this.setStatus(`mutate failed: ${error.message}`);
         }
     }
 
-    updateComposerState(dirty = false) {
+    updateComposerState(dirty = this.composerDirty) {
         if (!this.editorState || !this.nameInput) return;
         this.editorState.textContent = this.currentSound
-            ? `editing saved sound: ${this.currentSound.name}${dirty ? ' // unsaved changes' : ''}`
-            : `new unsaved draft${dirty ? ' // changed' : ''}`;
+            ? `${this.composerOwnsSound ? 'composer copy' : 'shared library sound'}: ${this.currentSound.name}${dirty ? ' // unsaved changes' : ''} // save sound updates only this copy`
+            : `new unsaved draft${dirty ? ' // changed' : ''} // save sound creates a library entry`;
     }
 
     setStatus(message) {

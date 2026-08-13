@@ -99,3 +99,69 @@ test('event inspection distinguishes custom, packaged, and missing sounds', () =
         ['preview', 'forge:zap']
     ]);
 });
+
+test('duplicating a saved sound creates independent recipe and audio records without changing bindings', async () => {
+    const { runtime, calls } = createHarness();
+    const source = {
+        id: 'drone-shot',
+        schemaVersion: 1,
+        jfxrVersion: '0.13.0',
+        name: 'drone shot',
+        recipe: { frequency: 440, nested: { sweep: 2 } },
+        wavBytes: new Uint8Array([1, 2, 3, 4]),
+        sampleRate: 44100,
+        channels: 1,
+        duration: .1,
+        peak: .8,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        modifiedAt: '2026-01-01T00:00:00.000Z'
+    };
+    runtime.sounds.set(source.id, source);
+    runtime.bindings.set('part:drone_a:fire', source.id);
+
+    const copy = await runtime.duplicateSound(source.id);
+
+    assert.notEqual(copy.id, source.id);
+    assert.equal(copy.name, 'drone shot copy');
+    assert.deepEqual(copy.recipe, source.recipe);
+    assert.notEqual(copy.recipe, source.recipe);
+    assert.deepEqual(copy.wavBytes, source.wavBytes);
+    assert.notEqual(copy.wavBytes, source.wavBytes);
+    copy.recipe.nested.sweep = 99;
+    copy.wavBytes[0] = 9;
+    assert.equal(source.recipe.nested.sweep, 2);
+    assert.equal(source.wavBytes[0], 1);
+    assert.equal(runtime.getBinding('part:drone_a:fire'), source.id);
+    assert.equal(runtime.sounds.get(copy.id), copy);
+    assert.deepEqual(calls.filter(call => call[0] === 'putSound'), [['putSound', copy.id]]);
+    assert.deepEqual(calls.filter(call => call[0] === 'replace').map(call => call[1]), [`forge:${copy.id}`]);
+});
+
+test('saving a new rendered sound without an id never reuses a shared library id', async () => {
+    const { runtime } = createHarness();
+    const source = {
+        id: 'shared',
+        schemaVersion: 1,
+        jfxrVersion: '0.13.0',
+        name: 'shared',
+        recipe: { frequency: 220 },
+        wavBytes: new Uint8Array([1, 2, 3, 4]),
+        sampleRate: 44100,
+        channels: 1,
+        duration: .1,
+        peak: .5,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        modifiedAt: '2026-01-01T00:00:00.000Z'
+    };
+    runtime.sounds.set(source.id, source);
+
+    const created = await runtime.saveRendered({
+        name: 'shared variant',
+        recipe: { frequency: 330 },
+        rendered: { jfxrVersion: '0.13.0', samples: new Float32Array([0, .2, 0]), wavBytes: new Uint8Array([5, 6, 7, 8]), sampleRate: 44100, duration: .1, peak: .4 }
+    });
+
+    assert.notEqual(created.id, source.id);
+    assert.equal(runtime.sounds.get(source.id), source);
+    assert.equal(runtime.sounds.get(created.id).name, 'shared variant');
+});
