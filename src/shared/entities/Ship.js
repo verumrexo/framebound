@@ -1,6 +1,11 @@
 import { PartsLibrary, PartType, TILE_SIZE } from '../parts/Part.js';
 import { Collision } from '../CollisionSystem.js';
 import { createPermanentStats } from '../combat/WeaponFamilies.js';
+import {
+    clamp,
+    createShipBuildProfile,
+    massMovementMultipliers
+} from '../combat/ShipBuildProfile.js';
 
 export class Ship {
     constructor() {
@@ -44,6 +49,8 @@ export class Ship {
         this.hp = 0;
         this.maxHp = 0;
         this.isDead = false;
+        this.combatSilenceTimer = 999;
+        this.ambushReady = false;
 
         // Dash State
         this.dashCooldown = 0;
@@ -95,16 +102,32 @@ export class Ship {
 
         // --- Movement Physics ---
         // Base Stats
-        const perm = this.permanentStats;
         const baseThrust = (this.stats.thrust !== undefined) ? this.stats.thrust : 0;
         const thrustMultiplier = 1 + (baseThrust * 0.05);
 
         const levelBonus = 1.0; // Pass level?
 
-        const currentAccel = 2500 * thrustMultiplier * levelBonus * movementMultiplier * (perm.speedMul || 1.0);
+        const profile = this.stats.profile || createShipBuildProfile(this, PartsLibrary);
+        const massMovement = massMovementMultipliers(this.stats.totalMass);
+        const quietSpeed = profile.doctrineId === 'phantom' && this.combatSilenceTimer >= profile.quietSpeedDelay
+            ? profile.quietSpeedMul
+            : 1;
+        const accelerationFactor = clamp(
+            massMovement.acceleration * profile.accelerationMul,
+            0.4,
+            2
+        );
+        const speedFactor = clamp(
+            massMovement.speed * profile.speedMul * quietSpeed,
+            0.4,
+            2
+        );
+        const currentAccel = 2500 * thrustMultiplier * levelBonus * movementMultiplier *
+            accelerationFactor;
 
         // Max VELOCITY
-        let maxSpeed = 150 * thrustMultiplier * levelBonus * movementMultiplier * (perm.speedMul || 1.0);
+        let maxSpeed = 150 * thrustMultiplier * levelBonus * movementMultiplier *
+            speedFactor;
         if (dashActive) {
             maxSpeed *= 2.5;
         }
@@ -183,7 +206,7 @@ export class Ship {
             const baseTurnRate = 5.0;
             const currentMass = this.stats.totalMass || 5;
             let turnRate = (Math.max(0.5, baseTurnRate * (5 / currentMass)) + (this.stats.turnSpeed || 0));
-            turnRate *= (perm.turnMul || 1.0);
+            turnRate *= profile.turnMul;
 
             const maxStep = turnRate * dt;
 
@@ -219,6 +242,8 @@ export class Ship {
 
         const def = PartsLibrary[partId];
 
+        if (this.getUniqueGroupConflict(partId)) return false;
+
         const isRotated = (rotation % 2 !== 0);
         const w = isRotated ? def.height : def.width;
         const h = isRotated ? def.width : def.height;
@@ -252,6 +277,16 @@ export class Ship {
         }
 
         return !hasCollision && hasAdjacency;
+    }
+
+    getUniqueGroupConflict(partId) {
+        const definition = PartsLibrary[partId];
+        if (!definition?.uniqueGroup) return null;
+        for (const part of this.getUniqueParts()) {
+            const installed = PartsLibrary[part.partId];
+            if (installed?.uniqueGroup === definition.uniqueGroup) return installed;
+        }
+        return null;
     }
 
     addPart(x, y, partId, rotation = 0) {
@@ -353,6 +388,8 @@ export class Ship {
         newShip.permanentStats = { ...this.permanentStats };
         newShip.dashCooldown = this.dashCooldown;
         newShip.dashActiveTimer = this.dashActiveTimer;
+        newShip.combatSilenceTimer = this.combatSilenceTimer;
+        newShip.ambushReady = this.ambushReady;
 
         newShip.recalculateStats();
 
@@ -459,9 +496,15 @@ export class Ship {
         }
 
         // Apply Permanent Upgrades
-        const perm = this.permanentStats;
-        this.stats.totalHp = Math.floor(this.stats.totalHp * perm.hpMul);
-        this.stats.regen += perm.regenAdd;
+        const profile = createShipBuildProfile(this, PartsLibrary);
+        this.stats.profile = profile;
+        this.stats.totalHp = Math.floor(this.stats.totalHp * profile.maxHpMul);
+        this.stats.regen = this.stats.regen * profile.regenMul +
+            profile.regenAdd;
+        this.stats.droneCapacity = Math.min(24, [...this.getUniqueParts()].reduce(
+            (total, part) => total + (PartsLibrary[part.partId]?.stats?.droneCapacity || 0),
+            0
+        ) + profile.droneCapacityAdd);
         // thrust and turnSpeed multipliers are applied in PlayerControlSystem
 
         // Finalize
@@ -513,7 +556,8 @@ export class Ship {
             let effectiveRadius = cellRadius;
             const isShieldActive = (def.type === 'shield' && (!partRef.shieldCooldown || partRef.shieldCooldown <= 0));
             if (isShieldActive) {
-                effectiveRadius *= (def.stats.shieldRadiusScale || 1.4);
+                effectiveRadius *= (def.stats.shieldRadiusScale || 1.4) *
+                    (this.stats.profile?.shieldRadiusMul || 1);
             }
 
             if (isBeam) {
@@ -539,7 +583,8 @@ export class Ship {
                     // Actually, modifying part state inside checkCollision is a side effect.
                     // But it simplifies the caller loop.
                     // Let's modify state here for consistency with Game.js logic.
-                    partRef.shieldCooldown = def.stats.shieldCooldown || 3.0;
+                    partRef.shieldCooldown = (def.stats.shieldCooldown || 3.0) *
+                        (this.stats.profile?.shieldCooldownMul || 1);
                     return { hit: true, blocked: true, shieldHit: true, worldX: worldCellX, worldY: worldCellY };
                 }
                 // Normal Hit

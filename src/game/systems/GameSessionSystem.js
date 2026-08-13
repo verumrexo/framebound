@@ -151,6 +151,8 @@ export class GameSessionSystem {
         game.hoveredTreasureChest = null;
         game.hoveredVaultChest = null;
 
+        game.doctrineTerminal?.resetRunState?.();
+
         if (game.hangar) {
             if (game.hangar.resetRunState) {
                 game.hangar.resetRunState();

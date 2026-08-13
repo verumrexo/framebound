@@ -153,7 +153,13 @@ export class ShipBuilder {
             this.game.audio.play('click_short');
             // No lastPlacedGrid check needed for button tapping
         } else {
-            this.game.showNotification("can't place here!", '#ff4444');
+            const conflict = this.draftShip.getUniqueGroupConflict?.(this.selectedPartId);
+            this.game.showNotification(
+                conflict?.uniqueGroup === 'doctrine'
+                    ? `${conflict.name.toLowerCase()} already controls this ship`
+                    : "can't place here!",
+                '#ff4444'
+            );
         }
     }
 
@@ -301,7 +307,7 @@ export class ShipBuilder {
 
             itemWrapper.onmouseenter = () => {
                 this.tooltip.style.display = 'block';
-                Hangar.updateTooltip(this.tooltip, def);
+                Hangar.updateTooltip(this.tooltip, def, this.draftShip);
             };
             itemWrapper.onmouseleave = () => {
                 this.tooltip.style.display = 'none';

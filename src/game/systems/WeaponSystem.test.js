@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 
 const { WeaponSystem } = await import('./WeaponSystem.js');
 const { PartsLibrary, TILE_SIZE } = await import('../../shared/parts/Part.js');
+const { createShipBuildProfile } = await import('../../shared/combat/ShipBuildProfile.js');
 
 function makeGame(part, overrides = {}) {
     const calls = [];
@@ -421,9 +422,9 @@ test('prism creates two non-recursive side beams with the corrected laser split 
         0.1396263402
     ]);
     assert.deepEqual(game.projectiles.map(projectile => projectile.args[6]), [
-        14,
-        6.3,
-        6.3
+        10.5,
+        10.5 * 0.45,
+        10.5 * 0.45
     ]);
     assert.deepEqual(game.projectiles.map(projectile => projectile.prismChild === true), [
         false,
@@ -432,7 +433,7 @@ test('prism creates two non-recursive side beams with the corrected laser split 
     ]);
 });
 
-test('rangefinder scales legacy laser speeds at the weapon boundary', () => {
+test('global projectile speed upgrades still scale lasers at the weapon boundary', () => {
     const part = { partId: 'pulse_lance', x: 0, y: 0, rotation: 0 };
     const { game } = makeGame(part);
     game.playerShip.stats.projectileSpeedMul = 1.2;
@@ -446,4 +447,204 @@ test('rangefinder scales legacy laser speeds at the weapon boundary', () => {
     assert.equal(game.projectiles[0].speed, 1800);
     assert.equal(game.projectiles[0].vx, 1800);
     assert.equal(game.projectiles[0].vy, 0);
+});
+
+test('bastion autofire uses the nearest visible hostile and manual aim overrides it', () => {
+    const part = { partId: 'pulse_lance', x: 0, y: 0, rotation: 0 };
+    const { game, calls } = makeGame(part, {
+        enemies: [
+            { x: 250, y: 200, hp: 10, isDead: false, spotted: true },
+            { x: 180, y: 200, hp: 10, isDead: false, spotted: false }
+        ],
+        bosses: []
+    });
+    game.playerShip.stats.profile = {
+        laserAutofire: true,
+        laserDamageMul: 1,
+        laserFireRateMul: 1,
+        laserRangeMul: 1
+    };
+    const system = new WeaponSystem(game);
+    const autoAngle = system.getInitialShotOrigin(
+        part,
+        PartsLibrary.pulse_lance,
+        250,
+        200
+    ).angle;
+
+    system.update(0.016, updateState({ isMouseDown: false, worldMouseX: 100, worldMouseY: 1000 }));
+    let shot = calls.find(call => call[0] === 'shot');
+    assert.ok(shot);
+    assert.equal(shot[4], autoAngle);
+
+    calls.length = 0;
+    part.cooldown = 0;
+    system.staggerTimers = {};
+    const manualAngle = system.getInitialShotOrigin(
+        part,
+        PartsLibrary.pulse_lance,
+        100,
+        1000
+    ).angle;
+    system.update(0.016, updateState({ isMouseDown: true, worldMouseX: 100, worldMouseY: 1000 }));
+    shot = calls.find(call => call[0] === 'shot');
+    assert.ok(shot);
+    assert.equal(shot[4], manualAngle);
+});
+
+test('bastion autofire treats hostile drones as normal authoritative targets', () => {
+    const part = { partId: 'pulse_lance', x: 0, y: 0, rotation: 0 };
+    const hostileDrone = { x: 210, y: 200, hp: 10, isDead: false, owner: 'enemy' };
+    const { game, calls } = makeGame(part, {
+        enemies: [],
+        bosses: [],
+        drones: [hostileDrone]
+    });
+    game.playerShip.stats.profile = {
+        laserAutofire: true,
+        laserDamageMul: 1,
+        laserFireRateMul: 1,
+        laserRangeMul: 1
+    };
+    const system = new WeaponSystem(game);
+    const expected = system.getInitialShotOrigin(
+        part,
+        PartsLibrary.pulse_lance,
+        hostileDrone.x,
+        hostileDrone.y
+    ).angle;
+
+    system.update(0.016, updateState({ isMouseDown: false }));
+
+    const shot = calls.find(call => call[0] === 'shot');
+    assert.ok(shot);
+    assert.equal(shot[4], expected);
+});
+
+test('phantom ambush arms after silence, boosts one attack, and is consumed even on a miss', () => {
+    const part = { partId: 'gun_basic', x: 0, y: 0, rotation: 0 };
+    const { game } = makeGame(part);
+    game.playerShip.stats.profile = {
+        doctrineId: 'phantom',
+        ambushArmSeconds: 2.5,
+        ambushDamageMul: 1.6,
+        directFireRateMul: 0.8
+    };
+    game.playerShip.combatSilenceTimer = 2.49;
+    const system = new WeaponSystem(game, {
+        ProjectileClass: ProjectileStub,
+        random: () => 0.5
+    });
+    game.spawnProjectile = (...args) => system.spawnProjectile(...args);
+
+    system.update(0.02, updateState({ worldMouseX: 5000 }));
+
+    assert.equal(game.projectiles[0].args[6], PartsLibrary.gun_basic.stats.damage * 1.6);
+    assert.equal(game.playerShip.combatSilenceTimer, 0);
+    assert.equal(game.playerShip.ambushReady, false);
+});
+
+test('range modifiers preserve exact travel distance while projectile speed changes', () => {
+    const part = { partId: 'gun_basic', x: 0, y: 0, rotation: 0 };
+    const { game } = makeGame(part);
+    const doctrine = PartsLibrary.doctrine_siege;
+    game.playerShip.getUniqueParts = () => [part, { partId: doctrine.id }];
+    game.playerShip.stats.profile = createShipBuildProfile(game.playerShip, PartsLibrary);
+    const system = new WeaponSystem(game, {
+        ProjectileClass: ProjectileStub,
+        random: () => 0.5
+    });
+
+    system.spawnProjectile(PartsLibrary.gun_basic, 0, 0, 0, part);
+    const projectile = game.projectiles[0];
+    assert.equal(projectile.args[4], 780);
+    assert.ok(Math.abs(projectile.life * projectile.args[4] - 675) < 1e-9);
+});
+
+test('special projectile constructors still preserve the exact profiled range', () => {
+    const part = { partId: 'scattr', x: 0, y: 0, rotation: 0 };
+    const { game } = makeGame(part);
+    game.playerShip.getUniqueParts = () => [part, { partId: 'doctrine_siege' }];
+    game.playerShip.stats.profile = createShipBuildProfile(game.playerShip, PartsLibrary);
+    const system = new WeaponSystem(game, { random: () => 0.5 });
+
+    system.spawnProjectile(PartsLibrary.scattr, 0, 0, 0, part);
+
+    assert.equal(game.projectiles.length, 15);
+    for (const projectile of game.projectiles) {
+        assert.ok(Math.abs(projectile.life * projectile.speed - 270) < 1e-9);
+    }
+});
+
+test('guided ggbm speed is modified once and still travels its exact range', () => {
+    const part = { partId: 'ggbm', x: 0, y: 0, rotation: 0 };
+    const { game } = makeGame(part);
+    game.playerShip.getUniqueParts = () => [part, { partId: 'doctrine_siege' }];
+    game.playerShip.stats.profile = createShipBuildProfile(game.playerShip, PartsLibrary);
+    const system = new WeaponSystem(game, { random: () => 0.5 });
+
+    system.spawnProjectile(PartsLibrary.ggbm, 0, 0, 0, part);
+
+    const projectile = game.projectiles[0];
+    assert.equal(projectile.speed, 600 * 0.7 * 1.3);
+    assert.ok(Math.abs(projectile.life * projectile.speed - 1890) < 1e-9);
+});
+
+test('shrapnel payload receives doctrine and one-shot ambush damage modifiers', () => {
+    const part = { partId: 'shrapnel_grenade', attackDamageMul: 1.6 };
+    const { game } = makeGame(part);
+    game.playerShip.getUniqueParts = () => [part, { partId: 'doctrine_demolition' }];
+    game.playerShip.stats.profile = createShipBuildProfile(game.playerShip, PartsLibrary);
+    const system = new WeaponSystem(game, {
+        ProjectileClass: ProjectileStub,
+        random: () => 0.5
+    });
+
+    system.spawnProjectile(PartsLibrary.shrapnel_grenade, 0, 0, 0, part);
+
+    assert.equal(
+        game.projectiles[0].shrapnelDamage,
+        PartsLibrary.shrapnel_grenade.stats.shrapnelDamage * 1.25 * 1.25 * 1.6
+    );
+});
+
+test('demolition changes explosive payloads and mines but leaves ordinary bullets alone', () => {
+    const mine = { partId: 'mine_placer', x: 0, y: 0, rotation: 0 };
+    const doctrine = { partId: 'doctrine_demolition' };
+    const { game } = makeGame(mine);
+    game.playerShip.getUniqueParts = () => [mine, doctrine];
+    game.playerShip.stats.profile = createShipBuildProfile(game.playerShip, PartsLibrary);
+    const system = new WeaponSystem(game, {
+        ProjectileClass: ProjectileStub,
+        random: () => 0.5
+    });
+
+    system.spawnProjectile(PartsLibrary.mine_placer, 0, 0, 0, mine);
+    const projectile = game.projectiles[0];
+    assert.equal(projectile.armingTime, PartsLibrary.mine_placer.stats.armingTime * 0.6);
+    assert.equal(projectile.blastRadiusMul, 1.35);
+    assert.equal(projectile.args[6], PartsLibrary.mine_placer.stats.damage * 1.25);
+    assert.equal(
+        system.getEffectiveRange(PartsLibrary.gun_basic),
+        450
+    );
+});
+
+test('ambush and disabled-target bonuses cannot push total damage past the safety cap', () => {
+    const part = { partId: 'gun_basic', attackDamageMul: 1.6 };
+    const { game } = makeGame(part);
+    game.playerShip.stats.profile = {
+        velocityDamageMul: 3,
+        disabledTargetDamageMul: 1.55
+    };
+    const system = new WeaponSystem(game, {
+        ProjectileClass: ProjectileStub,
+        random: () => 0.5
+    });
+
+    system.spawnProjectile(PartsLibrary.gun_basic, 0, 0, 0, part);
+
+    const projectile = game.projectiles[0];
+    assert.equal(projectile.args[6], PartsLibrary.gun_basic.stats.damage * 3);
+    assert.equal(projectile.disabledTargetDamageMul, 1);
 });

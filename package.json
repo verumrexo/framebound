@@ -35,7 +35,8 @@
     "test:biomes": "node --test src/game/environment/Biomes.test.js",
     "trace:movement": "node scripts/trace-movement.mjs",
     "trace:weapon-rates": "node scripts/trace-weapon-rates.mjs",
-    "trace:projectiles": "node scripts/trace-projectile-families.mjs"
+    "trace:projectiles": "node scripts/trace-projectile-families.mjs",
+    "report:balance": "node scripts/report-part-balance.mjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "^2.11.4",

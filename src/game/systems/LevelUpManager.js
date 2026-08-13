@@ -10,8 +10,24 @@ import {
     getInstalledWeaponFamilies,
     normalizePermanentStats
 } from '../../shared/combat/WeaponFamilies.js';
+import {
+    getInstalledDoctrine,
+    hasDoctrineEquipment
+} from '../../shared/combat/ShipBuildProfile.js';
 
 const UNIVERSAL_UPGRADES = Object.freeze(['hull', 'regen', 'mobility']);
+const DOCTRINE_UPGRADES = Object.freeze({
+    interceptor: ['interceptor tuning', '+8% speed and turning, +5% direct fire rate'],
+    hive: ['hive networking', '+1 drone capacity and +8% deployment speed'],
+    bastion: ['bastion reinforcement', '+10% hp and +5% laser damage'],
+    siege: ['siege calibration', '+10% range and +5% projectile speed and damage'],
+    reaver: ['reaver momentum', '+10% ram and melee damage, +5% acceleration'],
+    phantom: ['phantom timing', '+10% ambush damage, +5% stealth time, +4% quiet speed'],
+    disruptor: ['disruptor lock', '+8% control duration and +5% damage to disabled targets'],
+    demolition: ['demolition yield', '+8% explosion radius and +6% explosive damage'],
+    gunship: ['gunship link', '+4% maximum synchronized fire-rate bonus'],
+    warden: ['warden reinforcement', '+8% shields, regeneration, and repairs']
+});
 
 export class LevelUpManager {
     constructor(game) {
@@ -192,13 +208,40 @@ export class LevelUpManager {
     generateChoices(forceRarity = null, ship = this.game.playerShip) {
         const choices = [];
         const availableUpgrades = this.getAvailableUpgrades(ship);
-        for (let i = 0; i < 3; i++) {
+        const doctrine = getInstalledDoctrine(ship, PartsLibrary);
+        const doctrineChoice = this.generateDoctrineChoice(ship, doctrine);
+        if (doctrineChoice) choices.push(doctrineChoice);
+        for (let i = choices.length; i < 3; i++) {
             if (availableUpgrades.length === 0) break;
             const typeIndex = Math.floor(Math.random() * availableUpgrades.length);
             const type = availableUpgrades.splice(typeIndex, 1)[0];
             choices.push(this.generateChoiceForType(type, forceRarity));
         }
         return choices;
+    }
+
+    generateDoctrineChoice(ship, doctrine) {
+        if (!doctrine || !DOCTRINE_UPGRADES[doctrine.doctrineId]) return null;
+        const stat = `doctrine_${doctrine.doctrineId}_stacks`;
+        const cap = doctrine.doctrineId === 'hive' ? 4 : 5;
+        if ((ship?.permanentStats?.[stat] || 0) >= cap) return null;
+        const [name, desc] = DOCTRINE_UPGRADES[doctrine.doctrineId];
+        const definitions = [...(ship?.getUniqueParts?.() || [])]
+            .map(part => PartsLibrary[part.partId])
+            .filter(Boolean);
+        const hasEquipment = hasDoctrineEquipment(doctrine.doctrineId, definitions);
+        const fallback = doctrine.doctrineId === 'siege'
+            ? '+5% speed and turning until you install a ballistic or rocket weapon'
+            : '+6% maximum hp until you install matching equipment';
+        return {
+            rarity: this.rarities[1],
+            type: { id: `doctrine_${doctrine.doctrineId}` },
+            name,
+            value: 1,
+            stat,
+            mode: 'doctrine',
+            desc: hasEquipment ? desc : fallback
+        };
     }
 
     getAvailableUpgrades(ship = this.game.playerShip) {
@@ -407,6 +450,7 @@ export class LevelUpManager {
             let prefix = "+";
             if (choice.mode === 'multiply') valStr = `${Math.round(choice.value * 100)}%`;
             else if (choice.stat === 'regen') valStr = `${choice.value}/s`;
+            else if (choice.mode === 'doctrine') valStr = `${choice.value} stack`;
             else if (choice.mode === 'integer') {
                 valStr = `${choice.value} target${choice.value === 1 ? '' : 's'}`;
                 prefix = '+';

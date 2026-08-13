@@ -76,7 +76,8 @@ export class EntityRenderer {
 
                 if (def.type === 'shield' && (!partRef.shieldCooldown || partRef.shieldCooldown <= 0)) {
                     const pulse = 1 + Math.sin(Date.now() * 0.005) * 0.1;
-                    const radius = (TILE_SIZE / 2) * (def.stats.shieldRadiusScale || 1.4) * pulse;
+                    const radius = (TILE_SIZE / 2) * (def.stats.shieldRadiusScale || 1.4) *
+                        (ship.stats?.profile?.shieldRadiusMul || 1) * pulse;
                     ctx.save();
                     ctx.fillStyle = 'rgba(0, 200, 255, 0.15)';
                     ctx.strokeStyle = 'rgba(0, 255, 255, 0.4)';
@@ -622,6 +623,16 @@ export class EntityRenderer {
             ctx.fillStyle = '#ffd8d8';
             ctx.fillRect(-8, -2, 16, 4);
             ctx.fillRect(-2, -8, 4, 16);
+        } else if (item.data?.type === 'doctrine_terminal') {
+            ctx.strokeStyle = '#ffaa00';
+            ctx.lineWidth = 3;
+            ctx.strokeRect(-17, -17, 34, 34);
+            ctx.beginPath();
+            ctx.arc(0, 0, 8, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.fillStyle = '#ffaa00';
+            ctx.fillRect(-2, -25, 4, 50);
+            ctx.fillRect(-25, -2, 50, 4);
         } else if (item.partDef?.sprite) {
             ctx.globalAlpha = isSold ? 0.25 : state === 'unaffordable' ? 0.7 : 1;
             item.partDef.sprite.draw(ctx, 0, 0, 0);

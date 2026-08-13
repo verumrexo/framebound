@@ -140,3 +140,40 @@ test('drone upgrades stay exclusive to ships carrying a drone system', () => {
     assert.ok(available.some(upgrade => upgrade.id === 'drone_damage'));
     assert.ok(available.some(upgrade => upgrade.id === 'drone_capacity'));
 });
+
+test('an installed doctrine guarantees one aligned card until its stack cap', () => {
+    const { manager, ship } = createHarness();
+    ship.getUniqueParts = () => new Set([
+        { partId: 'gun_basic' },
+        { partId: 'doctrine_interceptor' }
+    ]);
+
+    const choices = manager.generateChoices('common', ship);
+    assert.equal(choices.length, 3);
+    assert.equal(choices[0].stat, 'doctrine_interceptor_stacks');
+    assert.equal(choices[0].mode, 'doctrine');
+    manager.applyUpgrade(choices[0]);
+    assert.equal(ship.permanentStats.doctrine_interceptor_stacks, 1);
+
+    ship.permanentStats.doctrine_interceptor_stacks = 5;
+    assert.equal(
+        manager.generateChoices('common', ship).some(choice =>
+            choice.stat === 'doctrine_interceptor_stacks'
+        ),
+        false
+    );
+});
+
+test('hive doctrine cards cap at four stacks', () => {
+    const { manager, ship } = createHarness();
+    ship.getUniqueParts = () => new Set([{ partId: 'doctrine_hive' }]);
+    ship.permanentStats.doctrine_hive_stacks = 3;
+    assert.equal(manager.generateChoices('common', ship)[0].stat, 'doctrine_hive_stacks');
+    ship.permanentStats.doctrine_hive_stacks = 4;
+    assert.equal(
+        manager.generateChoices('common', ship).some(choice =>
+            choice.stat === 'doctrine_hive_stacks'
+        ),
+        false
+    );
+});

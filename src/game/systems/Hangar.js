@@ -1,9 +1,15 @@
 import { Assets } from '../../Assets.js';
 import { PartsLibrary, TILE_SIZE } from '../../shared/parts/Part.js';
+import { WEAPON_FAMILIES } from '../../shared/combat/WeaponFamilies.js';
 import {
-    WEAPON_FAMILIES,
-    getFamilyFireRateMultiplier
-} from '../../shared/combat/WeaponFamilies.js';
+    getBuildRatings,
+    getBaseProjectileSpeed,
+    getBaseWeaponRange,
+    isBeamWeapon,
+    getWeaponProfile,
+    clamp,
+    massMovementMultipliers
+} from '../../shared/combat/ShipBuildProfile.js';
 
 export class Hangar {
     constructor(game) {
@@ -152,10 +158,10 @@ export class Hangar {
     }
 
     updateTooltip(def) {
-        Hangar.updateTooltip(this.tooltip, def);
+        Hangar.updateTooltip(this.tooltip, def, this.draftShip);
     }
 
-    static updateTooltip(tooltipEl, def) {
+    static updateTooltip(tooltipEl, def, ship = null) {
         const stats = [];
         if (def.stats) {
             if (def.stats.hp) stats.push(['integrity', `+${def.stats.hp}`, '#ff4d5a']);
@@ -164,10 +170,40 @@ export class Hangar {
             if (def.stats.cooldown) stats.push(['cooldown', `${def.stats.cooldown}s`, '#ffc857']);
             if (def.stats.chargeTime) stats.push(['charge', `${def.stats.chargeTime}s`, '#ffc857']);
             if (def.stats.regen) stats.push(['regen', `+${def.stats.regen}/s`, '#74ff6a']);
-            if (def.stats.thrust || def.type === 'thruster') stats.push(['thrust', `+${def.width * def.height}`, '#55ffc2']);
-            if (def.type === 'accelerant') stats.push(['laser fire rate', '+5%', '#ff8a3d']);
-            if (def.type === 'rocket_bay') stats.push(['rocket payload', '+1', '#ff8a3d']);
+            if (def.stats.thrust) stats.push(['thrust', `+${def.stats.thrust}`, '#55ffc2']);
+            if (def.type === 'accelerant') {
+                stats.push(['laser fire rate', '+12%', '#74ff6a']);
+                stats.push(['laser damage', '-8%', '#ff6978']);
+            }
+            if (def.type === 'rocket_bay') {
+                stats.push(['rocket payload', '+1', '#74ff6a']);
+                stats.push(['rocket reload', '+20%', '#ff6978']);
+            }
             if (def.type === 'booster') stats.push(['system', 'dash enabled', '#55ffc2']);
+            if (def.id === 'coolant_loop') {
+                stats.push(['all fire rate', '+12%', '#74ff6a']);
+                stats.push(['direct damage', '-8%', '#ff6978']);
+            }
+            if (def.id === 'gyro_ring') stats.push(['top speed', '-10%', '#ff6978']);
+            if (def.id === 'rangefinder') {
+                stats.push(['shot range', '+20%', '#74ff6a']);
+                stats.push(['shot speed', '+15%', '#74ff6a']);
+                stats.push(['gun reload', '+11%', '#ff6978']);
+            }
+            if (def.id === 'auto_aim') stats.push(['direct damage', '-12%', '#ff6978']);
+            if (def.id === 'fmj') stats.push(['ballistic reload', '+18%', '#ff6978']);
+            for (const bonus of def.bonuses || []) stats.push(['bonus', bonus, '#74ff6a']);
+            for (const drawback of def.drawbacks || []) stats.push(['cost', drawback, '#ff6978']);
+            if (def.type === 'weapon' && ship?.stats?.profile) {
+                const weapon = getWeaponProfile(ship.stats.profile, def);
+                const baseSpeed = getBaseProjectileSpeed(def);
+                stats.push(['actual damage', (def.stats.damage * weapon.damageMul).toFixed(1), '#ff8a3d']);
+                stats.push(['actual cooldown', `${(def.stats.cooldown / weapon.fireRateMul).toFixed(2)}s`, '#ffc857']);
+                stats.push(['actual range', `${Math.round(getBaseWeaponRange(def) * weapon.rangeMul)}u`, '#55ffc2']);
+                if (baseSpeed > 0 && !isBeamWeapon(def)) {
+                    stats.push(['actual shot speed', `${Math.round(baseSpeed * weapon.projectileSpeedMul)}u/s`, '#55ffc2']);
+                }
+            }
         }
 
         let rarityColor = '#0f0'; // Common
@@ -205,38 +241,76 @@ export class Hangar {
         const stats = this.draftShip.stats;
         const perm = this.draftShip.permanentStats;
         const levelBonus = 1 + (this.game.level - 1) * 0.01;
+        const profile = stats.profile || {};
+        const massMovement = massMovementMultipliers(stats.totalMass);
+        const thrustMultiplier = 1 + (stats.thrust || 0) * 0.05;
+        const acceleration = 2500 * thrustMultiplier * clamp(
+            massMovement.acceleration * (profile.accelerationMul || 1),
+            0.4,
+            2
+        );
+        const topSpeed = 150 * thrustMultiplier * clamp(
+            massMovement.speed * (profile.speedMul || 1),
+            0.4,
+            2
+        );
+        const ratings = getBuildRatings(this.draftShip, PartsLibrary);
+        const currentRatings = getBuildRatings(this.game.playerShip, PartsLibrary);
+        const ratingRow = (label, value) => {
+            const delta = value - (currentRatings[label] || 0);
+            const suffix = delta === 0 ? '' : ` // ${delta > 0 ? '+' : ''}${delta}`;
+            return statRow({
+                label: label.replace(/([A-Z])/g, ' $1').toLowerCase(),
+                value: `${value}${suffix}`,
+                color: delta > 0 ? '#74ff6a' : delta < 0 ? '#ff6978' : '#bde9df'
+            });
+        };
 
         // Fire Rate Bonuses
-        const velocityFR = Math.round((
-            levelBonus * getFamilyFireRateMultiplier(this.draftShip, 'velocity') - 1
+        const boundedRate = value => Math.min(2.5, Math.max(0.45, value));
+        const velocityFR = Math.round((boundedRate(
+            levelBonus *
+            (profile.globalFireRateMul || 1) *
+            (profile.directFireRateMul || 1) *
+            (profile.velocityFireRateMul || 1)
+        ) - 1
         ) * 100);
 
-        const accelerantBonus = (1 + (stats.accelerantCount || 0) * 0.05);
-        const laserFR = Math.round((
+        const laserFR = Math.round((boundedRate(
             levelBonus *
-            accelerantBonus *
-            getFamilyFireRateMultiplier(this.draftShip, 'laser') - 1
+            (profile.globalFireRateMul || 1) *
+            (profile.directFireRateMul || 1) *
+            (profile.laserFireRateMul || 1)
+        ) - 1
         ) * 100);
-        const rocketFR = Math.round((
-            levelBonus * getFamilyFireRateMultiplier(this.draftShip, 'rocket') - 1
+        const rocketFR = Math.round((boundedRate(
+            levelBonus *
+            (profile.globalFireRateMul || 1) *
+            (profile.directFireRateMul || 1) *
+            (profile.rocketFireRateMul || 1)
+        ) - 1
         ) * 100);
 
         // Turn Speed Calc (Matching PlayerControlSystem)
         const baseTurnRate = 5.0;
         const currentMass = (stats.totalMass || 5);
-        const turnSpeedVal = (Math.max(0.5, baseTurnRate * (5 / currentMass)) + (stats.turnSpeed || 0)) * (perm.turnMul || 1.0);
+        const turnSpeedVal = (Math.max(0.5, baseTurnRate * (5 / currentMass)) + (stats.turnSpeed || 0)) *
+            (profile.turnMul || 1);
 
-        const missileSpeedBonus = Math.round(((this.draftShip.permanentStats.missileSpeedMul || 1.0) - 1) * 100);
+        const missileSpeedBonus = Math.round(((profile.rocketSpeedMul || 1) - 1) * 100);
 
         const rows = [
             { label: 'integrity', value: `${stats.totalHp} hp`, color: '#ff4444' },
-            { label: 'mass / turn', value: `${stats.totalMass.toFixed(1)}t / ${turnSpeedVal.toFixed(1)}`, color: '#aaa' },
+            { label: 'mass', value: `${stats.totalMass.toFixed(1)} t`, color: '#aaa' },
             { label: 'regen', value: `${((stats.regen || 0) * levelBonus).toFixed(1)} /s`, color: '#44ff44' },
-            { label: 'max speed', value: `${Math.floor(800 * (1 + (stats.thrust * 0.05)) * levelBonus * (perm.speedMul || 1.0))} km/h`, color: '#89a889' },
-            { label: 'velocity rate', value: `+${velocityFR}%`, color: '#ffaa44' },
-            { label: 'laser rate', value: `+${laserFR}%`, color: '#ffaa44' },
-            { label: 'missile rate', value: `+${rocketFR}%`, color: '#ffaa44' },
-            { label: 'missile speed', value: `+${missileSpeedBonus}%`, color: '#ffaa44' }
+            { label: 'acceleration', value: `${Math.round(acceleration)} u/s²`, color: '#55ffc2' },
+            { label: 'top speed', value: `${Math.round(topSpeed)} u/s`, color: '#55ffc2' },
+            { label: 'turn rate', value: `${turnSpeedVal.toFixed(2)} rad/s`, color: '#55ffc2' },
+            { label: 'velocity rate', value: `${velocityFR >= 0 ? '+' : ''}${velocityFR}%`, color: '#ffaa44' },
+            { label: 'laser rate', value: `${laserFR >= 0 ? '+' : ''}${laserFR}%`, color: '#ffaa44' },
+            { label: 'missile rate', value: `${rocketFR >= 0 ? '+' : ''}${rocketFR}%`, color: '#ffaa44' },
+            { label: 'missile speed', value: `${missileSpeedBonus >= 0 ? '+' : ''}${missileSpeedBonus}%`, color: '#ffaa44' },
+            { label: 'drone capacity', value: `${stats.droneCapacity || 0}`, color: '#57d8ff' }
         ];
 
         if (stats.rocketBayCount > 0) {
@@ -246,11 +320,24 @@ export class Hangar {
         statPanel.innerHTML = `
             <div class="workshop-stat-group">
                 <div class="workshop-stat-heading">frame performance</div>
-                ${rows.slice(0, 4).map(statRow).join('')}
+                ${rows.slice(0, 6).map(statRow).join('')}
             </div>
             <div class="workshop-stat-group">
                 <div class="workshop-stat-heading">combat routing</div>
-                ${rows.slice(4).map(statRow).join('')}
+                ${rows.slice(6).map(statRow).join('')}
+            </div>
+            <div class="workshop-stat-group">
+                <div class="workshop-stat-heading">build ratings // starter = 100</div>
+                ${Object.entries(ratings).map(([label, value]) => ratingRow(label, value)).join('')}
+            </div>
+            <div class="workshop-stat-group">
+                <div class="workshop-stat-heading">active doctrine</div>
+                ${statRow({ label: profile.doctrineName || 'balanced', value: profile.doctrineId ? 'online' : 'none', color: profile.doctrineId ? '#ffaa00' : '#8eaaa2' })}
+                ${profile.doctrineId ? `<div class="workshop-tooltip-description">${PartsLibrary[`doctrine_${profile.doctrineId}`]?.description || ''}</div>` : ''}
+                ${(PartsLibrary[`doctrine_${profile.doctrineId}`]?.bonuses || []).map(value => statRow({ label: 'bonus', value, color: '#74ff6a' })).join('')}
+                ${(PartsLibrary[`doctrine_${profile.doctrineId}`]?.drawbacks || []).map(value => statRow({ label: 'cost', value, color: '#ff6978' })).join('')}
+                ${profile.doctrineId === 'gunship' ? statRow({ label: 'linked guns', value: `${profile.directWeaponCount} // +${Math.round((profile.gunshipRateBonus || 0) * 100)}% rate`, color: '#ffaa00' }) : ''}
+                ${profile.doctrineId === 'phantom' ? statRow({ label: 'ambush', value: `${Math.round((profile.ambushDamageMul - 1) * 100)}% bonus after ${profile.ambushArmSeconds}s`, color: '#ffaa00' }) : ''}
             </div>
         `;
 
@@ -506,6 +593,14 @@ export class Hangar {
                                 this.updateUI();
                                 this.lastPlacedGrid = currentGridKey; // Mark this cell as handled
                             }
+                        }
+                    } else if (!isValid && !this.game.mouseDownLastFrame) {
+                        const conflict = this.draftShip.getUniqueGroupConflict?.(this.selectedPartId);
+                        if (conflict?.uniqueGroup === 'doctrine') {
+                            this.game.showNotification(
+                                `${conflict.name.toLowerCase()} already controls this ship`,
+                                '#ff4444'
+                            );
                         }
                     }
                 }

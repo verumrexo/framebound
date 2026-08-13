@@ -92,7 +92,8 @@ function updateProjectiles(dt, random) {
                                 if (p.type === 'hack_dart') {
                                     applyHack(enemy, p);
                                 }
-                                enemy.takeDamage(p.damage, p.type);
+                                const dealtDamage = damageAgainstTarget(p, enemy);
+                                enemy.takeDamage(dealtDamage, p.type);
                                 applyEnergyChain(this, p, enemy);
                                 const dist = Math.hypot(enemy.x - p.x, enemy.y - p.y);
                                 const hX = p.x + Math.cos(p.angle) * dist;
@@ -100,7 +101,7 @@ function updateProjectiles(dt, random) {
                                 this.spawnDamageNumber(
                                     hX,
                                     hY,
-                                    p.damage,
+                                    dealtDamage,
                                     false,
                                     damageSourceFromProjectile(p)
                                 );
@@ -111,7 +112,7 @@ function updateProjectiles(dt, random) {
 
                                 // Sync Hit
                                 if (!this.partLabSimulation?.active && this.network && this.network.isConnected) {
-                                    this.network.sendEnemyHit(enemy.id, p.damage, enemy.isDead);
+                                    this.network.sendEnemyHit(enemy.id, dealtDamage, enemy.isDead);
                                 }
                             }
                         }
@@ -122,12 +123,13 @@ function updateProjectiles(dt, random) {
                             if (p.type === 'hack_dart') {
                                 applyHack(enemy, p);
                             }
-                            enemy.takeDamage(p.damage, p.type);
+                            const dealtDamage = damageAgainstTarget(p, enemy);
+                            enemy.takeDamage(dealtDamage, p.type);
                             applyEnergyChain(this, p, enemy);
                             this.spawnDamageNumber(
                                 p.x,
                                 p.y,
-                                p.damage,
+                                dealtDamage,
                                 false,
                                 damageSourceFromProjectile(p)
                             );
@@ -137,7 +139,7 @@ function updateProjectiles(dt, random) {
 
                             // Sync Hit
                             if (!this.partLabSimulation?.active && this.network && this.network.isConnected) {
-                                this.network.sendEnemyHit(enemy.id, p.damage, enemy.isDead);
+                                this.network.sendEnemyHit(enemy.id, dealtDamage, enemy.isDead);
                             }
                         }
                     }
@@ -159,15 +161,17 @@ function updateProjectiles(dt, random) {
                             const now = this.projectileClock;
                             if (canBeamHitTarget(p, boss, now, 0.1)) {
                                 if (p.type !== 'hack_dart') {
-                                    boss.takeDamage(p.damage, p.type);
+                                    const dealtDamage = damageAgainstTarget(p, boss);
+                                    boss.takeDamage(dealtDamage, p.type);
                                     applyEnergyChain(this, p, boss);
+                                    p.lastDealtDamage = dealtDamage;
                                 }
                                 const hX = p.x + Math.cos(p.angle) * bx;
                                 const hY = p.y + Math.sin(p.angle) * bx;
                                 this.spawnDamageNumber(
                                     hX,
                                     hY,
-                                    p.damage,
+                                    p.lastDealtDamage ?? p.damage,
                                     false,
                                     damageSourceFromProjectile(p)
                                 );
@@ -190,13 +194,15 @@ function updateProjectiles(dt, random) {
                         const hitResult = boss.checkPartHit(p.x, p.y, p.radius || 4);
                         if (hitResult.hit) {
                             if (p.type !== 'hack_dart') {
-                                boss.takeDamage(p.damage, p.type);
+                                const dealtDamage = damageAgainstTarget(p, boss);
+                                boss.takeDamage(dealtDamage, p.type);
                                 applyEnergyChain(this, p, boss);
+                                p.lastDealtDamage = dealtDamage;
                             }
                             this.spawnDamageNumber(
                                 p.x,
                                 p.y,
-                                p.damage,
+                                p.lastDealtDamage ?? p.damage,
                                 false,
                                 damageSourceFromProjectile(p)
                             );
@@ -530,7 +536,11 @@ function updateProjectiles(dt, random) {
                         const dy = p.y - enemy.y;
                         const distSq = dx * dx + dy * dy;
                         if (distSq < (radius + (enemy.radius || 20)) ** 2) {
-                            const aoeDmg = p.explosionDamage ?? Math.ceil(p.damage * 0.5);
+                            const aoeDmg = damageAgainstTarget(
+                                p,
+                                enemy,
+                                p.explosionDamage ?? Math.ceil(p.damage * 0.5)
+                            );
                             enemy.takeDamage(aoeDmg, p.type);
                             this.spawnDamageNumber(
                                 enemy.x,
@@ -549,7 +559,11 @@ function updateProjectiles(dt, random) {
                         const dy = p.y - boss.y;
                         const distSq = dx * dx + dy * dy;
                         if (distSq < (radius + (boss.radius || 60)) ** 2) {
-                            const aoeDmg = p.explosionDamage ?? Math.ceil(p.damage * 0.5);
+                            const aoeDmg = damageAgainstTarget(
+                                p,
+                                boss,
+                                p.explosionDamage ?? Math.ceil(p.damage * 0.5)
+                            );
                             boss.takeDamage(aoeDmg, p.type);
                             this.spawnDamageNumber(
                                 boss.x,
@@ -605,6 +619,7 @@ function updateProjectiles(dt, random) {
                         childProj.sourcePartKey = p.sourcePartKey;
                         childProj.sourcePartName = p.sourcePartName;
                         childProj.sourcePlayerId = p.sourcePlayerId;
+                        childProj.disabledTargetDamageMul = p.disabledTargetDamageMul || 1;
                         childProj.projectileLook = p.projectileLook || 'default';
                         childProj.projectileTrail = p.projectileTrail || 'default';
                         this.projectiles.push(childProj);
@@ -632,6 +647,7 @@ function updateProjectiles(dt, random) {
                         fragment.sourcePartKey = p.sourcePartKey;
                         fragment.sourcePartName = p.sourcePartName;
                         fragment.sourcePlayerId = p.sourcePlayerId;
+                        fragment.disabledTargetDamageMul = p.disabledTargetDamageMul || 1;
                         fragment.projectileLook = p.projectileLook || 'default';
                         fragment.projectileTrail = p.projectileTrail || 'default';
                         this.projectiles.push(fragment);
@@ -724,8 +740,21 @@ function isHackedAlly(target) {
         target?.hackedByPlayerId !== null;
 }
 
+function damageAgainstTarget(projectile, target, baseDamage = projectile.damage) {
+    const disabled = target?.hackTimer > 0 || target?.empTimer > 0 ||
+        target?.stunTimer > 0 || target?.disabledTimer > 0;
+    return baseDamage * (disabled ? (projectile.disabledTargetDamageMul || 1) : 1);
+}
+
 function applyHack(enemy, projectile) {
-    enemy.hackTimer = projectile.hackDuration || 8;
+    const targetsPlayer = enemy.owner === 'player' || enemy.ownerPlayerId;
+    const maximumMultiplier = targetsPlayer ? 1.25 : Infinity;
+    const baseDuration = projectile.baseHackDuration ||
+        projectile.hackDuration || 8;
+    enemy.hackTimer = Math.min(
+        projectile.hackDuration || baseDuration,
+        baseDuration * maximumMultiplier
+    );
     enemy.hackedByPlayerId = projectile.sourcePlayerId;
 }
 
@@ -843,7 +872,8 @@ function collideEnemyProjectileWithShip(game, projectile, target) {
             definition.type === 'shield' &&
             (!part.shieldCooldown || part.shieldCooldown <= 0)
         ) {
-            effectiveRadius *= definition.stats.shieldRadiusScale || 1.4;
+            effectiveRadius *= (definition.stats.shieldRadiusScale || 1.4) *
+                (ship.stats?.profile?.shieldRadiusMul || 1);
         }
 
         let hit = false;
@@ -882,7 +912,8 @@ function collideEnemyProjectileWithShip(game, projectile, target) {
             definition.type === 'shield' &&
             (!part.shieldCooldown || part.shieldCooldown <= 0)
         ) {
-            part.shieldCooldown = definition.stats.shieldCooldown || 3;
+            part.shieldCooldown = (definition.stats.shieldCooldown || 3) *
+                (ship.stats?.profile?.shieldCooldownMul || 1);
             if (game.audio.playEvent) {
                 game.audio.playEvent(
                     partSoundEventKey(definition.id, 'hit'),

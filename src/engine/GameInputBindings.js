@@ -30,6 +30,11 @@ export class GameInputBindings {
         if (!game.running || !game.playerShip) return;
         if (game.isGameOver || game.nameEntryActive) return;
 
+        if (game.doctrineTerminal?.active) {
+            if (event.key === 'Escape') game.doctrineTerminal.close();
+            return;
+        }
+
         if (game.shipBuilder.active) {
             if (event.code === 'KeyM') {
                 game.shipBuilder.toggle();
@@ -80,7 +85,7 @@ export class GameInputBindings {
 
     onDevKey(event) {
         if (event.code === 'KeyL') {
-            if (this.game.nameEntryActive) return;
+            if (this.game.nameEntryActive || this.game.doctrineTerminal?.active) return;
             this.game.devTools?.toggle?.();
         }
     }

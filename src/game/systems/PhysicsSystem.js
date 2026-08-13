@@ -1,5 +1,6 @@
 import { Collision } from '../../shared/CollisionSystem.js';
 import { TILE_SIZE } from '../../shared/parts/PartDefinitions.js';
+import { isHostileTo } from '../../shared/combat/Hostility.js';
 
 function getCollisionNormal(dx, dy, distance, fallbackThreshold = 0) {
     const needsFallback = fallbackThreshold === 0
@@ -23,11 +24,60 @@ export class PhysicsSystem {
         this.game = game;
         this.random = random;
         this.tileSize = tileSize;
+        this.collisionClock = 0;
+        this.ramCooldowns = new Map();
     }
 
     update(dt) {
+        this.collisionClock += dt;
         this.updateAsteroids(dt);
         this.updateLootCrates(dt);
+        this.updateShipEnemyCollisions();
+    }
+
+    updateShipEnemyCollisions() {
+        for (const target of this.playerCollisionTargets()) {
+            if (target.ship.isDead) continue;
+            for (const enemy of [
+                ...(this.game.enemies || []),
+                ...(this.game.bosses || [])
+            ]) {
+                if (!isHostileTo(target, enemy)) continue;
+                if (!this.shipTouchesBody(target, enemy)) continue;
+                let targetCooldowns = this.ramCooldowns.get(target.id);
+                if (!targetCooldowns) {
+                    targetCooldowns = new WeakMap();
+                    this.ramCooldowns.set(target.id, targetCooldowns);
+                }
+                if (this.collisionClock - (targetCooldowns.get(enemy) || -Infinity) < 0.45) continue;
+                targetCooldowns.set(enemy, this.collisionClock);
+                const relativeSpeed = Math.hypot(
+                    (target.entity.vx || 0) - (enemy.vx || 0),
+                    (target.entity.vy || 0) - (enemy.vy || 0)
+                );
+                const mass = Math.max(1, target.ship.stats?.totalMass || 5);
+                const impact = Math.max(4, relativeSpeed * Math.sqrt(mass) / 18);
+                const profile = target.ship.stats?.profile || {};
+                enemy.takeDamage?.(impact * (profile.collisionDamageMul || 1), 'collision');
+                target.ship.takeDamage(
+                    impact * 0.35 * (profile.collisionDamageTakenMul || 1)
+                );
+            }
+        }
+    }
+
+    shipTouchesBody(target, body) {
+        const cos = Math.cos(target.entity.rotation || 0);
+        const sin = Math.sin(target.entity.rotation || 0);
+        for (const part of target.ship.getUniqueParts()) {
+            const localX = part.x * this.tileSize;
+            const localY = part.y * this.tileSize;
+            const x = target.entity.x + localX * cos - localY * sin;
+            const y = target.entity.y + localX * sin + localY * cos;
+            const range = (body.radius || 20) + this.tileSize / 2;
+            if ((x - body.x) ** 2 + (y - body.y) ** 2 < range * range) return true;
+        }
+        return false;
     }
 
     updateAsteroids(dt) {

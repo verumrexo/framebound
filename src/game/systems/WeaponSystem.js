@@ -1,9 +1,5 @@
 import { PartsLibrary, TILE_SIZE } from '../../shared/parts/Part.js';
 import { Projectile } from '../../shared/entities/Projectile.js';
-import {
-    getFamilyDamageMultiplier,
-    getFamilyFireRateMultiplier
-} from '../../shared/combat/WeaponFamilies.js';
 import { dispatchPlayerShot } from './PlayerShotDispatcher.js';
 import {
     getPartFireDefault,
@@ -16,6 +12,17 @@ import {
     getPartWorldCenter,
     isAuthoredPartGeometry
 } from '../../shared/parts/PartVisualGeometry.js';
+import {
+    getWeaponProfile,
+    getProjectileLaunchSpeed,
+    getBaseWeaponRange,
+    clamp,
+    createShipBuildProfile,
+    isDirectWeapon,
+    isExplosiveWeapon,
+    isMeleeWeapon
+} from '../../shared/combat/ShipBuildProfile.js';
+import { isHostileTo, nearestHostile } from '../../shared/combat/Hostility.js';
 
 function playPartEvent(audio, partId, slot, fallbackName, options) {
     if (typeof audio.playEvent === 'function') {
@@ -65,8 +72,18 @@ export class WeaponSystem {
         levelBonus = finitePositive(levelBonus);
 
         const shipStats = game.playerShip?.stats || {};
-
-        const accelerantBonus = 1 + (game.playerShip.stats.accelerantCount || 0) * 0.05;
+        const buildProfile = shipStats.profile || createShipBuildProfile(
+            game.playerShip,
+            PartsLibrary
+        );
+        if (game.playerShip) {
+            game.playerShip.combatSilenceTimer = Math.max(
+                0,
+                finiteNumber(game.playerShip.combatSilenceTimer) + dt
+            );
+            game.playerShip.ambushReady = buildProfile.doctrineId === 'phantom' &&
+                game.playerShip.combatSilenceTimer >= finitePositive(buildProfile.ambushArmSeconds, 2.5);
+        }
 
         for (const part of game.playerShip.getUniqueParts()) {
             if (part.shieldCooldown > 0) {
@@ -110,14 +127,10 @@ export class WeaponSystem {
             }
 
             const rampFactor = (def.stats.rampUp && partRef.rampLevel) ? 1 + partRef.rampLevel : 1;
-            let currentFireRateMul = levelBonus * getFamilyFireRateMultiplier(
-                game.playerShip,
-                def.stats.weaponGroup
-            );
-            currentFireRateMul *= finitePositive(shipStats.globalFireRateMul);
-            if (def.stats.weaponGroup === 'laser') {
-                currentFireRateMul *= accelerantBonus;
-            }
+            const currentFireRateMul = Math.min(2.5, Math.max(
+                0.45,
+                levelBonus * getWeaponProfile(buildProfile, def).fireRateMul
+            ));
 
             let baseCooldown = def.stats.cooldown || 0.15;
             if (baseCooldown <= 0.001) baseCooldown = 0.016;
@@ -141,8 +154,31 @@ export class WeaponSystem {
             weaponGroups[def.id].weapons.push({ partRef, def, adjCooldown });
         }
 
-        if (isMouseDown && !game.designer.active) {
+        if (!game.designer.active) {
             for (const [groupId, group] of Object.entries(weaponGroups)) {
+                const weaponProfile = getWeaponProfile(buildProfile, group.def);
+                const autoFire = !isMouseDown && buildProfile.laserAutofire &&
+                    group.def.stats.weaponGroup === 'laser' &&
+                    !isMeleeWeapon(group.def);
+                const autoTargets = new Map();
+                if (autoFire) {
+                    for (const weapon of group.weapons) {
+                        const center = getPartWorldCenter(game, weapon.partRef, weapon.def);
+                        const target = nearestHostile(
+                            game.playerShip,
+                            [
+                                ...(game.enemies || []),
+                                ...(game.bosses || []),
+                                ...(game.drones || [])
+                            ],
+                            center.x,
+                            center.y,
+                            this.getEffectiveRange(group.def, weaponProfile)
+                        );
+                        if (target) autoTargets.set(weapon.partRef, target);
+                    }
+                }
+                if (!isMouseDown && autoTargets.size === 0) continue;
                 if (this.staggerTimers[groupId] === undefined) this.staggerTimers[groupId] = 0;
 
                 const count = group.weapons.length;
@@ -156,13 +192,20 @@ export class WeaponSystem {
                     const readyWeapon = group.weapons.find(w =>
                         w.partRef.cooldown <= 0 &&
                         w.partRef.chargeLeft === undefined &&
-                        !w.partRef.chargeReady
+                        !w.partRef.chargeReady &&
+                        (isMouseDown || autoTargets.has(w.partRef))
                     );
-                    const chargedWeapon = group.weapons.find(w => w.partRef.chargeReady);
+                    const chargedWeapon = group.weapons.find(w =>
+                        w.partRef.chargeReady &&
+                        (isMouseDown || autoTargets.has(w.partRef))
+                    );
 
                     if (readyWeapon || chargedWeapon) {
                         const activeWeapon = chargedWeapon || readyWeapon;
                         const { partRef, def, adjCooldown } = activeWeapon;
+                        const autoTarget = autoTargets.get(partRef);
+                        const aimX = autoTarget?.x ?? worldMouseX;
+                        const aimY = autoTarget?.y ?? worldMouseY;
 
                         if (!chargedWeapon && def.stats.chargeTime && !partRef.chargeLeft) {
                             partRef.chargeLeft = def.stats.chargeTime;
@@ -209,8 +252,8 @@ export class WeaponSystem {
                         const { fireX, fireY, angle } = this.getInitialShotOrigin(
                             partRef,
                             def,
-                            worldMouseX,
-                            worldMouseY
+                            aimX,
+                            aimY
                         );
 
                         const burstCount = def.stats.burstCount || 0;
@@ -225,8 +268,11 @@ export class WeaponSystem {
                             partRef.burstTimer = 0;
                         }
 
+                        this.prepareAttack(partRef, def, aimX, aimY);
+
                         if (!(partRef.burstLeft > 0)) {
                             dispatchPlayerShot(game, def, fireX, fireY, angle, partRef);
+                            delete partRef.attackDamageMul;
                         }
 
                         if (def.stats.rampUp) {
@@ -274,12 +320,17 @@ export class WeaponSystem {
             const { fireX, fireY, angle } = this.getBurstShotOrigin(
                 partRef,
                 def,
-                worldMouseX,
-                worldMouseY
+                partRef.attackAimX ?? worldMouseX,
+                partRef.attackAimY ?? worldMouseY
             );
             dispatchPlayerShot(game, def, fireX, fireY, angle, partRef);
 
             partRef.burstLeft--;
+            if (partRef.burstLeft <= 0) {
+                delete partRef.attackDamageMul;
+                delete partRef.attackAimX;
+                delete partRef.attackAimY;
+            }
             let interval = def.stats.burstInterval || 0.1;
             if (def.stats.weaponGroup === 'rocket' && (game.playerShip.stats?.rocketBayCount || 0) > 0) {
                 interval /= 1 + game.playerShip.stats.rocketBayCount;
@@ -288,6 +339,24 @@ export class WeaponSystem {
         }
 
         return { isMouseDown, blockedFrame: false };
+    }
+
+    prepareAttack(partRef, def, aimX, aimY) {
+        const ship = this.game.playerShip;
+        partRef.attackAimX = aimX;
+        partRef.attackAimY = aimY;
+        partRef.attackDamageMul = 1;
+        if (ship?.ambushReady && (isDirectWeapon(def) || isExplosiveWeapon(def))) {
+            partRef.attackDamageMul = ship.stats?.profile?.ambushDamageMul || 1;
+        }
+        if (ship) {
+            ship.combatSilenceTimer = 0;
+            ship.ambushReady = false;
+        }
+    }
+
+    getEffectiveRange(def, weaponProfile = getWeaponProfile(this.game.playerShip?.stats?.profile || {}, def)) {
+        return getBaseWeaponRange(def) * weaponProfile.rangeMul;
     }
 
     getInitialShotOrigin(partRef, def, worldMouseX, worldMouseY) {
@@ -430,7 +499,7 @@ export class WeaponSystem {
         ];
         for (const target of candidates) {
             if (!target || target.isDead) continue;
-            if (target.hackTimer > 0 && target.hackedByPlayerId) continue;
+            if (!isHostileTo(this.game.playerShip, target)) continue;
             const dx = target.x - originX;
             const dy = target.y - originY;
             const distanceSq = dx * dx + dy * dy;
@@ -451,7 +520,11 @@ export class WeaponSystem {
         const spread = def.stats.spread || 0;
         const pelletInterval = def.stats.pelletInterval || 0;
         const shipStats = game.playerShip?.stats || {};
-        const permanent = game.playerShip?.permanentStats || {};
+        const buildProfile = shipStats.profile || createShipBuildProfile(
+            game.playerShip,
+            PartsLibrary
+        );
+        const weaponProfile = getWeaponProfile(buildProfile, def);
         const splitCount = Math.max(0, Math.floor(finiteNumber(shipStats.laserSplitCount)));
         const splitAngle = finiteNumber(shipStats.laserSplitAngle);
         const splitDamageMul = finitePositive(shipStats.laserSplitDamageMul);
@@ -480,12 +553,10 @@ export class WeaponSystem {
                 projectileY += perpendicularY * offset;
             }
 
-            let speed = def.stats.projectileSpeed || 600;
-            speed *= finitePositive(shipStats.projectileSpeedMul);
-            if (def.stats.weaponGroup === 'rocket' && game.playerShip) {
-                speed *= finitePositive(permanent.missileSpeedMul);
-            }
-
+            const projectileType = def.stats.projectileType;
+            const baseSpeed = getProjectileLaunchSpeed(def);
+            let speed = baseSpeed;
+            speed *= weaponProfile.projectileSpeedMul;
             const family = def.stats.weaponGroup;
             const splitAngles = [finalAngle];
             if (canSplit) {
@@ -498,6 +569,12 @@ export class WeaponSystem {
 
             for (let splitIndex = 0; splitIndex < splitAngles.length; splitIndex++) {
                 const splitDamage = splitIndex === 0 ? 1 : splitDamageMul;
+                const attackDamageMul = finitePositive(partRef?.attackDamageMul);
+                const damageMultiplier = clamp(
+                    weaponProfile.damageMul * attackDamageMul,
+                    0.5,
+                    3
+                );
                 const projectile = new this.ProjectileClass(
                     projectileX,
                     projectileY,
@@ -505,10 +582,7 @@ export class WeaponSystem {
                     def.stats.projectileType || 'bullet',
                     speed,
                     'player',
-                    (def.stats.damage || 10) * getFamilyDamageMultiplier(
-                        game.playerShip,
-                        family
-                    ) * (family === 'velocity' ? finitePositive(shipStats.velocityDamageMul) : 1) * splitDamage,
+                    (def.stats.damage || 10) * damageMultiplier * splitDamage,
                     def.stats.lifetime
                 );
                 projectile.weaponFamily = family;
@@ -527,20 +601,27 @@ export class WeaponSystem {
                 projectile.projectileLook = projectileVisuals.look;
                 projectile.projectileTrail = projectileVisuals.trail;
                 projectile.prismChild = splitIndex > 0;
+                projectile.disabledTargetDamageMul = Math.min(
+                    buildProfile.disabledTargetDamageMul || 1,
+                    3 / damageMultiplier
+                );
 
                 if (family === 'velocity') {
                     projectile.remainingPierces = Math.floor(
-                        finiteNumber(permanent.velocityPierce) + finiteNumber(shipStats.velocityPierceAdd)
+                        finiteNumber(buildProfile.velocityPierceAdd)
                     );
                 } else if (family === 'laser') {
                     projectile.chainCount = Math.floor(
-                        finiteNumber(permanent.laserChain) + finiteNumber(def.stats.baseChainCount)
+                        finiteNumber(buildProfile.laserChainAdd) + finiteNumber(def.stats.baseChainCount)
                     );
                 } else if (family === 'rocket') {
-                    projectile.blastRadiusMul = finitePositive(permanent.rocketBlastMul);
+                    projectile.blastRadiusMul = 1;
+                }
+                if (isExplosiveWeapon(def)) {
+                    projectile.blastRadiusMul = finitePositive(projectile.blastRadiusMul) *
+                        weaponProfile.explosionRadiusMul;
                 }
 
-                const projectileType = def.stats.projectileType;
                 if (projectileType === 'railgun' ||
                     projectileType === 'beam_freeze' ||
                     projectileType === 'beam_sword' ||
@@ -548,25 +629,51 @@ export class WeaponSystem {
                     projectile.isBeam = true;
                 }
                 if (projectileType === 'laser' || projectileType === 'small_laser') {
-                    const laserBaseSpeed = projectileType === 'laser' ? 1500 : 1800;
-                    const laserSpeed = laserBaseSpeed * finitePositive(shipStats.projectileSpeedMul);
+                    const laserSpeed = baseSpeed * weaponProfile.projectileSpeedMul;
                     projectile.speed = laserSpeed;
                     projectile.vx = Math.cos(splitAngles[splitIndex]) * laserSpeed;
                     projectile.vy = Math.sin(splitAngles[splitIndex]) * laserSpeed;
                 }
-                if (def.stats.range) projectile.beamLength = def.stats.range;
+                if (projectileType === 'pellet' || projectileType === 'cluster_grenade') {
+                    const specialSpeed = finitePositive(projectile.speed, baseSpeed) *
+                        weaponProfile.projectileSpeedMul;
+                    projectile.speed = specialSpeed;
+                    projectile.vx = Math.cos(splitAngles[splitIndex]) * specialSpeed;
+                    projectile.vy = Math.sin(splitAngles[splitIndex]) * specialSpeed;
+                }
+                if (projectile.isBeam) {
+                    projectile.beamLength = getBaseWeaponRange(def) * weaponProfile.rangeMul;
+                } else if (projectileType !== 'proximity_mine') {
+                    projectile.life = getBaseWeaponRange(def) * weaponProfile.rangeMul /
+                        Math.max(1, finitePositive(projectile.speed, speed));
+                    projectile.maxLife = projectile.life;
+                }
+                if (def.stats.range) projectile.beamLength = def.stats.range * weaponProfile.rangeMul;
                 if (def.stats.armingTime !== undefined) {
-                    projectile.armingTime = def.stats.armingTime;
-                    projectile.armingTimeRemaining = def.stats.armingTime;
+                    projectile.armingTime = def.stats.armingTime * weaponProfile.mineArmingMul;
+                    projectile.armingTimeRemaining = projectile.armingTime;
                 }
                 if (def.stats.triggerRadius !== undefined) projectile.triggerRadius = def.stats.triggerRadius;
                 if (def.stats.aoeRadius !== undefined) {
                     projectile.blastRadius = def.stats.aoeRadius;
-                    projectile.explosionDamage = def.stats.damage;
+                    projectile.explosionDamage = projectile.damage;
                 }
                 if (def.stats.shrapnelCount !== undefined) projectile.shrapnelCount = def.stats.shrapnelCount;
-                if (def.stats.shrapnelDamage !== undefined) projectile.shrapnelDamage = def.stats.shrapnelDamage;
-                if (def.stats.hackDuration !== undefined) projectile.hackDuration = def.stats.hackDuration;
+                if (def.stats.shrapnelDamage !== undefined) {
+                    projectile.shrapnelDamage = def.stats.shrapnelDamage *
+                        clamp(
+                            weaponProfile.damageMul *
+                            weaponProfile.shrapnelDamageMul *
+                            attackDamageMul,
+                            0.5,
+                            3
+                        );
+                }
+                if (def.stats.hackDuration !== undefined) {
+                    projectile.baseHackDuration = def.stats.hackDuration;
+                    projectile.hackDuration = def.stats.hackDuration *
+                        (buildProfile.hackDurationMul || 1);
+                }
                 if (def.stats.ricochetCount !== undefined) projectile.ricochetCount = def.stats.ricochetCount;
                 if (def.stats.ricochetRange !== undefined) projectile.ricochetRange = def.stats.ricochetRange;
                 if (def.stats.ricochetDamageMul !== undefined) projectile.ricochetDamageMul = def.stats.ricochetDamageMul;

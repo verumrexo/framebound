@@ -142,7 +142,8 @@ export class AbilitySystem {
 
         const cooldowns = ensureCooldowns(ship);
         if (cooldowns[abilityId] > 0) return false;
-        cooldowns[abilityId] = ability.balance.cooldown;
+        const profile = ship.stats?.profile || {};
+        cooldowns[abilityId] = ability.balance.cooldown * (profile.abilityCooldownMul || 1);
         this.syncPartCooldowns(ship, abilityId, cooldowns[abilityId]);
 
         const origin = this.positionFor(playerId, ship);
@@ -173,8 +174,8 @@ export class AbilitySystem {
                 {
                     hp: ability.balance.hp,
                     maxHp: ability.balance.hp,
-                    duration: ability.balance.duration,
-                    life: ability.balance.duration
+                    duration: ability.balance.duration * (profile.decoyDurationMul || 1),
+                    life: ability.balance.duration * (profile.decoyDurationMul || 1)
                 }
             );
             this.game.decoys ||= [];
@@ -187,10 +188,10 @@ export class AbilitySystem {
         if (abilityId === 'stealth') {
             ship.stealthTimer = Math.max(
                 Number.isFinite(ship.stealthTimer) ? ship.stealthTimer : 0,
-                ability.balance.duration
+                ability.balance.duration * (profile.stealthDurationMul || 1)
             );
             this.playAbilitySound(ability, 'cloak', 'dash');
-            return { ...result, duration: ability.balance.duration };
+            return { ...result, duration: ability.balance.duration * (profile.stealthDurationMul || 1) };
         }
 
         this.playAbilitySound(ability, 'activate', 'reload');
@@ -203,9 +204,13 @@ export class AbilitySystem {
         ]) {
             if (enemy.isDead) continue;
             if (distanceSquared(originPoint, enemy) > radius * radius) continue;
-            const duration = enemy.type === 'boss' || enemy.isBoss
+            const isBoss = enemy.type === 'boss' || enemy.isBoss;
+            const durationMultiplier = isBoss
+                ? Math.min(profile.empDurationMul || 1, 1.25)
+                : profile.empDurationMul || 1;
+            const duration = (isBoss
                 ? ability.balance.bossDuration
-                : ability.balance.duration;
+                : ability.balance.duration) * durationMultiplier;
             enemy.empTimer = Math.max(
                 Number.isFinite(enemy.empTimer) ? enemy.empTimer : 0,
                 duration

@@ -3,6 +3,7 @@ import { PartsLibrary } from '../../shared/parts/Part.js';
 import { VaultPhase } from '../../shared/vault/VaultDefinitions.js';
 import { commitVaultContract } from '../vault/VaultEconomy.js';
 import { claimVaultReward } from '../vault/VaultRewardSystem.js';
+import { DOCTRINE_PART_SPECS } from '../../shared/parts/arsenal/DoctrineParts.js';
 
 const MAX_REMOTE_INTERACTION_DISTANCE = 1200;
 
@@ -28,7 +29,11 @@ export class WorldInteractionSystem {
         const clicked = game.input.isMouseDown() && !game.mouseDownLastFrame;
 
         if ((ePressed || clicked) && game.hoveredShopItem) {
-            this.purchaseShopItem(game.hoveredShopItem);
+            if (game.hoveredShopItem.data?.type === 'doctrine_terminal') {
+                game.doctrineTerminal?.open();
+            } else {
+                this.purchaseShopItem(game.hoveredShopItem);
+            }
         }
         if ((ePressed || clicked) && game.hoveredTreasureChest) {
             this.openTreasureChest(game.hoveredTreasureChest);
@@ -51,6 +56,11 @@ export class WorldInteractionSystem {
         if (ePressed || clicked) {
             const target = this.hoveredTarget();
             if (target) {
+                if (target.kind === 'shop' && game.hoveredShopItem?.data?.type === 'doctrine_terminal') {
+                    game.doctrineTerminal?.open();
+                    game.eKeyLastFrame = eDown;
+                    return;
+                }
                 game.peerNetwork?.sendInteraction?.(
                     target.kind,
                     target.index
@@ -143,6 +153,12 @@ export class WorldInteractionSystem {
 
     interactForPlayer(player, targetKind, targetIndex) {
         if (!player || player.ship?.isDead || player.suspended) return false;
+        if (targetKind === 'doctrine') {
+            const terminal = this.game.shopItems?.find(item => item.data?.type === 'doctrine_terminal');
+            if (!terminal || !this.canReach(player, terminal)) return false;
+            const spec = DOCTRINE_PART_SPECS[targetIndex];
+            return spec ? this.purchaseDoctrine(spec.id, player, terminal) : false;
+        }
         const targets = {
             shop: this.game.shopItems,
             treasure: this.game.treasureChests,
@@ -175,6 +191,10 @@ export class WorldInteractionSystem {
 
     purchaseShopItem(shopItem, player = null) {
         if (!shopItem || shopItem.purchased || !shopItem.data) return;
+        if (shopItem.data.type === 'doctrine_terminal') {
+            if (!player) return this.game.doctrineTerminal?.open() || false;
+            return false;
+        }
 
         const game = this.game;
         const buyer = player || {
@@ -224,12 +244,33 @@ export class WorldInteractionSystem {
         return true;
     }
 
+    purchaseDoctrine(partId, player = null, terminal = null) {
+        const game = this.game;
+        const definition = this.partsLibrary[partId];
+        if (!definition || definition.shopCategory !== 'doctrine') return false;
+        const price = definition.shopPrice || 90;
+        if (game.gold < price) return false;
+        const buyer = player || { id: 'host', ship: game.playerShip };
+        const source = terminal || game.shopItems?.find(item => item.data?.type === 'doctrine_terminal');
+        if (!source) return false;
+        game.gold -= price;
+        const pickup = new this.ItemPickupClass(source.x, source.y, partId, this.random);
+        pickup.ownerId = buyer.id;
+        game.itemPickups.push(pickup);
+        if (buyer.id === 'host') {
+            game.showNotification(`unlocked: ${definition.name}! pick it up.`, '#ffaa00');
+        }
+        return true;
+    }
+
     openTreasureChest(chest) {
         if (!chest || chest.opened) return false;
 
         const game = this.game;
         const allParts = Object.entries(this.partsLibrary)
-            .filter(([id]) => id !== 'core')
+            .filter(([id, definition]) =>
+                id !== 'core' && definition.shopCategory !== 'doctrine'
+            )
             .map(([id, def]) => ({ id, def }));
 
         if (allParts.length === 0) {

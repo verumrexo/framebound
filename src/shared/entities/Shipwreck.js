@@ -37,6 +37,7 @@ export class Shipwreck {
         Object.keys(PartsLibrary).forEach(id => {
             if (id === 'core') return;
             const def = PartsLibrary[id];
+            if (def.shopCategory === 'doctrine') return;
             const w = def.width, h = def.height;
             const isWep = (def.type === 'weapon');
             const min = Math.min(w, h), max = Math.max(w, h);

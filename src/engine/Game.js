@@ -55,6 +55,7 @@ import { SalvageSweepSystem } from '../game/systems/SalvageSweepSystem.js';
 import { SignalForgeRuntime } from '../game/audio/SignalForgeRuntime.js';
 import { AbilitySystem } from '../game/systems/AbilitySystem.js';
 import { applyPartLabSoundOverrides } from '../game/dev/PartLabManifest.js';
+import { DoctrineTerminal } from '../game/ui/DoctrineTerminal.js';
 
 export class Game {
     constructor(canvas, {
@@ -174,6 +175,7 @@ export class Game {
 
         this.playerShip = null; // Initialized by NetworkManager on 'init'
         this.hangar = new Hangar(this);
+        this.doctrineTerminal = new DoctrineTerminal(this);
         this.designer = new Designer(this);
         this.shipBuilder = new ShipBuilder(this);
         this.levelUpManager = new LevelUpManager(this);

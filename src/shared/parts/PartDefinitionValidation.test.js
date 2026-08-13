@@ -175,8 +175,35 @@ test('new utility stats reject impossible values while accepting the catalog sha
     );
 });
 
-test('the integrated arsenal keeps the complete 72-part catalog described', () => {
-    assert.equal(Object.keys(PartsLibrary).length, 72);
+test('doctrine definitions require their physical shop and modifier metadata', () => {
+    const doctrine = makePart({
+        id: 'doctrine_test',
+        type: PartType.UTILITY,
+        uniqueGroup: 'doctrine',
+        rarity: 'legendary',
+        shopCategory: 'doctrine',
+        shopPrice: 90,
+        doctrineId: 'test',
+        buildModifiers: { multiply: { speedMul: 1.2 } },
+        bonuses: ['faster'],
+        drawbacks: ['fragile']
+    });
+    assert.equal(validatePartDefinition('doctrine_test', doctrine), true);
+    assert.throws(
+        () => validatePartDefinition('doctrine_test', { ...doctrine, shopPrice: 89 }),
+        /invalid doctrine metadata/
+    );
+    assert.throws(
+        () => validatePartDefinition('doctrine_test', {
+            ...doctrine,
+            buildModifiers: { multiply: { speedMul: Number.NaN } }
+        }),
+        /invalid build modifiers/
+    );
+});
+
+test('the integrated arsenal keeps the complete 82-part catalog described', () => {
+    assert.equal(Object.keys(PartsLibrary).length, 82);
     for (const [id, definition] of Object.entries(PartsLibrary)) {
         assert.equal(definition.id, id);
         assert.equal(typeof definition.description, 'string');

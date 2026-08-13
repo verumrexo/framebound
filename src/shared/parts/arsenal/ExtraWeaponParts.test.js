@@ -11,7 +11,7 @@ const EXPECTED_PARTS = [
         stats: {
             hp: 15,
             mass: 2,
-            damage: 1.2,
+            damage: 0.6,
             cooldown: 0.12,
             projectileType: 'mini_bullet',
             projectileSpeed: 1050,
@@ -44,7 +44,7 @@ const EXPECTED_PARTS = [
         stats: {
             hp: 40,
             mass: 5,
-            damage: 22,
+            damage: 16,
             cooldown: 1.6,
             projectileSpeed: 850,
             projectileType: 'bullet',
@@ -59,7 +59,7 @@ const EXPECTED_PARTS = [
         stats: {
             hp: 75,
             mass: 9,
-            damage: 4,
+            damage: 7,
             cooldown: 1.8,
             projectileSpeed: 900,
             projectileType: 'bullet',
@@ -76,7 +76,7 @@ const EXPECTED_PARTS = [
         stats: {
             hp: 35,
             mass: 4,
-            damage: 8,
+            damage: 5.5,
             cooldown: 0.9,
             projectileSpeed: 800,
             projectileType: 'ricochet_slug',
@@ -94,7 +94,7 @@ const EXPECTED_PARTS = [
         stats: {
             hp: 15,
             mass: 2,
-            damage: 3.5,
+            damage: 1.2,
             cooldown: 0.18,
             projectileType: 'arc_welder',
             weaponGroup: 'laser',
@@ -110,7 +110,7 @@ const EXPECTED_PARTS = [
         stats: {
             hp: 35,
             mass: 4,
-            damage: 14,
+            damage: 10.5,
             cooldown: 1.05,
             projectileType: 'laser',
             projectileSpeed: 1500,
@@ -125,7 +125,7 @@ const EXPECTED_PARTS = [
         stats: {
             hp: 70,
             mass: 8,
-            damage: 10,
+            damage: 17,
             cooldown: 1.6,
             projectileType: 'small_laser',
             projectileSpeed: 1800,
@@ -141,7 +141,7 @@ const EXPECTED_PARTS = [
         stats: {
             hp: 20,
             mass: 2,
-            damage: 5,
+            damage: 1.5,
             cooldown: 1.7,
             projectileType: 'guided_rocket',
             projectileSpeed: 520,
@@ -159,7 +159,7 @@ const EXPECTED_PARTS = [
         stats: {
             hp: 40,
             mass: 5,
-            damage: 55,
+            damage: 18,
             cooldown: 4.8,
             projectileType: 'torpedo',
             projectileSpeed: 280,

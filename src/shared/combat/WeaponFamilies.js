@@ -48,7 +48,17 @@ export const PERMANENT_STAT_DEFAULTS = Object.freeze({
     droneCapacityAdd: 0,
     velocityPierce: 0,
     laserChain: 0,
-    rocketBlastMul: 1
+    rocketBlastMul: 1,
+    doctrine_interceptor_stacks: 0,
+    doctrine_hive_stacks: 0,
+    doctrine_bastion_stacks: 0,
+    doctrine_siege_stacks: 0,
+    doctrine_reaver_stacks: 0,
+    doctrine_phantom_stacks: 0,
+    doctrine_disruptor_stacks: 0,
+    doctrine_demolition_stacks: 0,
+    doctrine_gunship_stacks: 0,
+    doctrine_warden_stacks: 0
 });
 
 export const PERMANENT_STAT_KEYS = Object.freeze(

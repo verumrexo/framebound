@@ -305,6 +305,10 @@ export class HostGameSimulation {
             stealthTimer: Number.isFinite(ship.stealthTimer)
                 ? Math.max(0, ship.stealthTimer)
                 : 0,
+            combatSilenceTimer: Number.isFinite(ship.combatSilenceTimer)
+                ? Math.max(0, ship.combatSilenceTimer)
+                : 0,
+            ambushReady: Boolean(ship.ambushReady),
             abilityCooldowns: this.abilitySystem.snapshotShipState(ship).cooldowns
         };
         state.permanentStats = { ...ship.permanentStats };

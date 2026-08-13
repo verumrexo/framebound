@@ -181,7 +181,9 @@ export class WorldOverlayRenderer {
                 ? UI_COLORS.muted
                 : state === 'unaffordable' ? UI_COLORS.red : accent;
             ctx.fillText(
-                state === 'sold'
+                item.data?.type === 'doctrine_terminal'
+                    ? 'open catalog'
+                    : state === 'sold'
                     ? 'sold'
                     : `${item.data?.price || 0}g // ${getShopStateLabel(state)}`,
                 item.x,
@@ -268,7 +270,11 @@ export class WorldOverlayRenderer {
         ctx.fillText('price:', tooltipX + 16, priceY);
         ctx.fillStyle = state === 'unaffordable' ? UI_COLORS.red : accent;
         ctx.textAlign = 'right';
-        ctx.fillText(`${item.data?.price || 0}g`, tooltipX + tooltipW - 16, priceY);
+        ctx.fillText(
+            item.data?.type === 'doctrine_terminal' ? '90g each' : `${item.data?.price || 0}g`,
+            tooltipX + tooltipW - 16,
+            priceY
+        );
         ctx.textAlign = 'left';
         ctx.fillStyle = state === 'unaffordable'
             ? UI_COLORS.red

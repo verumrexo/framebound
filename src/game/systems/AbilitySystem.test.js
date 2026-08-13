@@ -162,3 +162,44 @@ test('decoy ids advance past restored and existing decoys', () => {
     assert.equal(created.decoyId, 'decoy_host_12');
     assert.equal(new Set(target.decoys.map(decoy => decoy.id)).size, 3);
 });
+
+test('doctrine ability timing is authoritative and boss control stays reduced', () => {
+    const enemy = { id: 'e1', x: 140, y: 100, isDead: false };
+    const boss = { id: 'b1', type: 'boss', x: 150, y: 100, isDead: false };
+    const playerShip = shipWith(
+        { partId: 'decoy', x: 0, y: 0 },
+        { partId: 'stealth', x: 1, y: 0 },
+        { partId: 'emp', x: 2, y: 0 }
+    );
+    playerShip.stats = { profile: {
+        abilityCooldownMul: 0.75,
+        empDurationMul: 1.5,
+        stealthDurationMul: 1.35,
+        decoyDurationMul: 1.35
+    } };
+    const target = game({
+        playerShip,
+        enemies: [enemy],
+        bosses: [boss],
+        audio: { playEvent() {} }
+    });
+    const system = new AbilitySystem(target);
+
+    const decoy = system.activateForPlayer('host', playerShip, {
+        abilityId: 'decoy', aimAngle: 0
+    });
+    const stealth = system.activateForPlayer('host', playerShip, {
+        abilityId: 'stealth', aimAngle: 0
+    });
+    system.activateForPlayer('host', playerShip, {
+        abilityId: 'emp', aimAngle: 0
+    });
+
+    assert.ok(Math.abs(
+        target.decoys.find(item => item.id === decoy.decoyId).duration - 8.1
+    ) < 1e-12);
+    assert.equal(stealth.duration, 5.4);
+    assert.equal(playerShip.abilityCooldowns.emp, 12);
+    assert.equal(enemy.empTimer, 4.5);
+    assert.equal(boss.empTimer, 1.5625);
+});

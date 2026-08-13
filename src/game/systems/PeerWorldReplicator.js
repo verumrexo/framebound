@@ -154,6 +154,10 @@ export class PeerWorldReplicator {
         }
         game.playerShip.hp = Math.min(player.hp, game.playerShip.maxHp);
         game.playerShip.isDead = player.isDead;
+        game.playerShip.combatSilenceTimer = Number.isFinite(player.combatSilenceTimer)
+            ? player.combatSilenceTimer
+            : 0;
+        game.playerShip.ambushReady = player.ambushReady === true;
     }
 
     applySharedPause(state) {
@@ -297,6 +301,11 @@ function validPlayer(player) {
         player.hp >= 0 &&
         player.maxHp > 0 &&
         player.hp <= player.maxHp &&
+        (player.combatSilenceTimer === undefined || (
+            Number.isFinite(player.combatSilenceTimer) &&
+            player.combatSilenceTimer >= 0
+        )) &&
+        (player.ambushReady === undefined || typeof player.ambushReady === 'boolean') &&
         isValidPermanentStats(player.permanentStats, { allowLegacy: true }) &&
         typeof player.isDead === 'boolean' &&
         typeof player.suspended === 'boolean';
@@ -330,7 +339,8 @@ function validUpgradeChoice(choice) {
         Number.isFinite(choice.value) &&
         choice.value >= 0 &&
         choice.value <= 1000 &&
-        [
+        (
+            [
             'maxHp',
             'regen',
             'mobility',
@@ -347,8 +357,9 @@ function validUpgradeChoice(choice) {
             'droneCapacityAdd',
             'missileSpeedMul',
             'rocketBlastMul'
-        ].includes(choice.stat) &&
-        ['add', 'multiply', 'integer'].includes(choice.mode) &&
+            ].includes(choice.stat) || /^doctrine_(interceptor|hive|bastion|siege|reaver|phantom|disruptor|demolition|gunship|warden)_stacks$/.test(choice.stat)
+        ) &&
+        ['add', 'multiply', 'integer', 'doctrine'].includes(choice.mode) &&
         typeof choice.desc === 'string' &&
         choice.desc.length > 0 &&
         choice.desc.length <= 200;

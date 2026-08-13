@@ -49,10 +49,12 @@ const PROJECTILE_STATE_KEYS = [
     'ricochetCount', 'ricochetRange', 'ricochetDamageMul',
     'sourcePlayerId', 'sourcePartId', 'sourcePartKey', 'sourcePartName',
     'projectileLook', 'projectileTrail',
-    'weaponFamily', 'hackDuration', 'isVisualOnly', 'prismChild'
+    'weaponFamily', 'baseHackDuration', 'hackDuration',
+    'disabledTargetDamageMul',
+    'isVisualOnly', 'prismChild'
 ];
 const DRONE_STATE_KEYS = [
-    'x', 'y', 'owner', 'isDead', 'hp', 'speed', 'turnRate', 'radius',
+    'x', 'y', 'owner', 'isDead', 'hp', 'maxHp', 'speed', 'turnRate', 'radius',
     'rotation', 'cooldown', 'maxCooldown', 'range', 'state',
     'ownerPlayerId', 'droneType', 'damage', 'sourcePartId',
     'sourcePartKey', 'sourcePartName'
@@ -755,7 +757,8 @@ function validProjectileSnapshot(value) {
                 'blastRadius', 'explosionDamage', 'shrapnelCount',
                 'shrapnelDamage', 'ricochetCount', 'ricochetRange',
                 'ricochetDamageMul', 'hitCount', 'remainingPierces',
-                'chainCount', 'hackDuration', 'beamLength',
+                'chainCount', 'baseHackDuration', 'hackDuration',
+                'disabledTargetDamageMul', 'beamLength',
                 'explosionRadius', 'blastRadiusMul'
             ],
             strings: [

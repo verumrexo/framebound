@@ -36,14 +36,14 @@ export class DroneSystem {
                 this.partsLibrary[part.partId]?.type === PartType.DRONE
             );
             const capacityBonus = Math.floor(
-                player.ship.permanentStats?.droneCapacityAdd || 0
+                player.ship.stats?.profile?.droneCapacityAdd || 0
             );
-            const capacity = droneParts.reduce(
+            const capacity = Math.min(24, droneParts.reduce(
                 (total, part) => total + (
                     this.partsLibrary[part.partId]?.stats?.droneCapacity || 0
                 ),
                 0
-            ) + capacityBonus;
+            ) + capacityBonus);
             const activeCount = game.drones.filter(drone =>
                 drone.owner === 'player' && drone.ownerPlayerId === player.id
             ).length;
@@ -65,13 +65,10 @@ export class DroneSystem {
                     )
                 ).length;
                 if (partActiveCount >= partCapacity) continue;
-                const rate = 1 + Math.max(
-                    0,
-                    player.ship.permanentStats?.droneRateAdd || 0
-                );
+                const deploymentRate = player.ship.stats?.profile?.droneDeployRateMul || 1;
                 const spawnCooldown = (
                     def.stats.droneSpawnCooldown * 1000
-                ) / rate;
+                ) / deploymentRate;
                 if (
                     part.lastDroneSpawn &&
                     now - part.lastDroneSpawn <= spawnCooldown
@@ -101,8 +98,9 @@ export class DroneSystem {
                     null,
                     this.getDroneConfig(
                         def,
-                        player.ship.permanentStats?.droneDamageMul || 1,
-                        part
+                        1,
+                        part,
+                        player.ship.stats?.profile
                     )
                 );
                 drone.ownerPlayerId = player.id;
@@ -194,16 +192,22 @@ export class DroneSystem {
         }
     }
 
-    getDroneConfig(definition, damageMultiplier = 1, part = null) {
+    getDroneConfig(definition, damageMultiplier = 1, part = null, buildProfile = null) {
         const stats = definition.stats || {};
+        const profile = buildProfile || {};
         const config = {
             type: stats.droneType,
-            damage: (stats.droneDamage ?? 0) * damageMultiplier,
+            damage: (stats.droneDamage ?? 0) * damageMultiplier * (profile.droneDamageMul || 1),
             attackCooldown: stats.droneAttackCooldown ?? 0.8,
             sourcePartId: definition.id || part?.partId || 'drone',
             sourcePartKey: part ? this.getDroneSourceKey(part) : definition.id,
             sourcePartName: String(definition.name || definition.id).toLowerCase()
         };
+        if (Number.isFinite(stats.droneHp)) {
+            config.hp = stats.droneHp * (profile.droneHpMul || 1);
+        } else if ((profile.droneHpMul || 1) !== 1) {
+            config.hpMultiplier = profile.droneHpMul;
+        }
         const profileFields = [
             'projectileType',
             'projectileSpeed',
@@ -219,6 +223,9 @@ export class DroneSystem {
         for (const field of profileFields) {
             const statKey = `drone${field[0].toUpperCase()}${field.slice(1)}`;
             if (stats[statKey] !== undefined) config[field] = stats[statKey];
+        }
+        if (Number.isFinite(config.repairAmount)) {
+            config.repairAmount *= profile.droneRepairMul || 1;
         }
         return config;
     }

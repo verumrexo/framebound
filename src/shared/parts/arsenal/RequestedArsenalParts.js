@@ -116,7 +116,7 @@ const REQUESTED_SPECS = [
         stats: {
             hp: 40,
             mass: 4,
-            damage: 28,
+            damage: 11.8,
             cooldown: 0.85,
             projectileType: 'beam_sword',
             weaponGroup: 'laser',
@@ -150,14 +150,14 @@ const REQUESTED_SPECS = [
         stats: {
             hp: 40,
             mass: 4,
-            damage: 12,
+            damage: 6,
             cooldown: 3.2,
             projectileType: 'shrapnel_grenade',
             weaponGroup: 'rocket',
             lifetime: 1.35,
             aoeRadius: 70,
             shrapnelCount: 10,
-            shrapnelDamage: 3.5
+            shrapnelDamage: 2.4
         },
         spriteRows: [
             '00011000',

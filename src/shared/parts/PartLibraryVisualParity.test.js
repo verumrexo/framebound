@@ -12,7 +12,11 @@ const ADDED_PART_IDS = new Set([
     'engine_brace', 'salvage_magnet', 'coolant_loop', 'gyro_ring',
     'rangefinder', 'needler', 'twin_dart', 'heavy_slugger', 'burst_cannon',
     'ricochet_cannon', 'arc_welder', 'pulse_lance', 'lightning_rod',
-    'micro_missile_pod', 'torpedo_tube'
+    'micro_missile_pod', 'torpedo_tube',
+    'doctrine_interceptor', 'doctrine_hive', 'doctrine_bastion',
+    'doctrine_siege', 'doctrine_reaver', 'doctrine_phantom',
+    'doctrine_disruptor', 'doctrine_demolition', 'doctrine_gunship',
+    'doctrine_warden'
 ]);
 
 test('existing part art and approved family metadata stay exact', () => {
@@ -34,7 +38,7 @@ test('existing part art and approved family metadata stay exact', () => {
         .update(JSON.stringify(originalManifest))
         .digest('hex');
 
-    assert.equal(manifest.length, 72);
+    assert.equal(manifest.length, 82);
     assert.equal(originalManifest.length, 40);
     assert.equal(
         hash,

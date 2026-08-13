@@ -219,7 +219,7 @@ const COOLANT_LOOP = freezeData({
     stats: {
         hp: 16,
         mass: 2,
-        globalFireRateMul: 1.08
+        globalFireRateMul: 1.12
     },
     spriteRows: [
         '00111100',
@@ -271,8 +271,7 @@ const RANGEFINDER = freezeData({
     height: 1,
     stats: {
         hp: 16,
-        mass: 2,
-        projectileSpeedMul: 1.2
+        mass: 2
     },
     spriteRows: [
         '00011000',

@@ -140,6 +140,7 @@ export class HudRenderer {
         this.drawSalvageSweepStatus();
         this.drawVaultStatus();
         this.drawActiveAbilityStatus();
+        this.drawDoctrineCursorStatus();
 
         const frameTime = this.now();
         game.frameCount++;
@@ -237,6 +238,31 @@ export class HudRenderer {
         ctx.textAlign = 'left';
         ctx.fillStyle = UI_COLORS.muted;
         ctx.fillText('q // cycle   rmb // activate', x + 12, y + 32);
+    }
+
+    drawDoctrineCursorStatus() {
+        const ship = this.game.playerShip;
+        if (ship?.stats?.profile?.doctrineId !== 'phantom') return;
+        const mouse = this.game.input.getMousePos();
+        const ready = Boolean(ship.ambushReady);
+        const armTime = ship.stats.profile.ambushArmSeconds || 2.5;
+        const progress = Math.min(1, (ship.combatSilenceTimer || 0) / armTime);
+        const ctx = this.game.renderer.ctx;
+        ctx.save();
+        ctx.translate(mouse.x, mouse.y);
+        ctx.globalAlpha = ready ? 0.72 : 0.28;
+        ctx.strokeStyle = ready ? '#d6b3ff' : '#6d7f79';
+        ctx.lineWidth = ready ? 2 : 1;
+        ctx.beginPath();
+        ctx.arc(0, 0, 25, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * progress);
+        ctx.stroke();
+        if (ready) {
+            ctx.fillStyle = '#d6b3ff';
+            ctx.font = UI_FONTS.tiny;
+            ctx.textAlign = 'center';
+            ctx.fillText('ambush', 0, -31);
+        }
+        ctx.restore();
     }
 
     drawNotifications() {
@@ -453,7 +479,11 @@ export class HudRenderer {
             const def = this.partsLibrary[part.partId];
             if (!def) continue;
             if (def.type === PartType.SHIELD) {
-                const max = Math.max(0.001, def.stats.shieldCooldown || 1);
+                const max = Math.max(
+                    0.001,
+                    (def.stats.shieldCooldown || 1) *
+                    (game.playerShip.stats?.profile?.shieldCooldownMul || 1)
+                );
                 utilities.push({
                     label: String(def.name || def.id).toLowerCase(),
                     readiness: Math.max(0, 1 - (part.shieldCooldown || 0) / max),
@@ -812,7 +842,11 @@ export class HudRenderer {
             game.gameTooltip.style.display = 'block';
             game.gameTooltip.style.left = `${mousePos.x + 15}px`;
             game.gameTooltip.style.top = `${mousePos.y + 15}px`;
-            this.hangarClass.updateTooltip(game.gameTooltip, hoveredItem.def);
+            this.hangarClass.updateTooltip(
+                game.gameTooltip,
+                hoveredItem.def,
+                game.playerShip
+            );
         } else if (game.gameTooltip) {
             game.gameTooltip.style.display = 'none';
         }

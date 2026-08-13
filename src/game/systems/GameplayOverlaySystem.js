@@ -6,6 +6,11 @@ export class GameplayOverlaySystem {
     update(dt, isMouseDown) {
         const game = this.game;
 
+        if (game.doctrineTerminal?.active) {
+            this.finishFrame(isMouseDown);
+            return true;
+        }
+
         if (game.hangar.active) {
             game.hangar.update(dt);
             this.finishFrame(isMouseDown);

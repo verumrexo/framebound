@@ -45,7 +45,7 @@ export class Drone {
 
         const blueprint = getDroneBlueprintVisual(config.type);
         this.droneType = blueprint.id;
-        this.hp = valueOr(config.hp, blueprint.hp);
+        this.hp = valueOr(config.hp, blueprint.hp) * valueOr(config.hpMultiplier, 1);
         this.maxHp = this.hp;
         this.speed = valueOr(config.speed, blueprint.speed);
         this.turnRate = valueOr(config.turnRate, blueprint.turnRate);

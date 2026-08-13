@@ -296,7 +296,7 @@ function sanitizeAction(action, payload) {
     if (action === 'interact') {
         if (
             typeof payload.targetKind !== 'string' ||
-            !['shop', 'treasure', 'vault', 'portal'].includes(
+                !['shop', 'treasure', 'vault', 'portal', 'doctrine'].includes(
                 payload.targetKind
             ) ||
             !Number.isInteger(payload.targetIndex) ||

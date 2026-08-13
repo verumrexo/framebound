@@ -74,6 +74,38 @@ test('projectiles update in reverse order and remove from their original index',
     assert.deepEqual(game.projectiles, [first]);
 });
 
+test('disabled targets receive disruptor bonus damage only while disabled', () => {
+    const damage = [];
+    const enemy = {
+        id: 'disabled_target',
+        x: 0,
+        y: 0,
+        hp: 100,
+        isDead: false,
+        empTimer: 2,
+        checkShieldHit: () => ({ hit: false }),
+        checkPartHit: () => ({ hit: true }),
+        takeDamage: amount => damage.push(amount)
+    };
+    const projectile = {
+        owner: 'player',
+        type: 'bullet',
+        x: 0,
+        y: 0,
+        radius: 2,
+        damage: 10,
+        disabledTargetDamageMul: 1.3,
+        isBeam: false,
+        isDead: false,
+        shouldExplode: false,
+        update() {}
+    };
+    const { system } = createGame([projectile], { enemies: [enemy] });
+
+    system.update(0.016);
+    assert.deepEqual(damage, [13]);
+});
+
 test('network enemy projectile spawning keeps owner, fields, sound mapping, and return value', () => {
     class ProjectileStub {
         constructor(...args) {
@@ -285,6 +317,36 @@ test('loaded shield audio suppresses the generic hit fallback', () => {
         ['shield_hit', { volume: 0.8 }]
     ]);
     assert.equal(shield.shieldCooldown, 3);
+    assert.deepEqual(game.projectiles, []);
+});
+
+test('warden shield radius and cooldown apply on the authoritative collision path', () => {
+    const shield = {
+        partId: 'custom_1768410823264',
+        shieldCooldown: 0
+    };
+    const projectile = {
+        owner: 'enemy',
+        type: 'bullet',
+        x: 57,
+        y: 0,
+        radius: 4,
+        damage: 5,
+        isBeam: false,
+        isDead: false,
+        update() {}
+    };
+    const { game, system } = createGame([projectile], {
+        playerShip: {
+            parts: new Map([['0,0', shield]]),
+            stats: { profile: { shieldRadiusMul: 1.3, shieldCooldownMul: 0.65 } },
+            takeDamage: () => assert.fail('warden shield did not block the shot')
+        }
+    });
+
+    system.update(0.016);
+
+    assert.ok(Math.abs(shield.shieldCooldown - 1.95) < 1e-12);
     assert.deepEqual(game.projectiles, []);
 });
 

@@ -125,7 +125,9 @@ export class VaultEncounterSystem {
     }
 
     rollRewards() {
-        const ids = Object.keys(PartsLibrary).filter(id => id !== 'core');
+        const ids = Object.keys(PartsLibrary).filter(id =>
+            id !== 'core' && PartsLibrary[id].shopCategory !== 'doctrine'
+        );
         for (let i = ids.length - 1; i > 0; i--) {
             const j = Math.floor(this.room.random() * (i + 1));
             [ids[i], ids[j]] = [ids[j], ids[i]];

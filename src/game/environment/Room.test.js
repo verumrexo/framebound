@@ -47,7 +47,7 @@ test('floor rosters introduce new roles gradually', () => {
     assert.equal(selectEnemyType(5, 0.05, { vault: true }), 'hive_carrier');
 });
 
-test('shop entry creates its original four items synchronously and once', () => {
+test('shop entry keeps four original offers plus a permanent doctrine terminal', () => {
     const room = new Room(1, 0, 1, 1, () => 0.5);
     room.type = RoomType.SHOP;
     const game = { shopItems: [] };
@@ -55,19 +55,20 @@ test('shop entry creates its original four items synchronously and once', () => 
     room.onEnter(game);
 
     assert.equal(room.cleared, true);
-    assert.equal(room.shopItems.length, 4);
-    assert.equal(game.shopItems.length, 4);
+    assert.equal(room.shopItems.length, 5);
+    assert.equal(game.shopItems.length, 5);
     assert.equal(room.shopItems[0].data.type, 'heal');
-    for (const item of room.shopItems.slice(1)) {
+    for (const item of room.shopItems.slice(1, 4)) {
         assert.equal(item.data.description, PartsLibrary[item.data.partId].description);
     }
+    assert.equal(room.shopItems[4].data.type, 'doctrine_terminal');
     assert.deepEqual(
         room.shopItems.map(item => item.x),
-        [2820, 2940, 3060, 3180]
+        [2760, 2880, 3000, 3120, 3240]
     );
 
     room.generateShopItems(game);
-    assert.equal(game.shopItems.length, 4);
+    assert.equal(game.shopItems.length, 5);
 });
 
 test('treasure and exclusive vault contracts exist before room entry returns', () => {

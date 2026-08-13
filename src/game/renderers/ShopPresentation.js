@@ -51,6 +51,7 @@ function addRow(rows, label, value) {
 }
 
 export function getShopAccent(item) {
+    if (item?.data?.type === 'doctrine_terminal') return UI_COLORS.amber;
     if (item?.data?.type === 'heal') return UI_COLORS.mint;
     const family = item?.partDef?.stats?.weaponGroup;
     if (family && WEAPON_FAMILIES[family]) return WEAPON_FAMILIES[family].color;
@@ -58,6 +59,7 @@ export function getShopAccent(item) {
 }
 
 export function getShopCategory(item) {
+    if (item?.data?.type === 'doctrine_terminal') return 'build doctrine catalog';
     if (item?.data?.type === 'heal') return 'frame service';
     const family = item?.partDef?.stats?.weaponGroup;
     if (family && WEAPON_LABELS[family]) return WEAPON_LABELS[family];
@@ -65,6 +67,12 @@ export function getShopCategory(item) {
 }
 
 export function getShopStatRows(item, maxRows = 4) {
+    if (item?.data?.type === 'doctrine_terminal') {
+        return [
+            { label: 'doctrines', value: '10' },
+            { label: 'rule', value: 'install one' }
+        ];
+    }
     if (item?.data?.type === 'heal') return [{ label: 'repair', value: '+50 hp' }];
 
     const stats = item?.partDef?.stats || {};
@@ -102,6 +110,7 @@ export function getShopStateLabel(state) {
 }
 
 export function getShopActionText(item, credits = Number.POSITIVE_INFINITY) {
+    if (item?.data?.type === 'doctrine_terminal') return '[e] / click // open catalog';
     const state = getShopItemState(item, credits);
     if (state === 'sold') return 'sold // already claimed';
     if (state === 'unaffordable') {
@@ -113,8 +122,9 @@ export function getShopActionText(item, credits = Number.POSITIVE_INFINITY) {
 
 export function getShopHeader(items = [], credits = 0) {
     const offers = Array.isArray(items) ? items : [];
-    const stockTotal = offers.length;
-    const stockRemaining = offers.filter(item => !item?.purchased).length;
+    const stock = offers.filter(item => item?.data?.type !== 'doctrine_terminal');
+    const stockTotal = stock.length;
+    const stockRemaining = stock.filter(item => !item?.purchased).length;
     return {
         credits: Number.isFinite(Number(credits)) ? Number(credits) : 0,
         stockRemaining,

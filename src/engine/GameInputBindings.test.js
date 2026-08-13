@@ -32,6 +32,10 @@ function createHarness(overrides = {}) {
             toggle: () => calls.push(['ship-builder'])
         },
         levelUpManager: { active: false },
+        doctrineTerminal: {
+            active: false,
+            close: () => calls.push(['doctrine-close'])
+        },
         isGameOver: false,
         fullscreenMapOpen: false,
         paused: false,
@@ -210,6 +214,22 @@ test('ship builder keeps gameplay shortcuts modal while m still closes it', () =
     assert.equal(calls.some(([name]) => name === 'pause'), false);
     assert.equal(calls.some(([name]) => name === 'prevent'), false);
     assert.equal(game.fullscreenMapOpen, false);
+});
+
+test('doctrine terminal is modal and escape closes only that terminal', () => {
+    const { game, calls, bindings, dispatch } = createHarness();
+    bindings.attach();
+    game.doctrineTerminal.active = true;
+    game.paused = true;
+
+    dispatch('keydown', { code: 'Tab', key: 'Tab' });
+    dispatch('keydown', { code: 'KeyL', key: 'l' });
+    dispatch('keydown', { key: 'Escape' });
+
+    assert.deepEqual(calls.filter(([name]) => name === 'doctrine-close'), [
+        ['doctrine-close']
+    ]);
+    assert.equal(calls.some(([name]) => ['hangar', 'pause', 'dev'].includes(name)), false);
 });
 
 test('name entry blocks dev tools and resize keeps native window dimensions', () => {

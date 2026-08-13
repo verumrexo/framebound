@@ -217,6 +217,65 @@ test('room containment preserves the original edge bounce signs', () => {
     assert.equal(crate.vy, -20);
 });
 
+test('reaver rams use mass and relative speed without frame-by-frame damage spam', () => {
+    const enemyDamage = [];
+    const shipDamage = [];
+    const enemy = createBody({
+        id: 'ram_target',
+        hp: 100,
+        x: 100,
+        y: 100,
+        takeDamage: amount => enemyDamage.push(amount)
+    });
+    const ship = {
+        isDead: false,
+        stats: {
+            totalMass: 13,
+            profile: {
+                collisionDamageMul: 1.75,
+                collisionDamageTakenMul: 0.3
+            }
+        },
+        getUniqueParts: () => [{ x: 0, y: 0 }],
+        takeDamage: amount => shipDamage.push(amount)
+    };
+    const { system } = createHarness({
+        vx: 180,
+        playerShip: ship,
+        enemies: [enemy],
+        bosses: []
+    });
+
+    system.update(0.1);
+    system.update(0.1);
+
+    const baseImpact = 180 * Math.sqrt(13) / 18;
+    assert.deepEqual(enemyDamage, [baseImpact * 1.75]);
+    assert.deepEqual(shipDamage, [baseImpact * 0.35 * 0.3]);
+});
+
+test('ram cooldowns are tracked per enemy even when enemies share a type', () => {
+    const hits = [];
+    const enemies = [1, 2].map(id => createBody({
+        id: undefined,
+        type: 'striker',
+        hp: 100,
+        takeDamage: () => hits.push(id)
+    }));
+    const ship = {
+        isDead: false,
+        stats: { totalMass: 13, profile: {} },
+        getUniqueParts: () => [{ x: 0, y: 0 }],
+        takeDamage() {}
+    };
+    const { system } = createHarness({ playerShip: ship, enemies, bosses: [] });
+
+    system.update(0.1);
+    system.update(0.1);
+
+    assert.deepEqual(hits, [1, 2]);
+});
+
 test('host physics applies the same asteroid collision to guest ships', () => {
     const asteroid = createBody({ radius: 20 });
     const guestShip = {

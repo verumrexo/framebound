@@ -5,6 +5,7 @@ import { Asteroid } from '../../shared/entities/Asteroid.js';
 import { LootCrate } from '../../shared/entities/LootCrate.js';
 import { Shipwreck } from '../../shared/entities/Shipwreck.js';
 import { ShopItem } from '../../shared/entities/ShopItem.js';
+import { doctrineTerminalItem } from '../ui/DoctrineTerminal.js';
 import { TreasureChest } from '../../shared/entities/TreasureChest.js';
 import { PartsLibrary } from '../../shared/parts/Part.js';
 import { RoomType } from './RoomType.js';
@@ -136,7 +137,7 @@ export class Room {
 
         const allParts = [];
         for (const id of Object.keys(PartsLibrary)) {
-            if (id !== 'core') {
+            if (id !== 'core' && PartsLibrary[id].shopCategory !== 'doctrine') {
                 allParts.push({ id, def: PartsLibrary[id] });
             }
         }
@@ -165,7 +166,8 @@ export class Room {
                     (part.def.stats?.hp || 10) * 2 +
                     (part.def.stats?.mass || 1) * 5
                 )
-            }))
+            })),
+            doctrineTerminalItem()
         ];
 
         const centerX = this.x + this.width / 2;

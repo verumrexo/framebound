@@ -51,6 +51,10 @@ export function validatePartDefinition(libraryId, definition) {
         throw new TypeError(`part ${libraryId} must have stats`);
     }
 
+    if (definition.uniqueGroup === 'doctrine') {
+        validateDoctrineDefinition(libraryId, definition);
+    }
+
     validateStatValues(libraryId, definition.stats);
     validateMechanicStats(libraryId, definition.stats);
     requireNonNegativeNumber(libraryId, definition.stats, 'hp');
@@ -101,6 +105,44 @@ export function validatePartDefinition(libraryId, definition) {
     }
 
     return true;
+}
+
+/**
+ * @param {string} libraryId
+ * @param {Record<string, unknown>} definition
+ */
+function validateDoctrineDefinition(libraryId, definition) {
+    if (
+        definition.type !== PartType.UTILITY ||
+        definition.rarity !== 'legendary' ||
+        definition.shopCategory !== 'doctrine' ||
+        definition.shopPrice !== 90 ||
+        typeof definition.doctrineId !== 'string' ||
+        definition.doctrineId.length === 0 ||
+        !isRecord(definition.buildModifiers) ||
+        !Array.isArray(definition.bonuses) || definition.bonuses.length === 0 ||
+        !Array.isArray(definition.drawbacks) || definition.drawbacks.length === 0
+    ) {
+        throw new TypeError(`doctrine ${libraryId} has invalid doctrine metadata`);
+    }
+    validateModifierTree(libraryId, definition.buildModifiers);
+}
+
+/**
+ * @param {string} libraryId
+ * @param {Record<string, unknown>} modifiers
+ */
+function validateModifierTree(libraryId, modifiers) {
+    for (const value of Object.values(modifiers)) {
+        if (typeof value === 'number' && !Number.isFinite(value)) {
+            throw new TypeError(`doctrine ${libraryId} has invalid build modifiers`);
+        }
+        if (typeof value === 'boolean') continue;
+        if (isRecord(value)) validateModifierTree(libraryId, value);
+        else if (typeof value !== 'number') {
+            throw new TypeError(`doctrine ${libraryId} has invalid build modifiers`);
+        }
+    }
 }
 
 /**

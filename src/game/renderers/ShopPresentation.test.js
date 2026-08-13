@@ -59,7 +59,7 @@ test('shop stat rows expose useful compact repair and part telemetry', () => {
     assert.deepEqual(getShopStatRows(partItem()), [
         { label: 'hull', value: '80 hp' },
         { label: 'mass', value: '8 t' },
-        { label: 'output', value: '15 dmg' },
+        { label: 'output', value: '6 dmg' },
         { label: 'cycle', value: '6.5s' }
     ]);
 });

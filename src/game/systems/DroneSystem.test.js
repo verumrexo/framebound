@@ -220,6 +220,32 @@ test('new drone roles and zero-damage repair profiles flow through the spawn sys
     });
 });
 
+test('hive profile scales attack, repair, hp, capacity, and deployment consistently', () => {
+    const { system } = createHarness();
+    const profile = {
+        droneDamageMul: 1.2,
+        droneRepairMul: 1.2,
+        droneHpMul: 1.2,
+        droneDeployRateMul: 1.25,
+        droneCapacityAdd: 4
+    };
+    const config = system.getDroneConfig({
+        id: 'test_hive',
+        name: 'test hive',
+        stats: {
+            droneType: 'repair',
+            droneDamage: 5,
+            droneRepairAmount: 4
+        }
+    }, 1, null, profile);
+
+    assert.equal(config.damage, 6);
+    assert.equal(config.repairAmount, 4.8);
+    assert.equal(config.hpMultiplier, 1.2);
+    assert.equal(profile.droneDeployRateMul, 1.25);
+    assert.equal(profile.droneCapacityAdd, 4);
+});
+
 test('mixed carriers fill their own capacity instead of one type starving another', () => {
     let currentTime = 10000;
     const firstId = 'drone_first';

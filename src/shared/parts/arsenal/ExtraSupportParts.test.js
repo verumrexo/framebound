@@ -37,7 +37,7 @@ const EXPECTED_PARTS = [
         type: 'utility',
         width: 1,
         height: 1,
-        stats: { hp: 16, mass: 2, globalFireRateMul: 1.08 }
+        stats: { hp: 16, mass: 2, globalFireRateMul: 1.12 }
     },
     {
         id: 'gyro_ring',
@@ -53,7 +53,7 @@ const EXPECTED_PARTS = [
         type: 'utility',
         width: 1,
         height: 1,
-        stats: { hp: 16, mass: 2, projectileSpeedMul: 1.2 }
+        stats: { hp: 16, mass: 2 }
     }
 ];
 

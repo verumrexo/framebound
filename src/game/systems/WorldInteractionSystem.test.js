@@ -179,6 +179,40 @@ test('part purchases still create a pickup at the shop item', () => {
     ]]);
 });
 
+test('doctrine terminal purchases are repeatable, shared-cost, and owner locked', () => {
+    const harness = createHarness({ gold: 200 });
+    harness.system.partsLibrary.doctrine_test = {
+        name: 'test doctrine',
+        shopCategory: 'doctrine',
+        shopPrice: 90
+    };
+    const terminal = {
+        x: 20,
+        y: 30,
+        purchased: false,
+        data: { type: 'doctrine_terminal' }
+    };
+    harness.game.shopItems = [terminal];
+    const guest = {
+        id: 'guest_1',
+        x: 20,
+        y: 30,
+        ship: { hp: 100, maxHp: 100 }
+    };
+
+    assert.equal(harness.system.purchaseDoctrine('doctrine_test', guest, terminal), true);
+    assert.equal(harness.system.purchaseDoctrine('doctrine_test', null, terminal), true);
+    assert.equal(harness.game.gold, 20);
+    assert.equal(terminal.purchased, false);
+    assert.deepEqual(harness.game.itemPickups.map(pickup => [
+        pickup.partId,
+        pickup.ownerId
+    ]), [
+        ['doctrine_test', 'guest_1'],
+        ['doctrine_test', 'host']
+    ]);
+});
+
 test('guest shop purchases heal or lock parts to that buyer only', () => {
     const harness = createHarness({ gold: 100 });
     const guest = {
@@ -256,6 +290,19 @@ test('treasure chests keep their random non-core part reward', () => {
         '#ffd700'
     ]]);
     assert.deepEqual(harness.audioCalls, [['hit', { volume: 0.6 }]]);
+});
+
+test('treasure chests never roll doctrine-only stock', () => {
+    const harness = createHarness({ random: () => 0.999 });
+    harness.system.partsLibrary.doctrine_test = {
+        name: 'test doctrine',
+        shopCategory: 'doctrine'
+    };
+    const chest = { x: 80, y: 90, opened: false };
+
+    harness.system.openTreasureChest(chest);
+
+    assert.notEqual(harness.game.itemPickups[0].partId, 'doctrine_test');
 });
 
 test('gilded vault deducts shared gold once and starts one contract', () => {

@@ -11,6 +11,7 @@ import { DRONE_PART_SPECS_RAM_STORM } from './drone/DronePartBatchRamStorm.js';
 import { REQUESTED_ARSENAL_PART_SPECS } from './arsenal/RequestedArsenalParts.js';
 import { EXTRA_SUPPORT_PART_SPECS } from './arsenal/ExtraSupportParts.js';
 import { EXTRA_WEAPON_PART_SPECS } from './arsenal/ExtraWeaponParts.js';
+import { DOCTRINE_PART_SPECS } from './arsenal/DoctrineParts.js';
 import { PART_DESCRIPTIONS } from './PartDescriptions.js';
 import {
     CORE_EFFECT_PIXELS,
@@ -59,6 +60,13 @@ function createArsenalPartDefinition(spec) {
     definition.baseSprite = sprite;
     if (spec.type === PartType.WEAPON) definition.drawTurretInInventory = true;
     if (spec.rarity) definition.rarity = spec.rarity;
+    if (spec.description) definition.description = spec.description;
+    for (const key of [
+        'uniqueGroup', 'shopCategory', 'shopPrice', 'doctrineId',
+        'bonuses', 'drawbacks', 'buildModifiers'
+    ]) {
+        if (spec[key] !== undefined) definition[key] = spec[key];
+    }
     if (spec.coreEffectColor || spec.coreEffectRows) {
         const pixels = spec.coreEffectRows
             ? spec.coreEffectRows.flatMap(row => [...row].map(Number))
@@ -95,7 +103,7 @@ export const PartsLibrary = {
     'railgun': (() => {
         const d = new PartDef('railgun', 'Railgun', PartType.WEAPON,
             new Sprite([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 15, 15, 4, { 1: '#26d426', 2: '#333' }),
-            { hp: 80, mass: 8, damage: 15, cooldown: 6.5, projectileType: 'railgun', weaponGroup: 'laser', chargeTime: 2.5 }, 2, 2
+            { hp: 80, mass: 8, damage: 6, cooldown: 6.5, projectileType: 'railgun', weaponGroup: 'laser', chargeTime: 2.5 }, 2, 2
         );
         d.baseSprite = new Sprite([0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 0, 1, 1, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 0, 0, 0, 1, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0], 15, 15, 4, { 1: '#26d426', 2: '#333' });
         return d;
@@ -103,7 +111,7 @@ export const PartsLibrary = {
     'lps': (() => {
         const d = new PartDef('lps', 'LPS', PartType.WEAPON,
             new Sprite([0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0], 8, 8, 4, { 1: '#26d426', 2: '#333' }),
-            { hp: 20, mass: 2, damage: 1.75, cooldown: 2.3, burstCount: 10, burstInterval: 0.01, projectileType: 'small_laser', spread: 0.1, weaponGroup: 'laser' }
+            { hp: 20, mass: 2, damage: 1.15, cooldown: 2.3, burstCount: 10, burstInterval: 0.01, projectileType: 'small_laser', spread: 0.1, weaponGroup: 'laser' }
         );
         d.baseSprite = new Sprite([0, 0, 1, 1, 1, 1, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 1, 0], 8, 8, 4, { 1: '#26d426', 2: '#333' });
         return d;
@@ -111,7 +119,7 @@ export const PartsLibrary = {
     'scattr': (() => {
         const d = new PartDef('scattr', 'SCATTR', PartType.WEAPON,
             new Sprite([0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 1, 0], 8, 15, 4, { 1: '#26d426', 2: '#333' }),
-            { hp: 40, mass: 4, damage: 2, cooldown: 4.2, burstCount: 2, burstInterval: 0.5, projectileType: 'pellet', pelletCount: 15, spread: 0.5, weaponGroup: 'velocity' }, 1, 2
+            { hp: 40, mass: 4, damage: 1.9, cooldown: 4.2, burstCount: 2, burstInterval: 0.5, projectileType: 'pellet', pelletCount: 15, spread: 0.5, weaponGroup: 'velocity' }, 1, 2
         );
         d.baseSprite = new Sprite([0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 1, 0, 1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1], 8, 15, 4, { 1: '#26d426', 2: '#333' });
         d.rotationOffset = Math.PI / 2;
@@ -120,7 +128,7 @@ export const PartsLibrary = {
     'ggbm': (() => {
         const d = new PartDef('ggbm', 'GGBM', PartType.WEAPON,
             new Sprite([0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0], 8, 15, 4, { 1: '#26d426', 2: '#333' }),
-            { hp: 40, mass: 4, damage: 45, cooldown: 1.8, projectileType: 'ggbm', weaponGroup: 'rocket', lifetime: 3.0 }, 1, 2
+            { hp: 40, mass: 4, damage: 10, cooldown: 1.8, projectileType: 'ggbm', weaponGroup: 'rocket', lifetime: 3.0 }, 1, 2
         );
         d.baseSprite = new Sprite([0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 1, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 1, 0], 8, 15, 4, { 1: '#26d426', 2: '#333' });
         d.rotationOffset = Math.PI / 2;
@@ -129,7 +137,7 @@ export const PartsLibrary = {
     'rocketle': (() => {
         const d = new PartDef('rocketle', 'Rocketle', PartType.WEAPON,
             new Sprite([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 8, 8, 4, { 1: '#26d426', 2: '#333' }),
-            { hp: 20, mass: 2, damage: 18, cooldown: 3.5, burstCount: 2, burstInterval: 0.3, projectileType: 'rocket_le', weaponGroup: 'rocket', lifetime: 3.0 }, 1, 1
+            { hp: 20, mass: 2, damage: 4.8, cooldown: 3.5, burstCount: 2, burstInterval: 0.3, projectileType: 'rocket_le', weaponGroup: 'rocket', lifetime: 3.0 }, 1, 1
         );
         d.baseSprite = new Sprite([0, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 1, 0], 8, 8, 4, { 1: '#26d426', 2: '#333' });
         return d;
@@ -137,7 +145,7 @@ export const PartsLibrary = {
     'minigun': (() => {
         const d = new PartDef('minigun', 'Minigun', PartType.WEAPON,
             new Sprite([0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0], 15, 15, 4, { 1: '#26d426', 2: '#333' }),
-            { hp: 80, mass: 8, damage: 1.5, cooldown: 1.0, projectileType: 'mini_bullet', rampUp: true, maxRamp: 29.0, rampRate: 0.6, peakDuration: 5, overheatCooldown: 7, pelletCount: 3, spread: 0.05, pelletInterval: 0.02, barrelSpacing: 20, weaponGroup: 'velocity' }, 2, 2
+            { hp: 80, mass: 8, damage: 1.5, cooldown: 1.0, projectileType: 'mini_bullet', rampUp: true, maxRamp: 3, rampRate: 0.25, peakDuration: 5, overheatCooldown: 7, pelletCount: 3, spread: 0.05, pelletInterval: 0.02, barrelSpacing: 20, weaponGroup: 'velocity' }, 2, 2
         );
         d.baseSprite = new Sprite([0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0], 15, 15, 4, { 1: '#26d426', 2: '#333' });
         d.rotationOffset = 0;
@@ -160,7 +168,7 @@ export const PartsLibrary = {
 
     // LSR Weapon (Turret)
     'custom_1767999386292': (() => {
-        const d = new PartDef('custom_1767999386292', 'LSR', PartType.WEAPON, new Sprite([0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 1, 1, 0, 0], 8, 15, 4, { 1: '#26d426', 2: '#333' }), { hp: 40, mass: 6, cooldown: 2.7, damage: 50, projectileType: 'laser', weaponGroup: 'laser' }, 1, 2);
+        const d = new PartDef('custom_1767999386292', 'LSR', PartType.WEAPON, new Sprite([0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 1, 1, 1, 1, 0, 0], 8, 15, 4, { 1: '#26d426', 2: '#333' }), { hp: 40, mass: 6, cooldown: 2.7, damage: 27, projectileType: 'laser', weaponGroup: 'laser' }, 1, 2);
         d.baseSprite = new Sprite([0, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 1, 0], 8, 15, 4, { 1: '#26d426', 2: '#333' });
         d.rotationOffset = Math.PI / 2; // +90 degrees to align barrel
         d.turretDrawOffset = TILE_SIZE * 0.4; // Move barrel forward
@@ -172,7 +180,7 @@ export const PartsLibrary = {
 
     // RocketHE Weapon
     'custom_1768036702131': (() => {
-        const d = new PartDef('custom_1768036702131', 'RocketHE', PartType.WEAPON, new Sprite([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 15, 15, 4, { 1: '#26d426', 2: '#333' }), { hp: 80, mass: 8, cooldown: 7.8, damage: 30, projectileType: 'rocket_he', burstCount: 8, burstInterval: 0.1, aoeRadius: 60, weaponGroup: 'rocket' }, 2, 2);
+        const d = new PartDef('custom_1768036702131', 'RocketHE', PartType.WEAPON, new Sprite([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 15, 15, 4, { 1: '#26d426', 2: '#333' }), { hp: 80, mass: 8, cooldown: 7.8, damage: 8, projectileType: 'rocket_he', burstCount: 8, burstInterval: 0.1, aoeRadius: 60, weaponGroup: 'rocket' }, 2, 2);
         d.baseSprite = new Sprite([0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0], 15, 15, 4, { 1: '#26d426', 2: '#333' });
         d.rotationOffset = Math.PI / 2;
         return d;
@@ -191,7 +199,7 @@ export const PartsLibrary = {
     'custom_1768397007593': (() => {
         const d = new PartDef('custom_1768397007593', 'Saber', PartType.WEAPON,
             new Sprite([0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], 8, 8, 4, { 1: '#26d426', 2: '#333' }),
-            { hp: 20, mass: 2, damage: 4, cooldown: 2.5, chargeTime: 1.0, projectileType: 'saber', weaponGroup: 'laser' }, 1, 1
+            { hp: 20, mass: 2, damage: 1.5, cooldown: 2.5, chargeTime: 1.0, projectileType: 'saber', weaponGroup: 'laser' }, 1, 1
         );
         d.baseSprite = new Sprite([0, 1, 0, 1, 1, 1, 1, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 1, 1, 1, 1, 0, 1, 0], 8, 8, 4, { 1: '#26d426', 2: '#333' });
         return d;
@@ -207,7 +215,7 @@ export const PartsLibrary = {
     'custom_1768857172136': (() => {
         const d = new PartDef('custom_1768857172136', 'Sniper', PartType.WEAPON,
             new Sprite([0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0], 8, 15, 4, { 1: '#26d426', 2: '#333' }),
-            { hp: 40, mass: 4, damage: 60, cooldown: 3.5, projectileSpeed: 1200, weaponGroup: 'velocity' }, 1, 2
+            { hp: 40, mass: 4, damage: 28, cooldown: 3.5, projectileSpeed: 1200, range: 1200, weaponGroup: 'velocity' }, 1, 2
         );
         d.baseSprite = new Sprite([0, 1, 1, 1, 1, 1, 1, 0, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 1, 0, 0, 1, 1, 0, 0, 1, 0, 0, 0, 1, 1, 0, 1, 0, 1, 0, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 1, 0, 1, 0, 0, 1, 0, 1, 0, 1, 1, 1, 1, 1, 1, 0], 8, 15, 4, { 1: '#26d426', 2: '#333' });
         d.rotationOffset = Math.PI / 2;
@@ -246,7 +254,7 @@ export const PartsLibrary = {
         const bs = new Sprite([0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0], 15, 15, 4, { 1: '#26d426', 2: '#333' }, 0.300, 0.700);
 
         const d = new PartDef('custom_1769514097773', 'Nova Cluster', PartType.WEAPON, ts,
-            { hp: 80, mass: 8, damage: 25, cooldown: 4.0, projectileType: 'cluster_grenade', weaponGroup: 'rocket', barrelPosition: { x: 18.0, y: 0.0 } }, 2, 2
+            { hp: 80, mass: 8, damage: 9, cooldown: 4.0, projectileType: 'cluster_grenade', weaponGroup: 'rocket', barrelPosition: { x: 18.0, y: 0.0 } }, 2, 2
         );
         d.baseSprite = bs;
         d.drawTurretInInventory = true;
@@ -302,13 +310,30 @@ Object.assign(
     PartsLibrary,
     createArsenalPartCatalog(REQUESTED_ARSENAL_PART_SPECS),
     createArsenalPartCatalog(EXTRA_SUPPORT_PART_SPECS),
-    createArsenalPartCatalog(EXTRA_WEAPON_PART_SPECS)
+    createArsenalPartCatalog(EXTRA_WEAPON_PART_SPECS),
+    createArsenalPartCatalog(DOCTRINE_PART_SPECS)
 );
 
+function completePartDescription(definition, description) {
+    const text = String(description || '').trim().toLowerCase();
+    const sentenceCount = (text.match(/[.!?](?:\s|$)/g) || []).length;
+    if (sentenceCount >= 2 || definition.shopCategory === 'doctrine') return text;
+    if (definition.type === PartType.WEAPON) {
+        return `${text} its range, reload time, and weight are the price.`;
+    }
+    if (definition.type === PartType.DRONE) {
+        return `${text} destroyed drones take time to replace.`;
+    }
+    if (definition.type === PartType.HULL || definition.type === PartType.SHIELD) {
+        return `${text} the added mass makes the ship harder to move.`;
+    }
+    return `${text} it uses ship space and adds mass.`;
+}
+
 for (const [id, definition] of Object.entries(PartsLibrary)) {
-    const description = PART_DESCRIPTIONS[id];
+    const description = PART_DESCRIPTIONS[id] || definition.description;
     if (!description) throw new TypeError(`part ${id} has no plain-English description`);
-    definition.description = description;
+    definition.description = completePartDescription(definition, description);
 }
 
 validatePartsLibrary(PartsLibrary);
