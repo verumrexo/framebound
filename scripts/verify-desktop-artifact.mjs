@@ -42,7 +42,7 @@ export async function verifyDesktopArtifact({
         }
         : baseTauri;
     assert.ok(
-        ['release', 'dev', 'part-lab'].includes(flavor),
+        ['release', 'dev', 'part-lab', 'enemy-lab'].includes(flavor),
         `unsupported desktop flavor: ${flavor}`
     );
     const expected = {

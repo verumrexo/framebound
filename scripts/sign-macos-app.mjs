@@ -15,8 +15,10 @@ const productName = flavor === 'dev'
     ? 'Framebound Dev'
     : flavor === 'part-lab'
         ? 'Framebound Part Lab'
-        : 'Framebound';
-if (!['release', 'dev', 'part-lab'].includes(flavor)) {
+        : flavor === 'enemy-lab'
+            ? 'Framebound Enemy Lab'
+            : 'Framebound';
+if (!['release', 'dev', 'part-lab', 'enemy-lab'].includes(flavor)) {
     console.error(`unsupported desktop flavor: ${flavor}`);
     process.exit(1);
 }

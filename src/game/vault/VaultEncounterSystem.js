@@ -162,6 +162,7 @@ export class VaultEncounterSystem {
                 vault: true,
                 large: true
             });
+            if (!type) continue;
             const id = `e_${room.gridX}_${room.gridY}_vault_${state.spawnSerial++}`;
             const enemy = new Enemy(x, y, type, floor, room.random, id);
             enemy.maxHp *= 1.2;

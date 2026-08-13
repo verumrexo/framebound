@@ -19,6 +19,8 @@ const MAX_PART_LAB_MANIFEST_BYTES: usize = 8 * 1024 * 1024;
 const MAX_PART_LAB_ENTRIES: usize = 256;
 #[cfg(any(debug_assertions, feature = "part-lab"))]
 const MAX_PART_LAB_PIXELS: usize = 512;
+#[cfg(any(debug_assertions, feature = "part-lab"))]
+const MAX_ENEMY_LAB_MANIFEST_BYTES: usize = 1024 * 1024;
 const MAX_SMOKE_REPORT_BYTES: usize = 64 * 1024;
 const SAVE_FILE_NAME: &str = "run-save-v2.json";
 const SIGNAL_FORGE_PACK_FILE_NAME: &str = "signal-forge-pack-v1.json";
@@ -446,6 +448,61 @@ fn promote_part_lab_manifest_to(root: &Path, raw: &str) -> Result<(), String> {
         "part lab manifest",
     )?;
     Ok(())
+}
+
+#[cfg(any(debug_assertions, feature = "part-lab"))]
+#[tauri::command]
+fn promote_enemy_lab_manifest(raw: String) -> Result<String, String> {
+    let source_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .ok_or_else(|| "project source root is missing".to_string())?
+        .join("public")
+        .join("generated-enemies");
+    promote_enemy_lab_manifest_to(&source_root, &raw)?;
+    Ok(source_root.to_string_lossy().into_owned())
+}
+
+#[cfg(any(debug_assertions, feature = "part-lab"))]
+fn promote_enemy_lab_manifest_to(root: &Path, raw: &str) -> Result<(), String> {
+    if raw.len() > MAX_ENEMY_LAB_MANIFEST_BYTES {
+        return Err("enemy lab manifest exceeds size limit".into());
+    }
+    let value: serde_json::Value = serde_json::from_str(raw)
+        .map_err(|error| format!("invalid enemy lab manifest: {error}"))?;
+    if value.get("schemaVersion").and_then(serde_json::Value::as_u64) != Some(1)
+        || value.get("version").and_then(serde_json::Value::as_u64).is_none_or(|version| version == 0)
+        || value.get("modifiedAt").and_then(serde_json::Value::as_str).is_none_or(|stamp| stamp.is_empty() || stamp.len() > 64)
+    {
+        return Err("unsupported enemy lab manifest header".into());
+    }
+    let enemies = value.get("enemies").and_then(serde_json::Value::as_array)
+        .ok_or_else(|| "enemy lab manifest has no roster".to_string())?;
+    if enemies.len() != 30 { return Err("enemy lab manifest must contain 30 ships".into()); }
+    let mut ids = std::collections::HashSet::new();
+    for enemy in enemies {
+        let id = enemy.get("id").and_then(serde_json::Value::as_str)
+            .ok_or_else(|| "enemy lab ship has no id".to_string())?;
+        if !is_safe_part_lab_id(id) || !ids.insert(id) {
+            return Err("enemy lab manifest contains an invalid or duplicate id".into());
+        }
+        let parts = enemy.get("parts").and_then(serde_json::Value::as_array)
+            .ok_or_else(|| format!("enemy lab ship {id} has no parts array"))?;
+        if parts.len() > 64 { return Err(format!("enemy lab ship {id} has too many parts")); }
+        for part in parts {
+            let part_id = part.get("partId").and_then(serde_json::Value::as_str).unwrap_or_default();
+            let geometry_ok = ["x", "y", "rotation"].iter().all(|key| part.get(key).and_then(serde_json::Value::as_i64).is_some());
+            if !is_safe_part_lab_id(part_id) || !geometry_ok {
+                return Err(format!("enemy lab ship {id} has invalid part geometry"));
+            }
+        }
+    }
+    fs::create_dir_all(root).map_err(|error| error.to_string())?;
+    write_bounded_file(
+        &root.join("enemy-lab-overrides.json"),
+        raw,
+        MAX_ENEMY_LAB_MANIFEST_BYTES,
+        "enemy lab manifest",
+    )
 }
 
 #[cfg(any(debug_assertions, feature = "part-lab"))]
@@ -941,6 +998,7 @@ pub fn run() {
             write_signal_forge_pack,
             promote_signal_forge_pack,
             promote_part_lab_manifest,
+            promote_enemy_lab_manifest,
             write_peer_smoke_report
         ])
         .run(tauri::generate_context!())
@@ -1061,6 +1119,23 @@ mod tests {
             { "x": 30.5, "y": 10 }
         ]);
         manifest.to_string()
+    }
+
+    fn valid_enemy_lab_manifest() -> String {
+        let enemies = (0..30).map(|index| serde_json::json!({
+            "id": format!("enemy-{index}"),
+            "parts": if index == 0 {
+                vec![serde_json::json!({ "partId": "core", "x": 0, "y": 0, "rotation": 0 })]
+            } else {
+                Vec::new()
+            }
+        })).collect::<Vec<_>>();
+        serde_json::json!({
+            "schemaVersion": 1,
+            "version": 1,
+            "modifiedAt": "2026-08-13T12:00:00.000Z",
+            "enemies": enemies
+        }).to_string()
     }
 
     #[test]
@@ -1288,6 +1363,42 @@ mod tests {
         let oversized = "x".repeat(MAX_PART_LAB_MANIFEST_BYTES + 1);
         assert!(promote_part_lab_manifest_to(&root, &oversized).is_err());
         assert!(!root.exists());
+    }
+
+    #[test]
+    fn enemy_lab_promotion_writes_only_the_fixed_manifest_path() {
+        let root = test_path("generated-enemies");
+        promote_enemy_lab_manifest_to(&root, &valid_enemy_lab_manifest())
+            .expect("valid enemy lab manifest should promote");
+        let saved = fs::read_to_string(root.join("enemy-lab-overrides.json"))
+            .expect("enemy lab manifest should be readable");
+        assert!(saved.contains("enemy-0"));
+        assert!(!root.join("../enemy-lab-overrides.json").exists());
+        fs::remove_dir_all(root.parent().unwrap())
+            .expect("test directory should be removable");
+    }
+
+    #[test]
+    fn enemy_lab_promotion_rejects_bad_rosters_paths_and_sizes() {
+        let root = test_path("generated-enemies-invalid");
+        let mut bad_count = serde_json::from_str::<serde_json::Value>(&valid_enemy_lab_manifest())
+            .expect("fixture should parse");
+        bad_count["enemies"].as_array_mut().unwrap().pop();
+        assert!(promote_enemy_lab_manifest_to(&root, &bad_count.to_string()).is_err());
+
+        let mut path_like = serde_json::from_str::<serde_json::Value>(&valid_enemy_lab_manifest())
+            .expect("fixture should parse");
+        path_like["enemies"][0]["parts"][0]["partId"] = serde_json::json!("../escape");
+        assert!(promote_enemy_lab_manifest_to(&root, &path_like.to_string()).is_err());
+        assert!(promote_enemy_lab_manifest_to(
+            &root,
+            &"x".repeat(MAX_ENEMY_LAB_MANIFEST_BYTES + 1),
+        ).is_err());
+        assert!(!root.join("enemy-lab-overrides.json").exists());
+        if root.parent().unwrap().exists() {
+            fs::remove_dir_all(root.parent().unwrap())
+                .expect("test directory should be removable");
+        }
     }
 
     #[test]

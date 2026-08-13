@@ -16,6 +16,7 @@
     "desktop:build:release": "node scripts/build-desktop.mjs --flavor release",
     "desktop:build:dev": "node scripts/build-desktop.mjs --flavor dev",
     "desktop:build:part-lab": "node scripts/build-desktop.mjs --flavor part-lab",
+    "desktop:build:enemy-lab": "node scripts/build-desktop.mjs --flavor enemy-lab",
     "desktop:build:apps": "node scripts/build-desktop-apps.mjs",
     "desktop:build:app": "node scripts/build-desktop.mjs --flavor release",
     "desktop:verify": "node scripts/verify-desktop-artifact.mjs",

@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 
-for (const flavor of ['release', 'dev', 'part-lab']) {
+for (const flavor of ['release', 'dev', 'part-lab', 'enemy-lab']) {
     const result = spawnSync(
         process.execPath,
         [

@@ -7,7 +7,7 @@ const flavor = flavorIndex >= 0
     ? process.argv[flavorIndex + 1]
     : 'release';
 
-if (!['release', 'dev', 'part-lab'].includes(flavor)) {
+if (!['release', 'dev', 'part-lab', 'enemy-lab'].includes(flavor)) {
     throw new Error(`unsupported desktop flavor: ${flavor}`);
 }
 

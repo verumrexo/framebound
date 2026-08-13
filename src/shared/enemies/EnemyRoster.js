@@ -1,43 +1,29 @@
-export function selectEnemyType(floor, roll, {
-    vault = false,
-    large = false
-} = {}) {
-    if (vault && floor >= 5 && roll < 0.08) return 'hive_carrier';
+import { EnemyBlueprints } from './EnemyBlueprints.js';
 
-    const offset = vault ? 0.08 : 0;
-    if (floor >= 5) {
-        if (roll < offset + 0.10) return 'repair_tender';
-        if (roll < offset + (large ? 0.24 : 0.20)) return 'bulwark';
-        if (roll < offset + 0.32) return 'rocketeer';
-        if (roll < offset + 0.44) return 'sniper';
-        if (roll < offset + 0.57) return 'interceptor';
-        if (roll < offset + 0.70) return 'circler';
-        if (roll < 0.90) return 'striker';
-        return 'basic';
+export function getEligibleEnemies(floor, {
+    role = 'standard',
+    vault = false,
+    blueprints = EnemyBlueprints
+} = {}) {
+    const level = Number.isFinite(Number(floor)) ? Math.max(1, Math.round(Number(floor))) : 1;
+    return Object.values(blueprints).filter(entry => {
+        if (!entry.combatReady || entry.spawnWeight <= 0) return false;
+        if (level < entry.floor.min || level > entry.floor.max) return false;
+        if (role === 'boss') return entry.encounterRole === 'boss';
+        if (role === 'miniboss') return entry.encounterRole === 'miniboss';
+        if (vault) return entry.encounterRole !== 'boss';
+        return entry.encounterRole === 'standard';
+    });
+}
+
+export function selectEnemyType(floor, roll, options = {}) {
+    const eligible = getEligibleEnemies(floor, options);
+    if (eligible.length === 0) return null;
+    const total = eligible.reduce((sum, entry) => sum + entry.spawnWeight, 0);
+    let cursor = Math.min(0.999999999, Math.max(0, Number(roll) || 0)) * total;
+    for (const entry of eligible) {
+        cursor -= entry.spawnWeight;
+        if (cursor < 0) return entry.id;
     }
-    if (floor >= 4) {
-        if (roll < 0.08) return 'repair_tender';
-        if (roll < (large ? 0.22 : 0.16)) return 'bulwark';
-        if (roll < 0.30) return 'rocketeer';
-        if (roll < 0.43) return 'sniper';
-        if (roll < 0.57) return 'interceptor';
-        if (roll < 0.69) return 'circler';
-        if (roll < 0.88) return 'striker';
-        return 'basic';
-    }
-    if (floor >= 3) {
-        if (roll < (large ? 0.14 : 0.09)) return 'bulwark';
-        if (roll < 0.24) return 'sniper';
-        if (roll < 0.39) return 'interceptor';
-        if (roll < 0.54) return 'circler';
-        if (roll < 0.80) return 'striker';
-        return 'basic';
-    }
-    if (floor >= 2) {
-        if (roll < 0.18) return 'interceptor';
-        if (roll < 0.36) return 'circler';
-        if (roll < 0.68) return 'striker';
-        return 'basic';
-    }
-    return roll < 0.5 ? 'striker' : 'basic';
+    return eligible.at(-1)?.id || null;
 }

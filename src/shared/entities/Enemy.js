@@ -2,9 +2,14 @@ import { Projectile } from './Projectile.js';
 import { TILE_SIZE } from '../parts/PartDefinitions.js';
 import { PartsLibrary } from '../parts/Part.js';
 import { getEnemyBlueprint } from '../enemies/EnemyBlueprints.js';
+import {
+    createTacticalState,
+    noteTacticalShot,
+    updateTacticalEnemy
+} from '../enemies/EnemyTacticalAI.js';
 
 export class Enemy {
-    constructor(x, y, type = 'basic', floorLevel = 1, randomGen = null, id = null) {
+    constructor(x, y, type = 'nail', floorLevel = 1, randomGen = null, id = null, options = {}) {
         this.id = id || `enemy_${Math.floor(Math.random() * 1000000)}`; // Fallback random if not provided
         this.x = x;
         this.y = y;
@@ -25,8 +30,18 @@ export class Enemy {
         this.isWarpingIn = true;
         this.warpTimer = 1.0 + (this.random() * 1.0);
 
-        const blueprint = getEnemyBlueprint(type);
+        const blueprint = options.blueprint
+            ? structuredClone(options.blueprint)
+            : getEnemyBlueprint(type, { allowDraft: options.allowDraft === true });
+        if (!blueprint) throw new Error(`enemy blueprint ${type} is unavailable`);
+        this.blueprintId = blueprint.id;
+        this.name = blueprint.name;
+        this.tier = blueprint.tier;
+        this.encounterRole = blueprint.encounterRole;
+        this.isBoss = blueprint.encounterRole === 'boss';
         this.behavior = blueprint.behavior;
+        this.behaviorProfile = blueprint.behavior;
+        this.rewards = blueprint.rewards;
         this.shipParts = blueprint.parts;
         this.activeBursts = [];
         this.sprite = null;
@@ -34,6 +49,10 @@ export class Enemy {
         this.projectileType = null;
         this.circleAngle = this.random() * Math.PI * 2;
         this.circleDirection = this.random() < 0.5 ? 1 : -1;
+        this.vx = 0;
+        this.vy = 0;
+        this.acceleration = blueprint.stats.acceleration;
+        this.tacticalState = createTacticalState(this.random, this.behaviorProfile);
         this.supportCooldown = this.random() * 2;
         this.supportPulseTimer = 0;
         this.weaponCooldowns = this.shipParts.flatMap(part => {
@@ -53,7 +72,7 @@ export class Enemy {
         this.radius = TILE_SIZE * blueprint.stats.radiusTiles;
         this.speed = blueprint.stats.speed;
         this.turnRate = blueprint.stats.turnRate;
-        this.engagementDist = blueprint.stats.engagementDist;
+        this.engagementDist = blueprint.behavior.preferredMaxRange;
         this.detectionDist = blueprint.stats.detectionDist;
         this.damageMultiplier = blueprint.stats.damageMultiplier;
 
@@ -160,7 +179,7 @@ export class Enemy {
             this.lastFreezeTick = now;
 
             if (this.freezeMeter >= 3.0) {
-                const freezeDuration = (this.type === 'striker') ? 3.0 : 5.0;
+                const freezeDuration = this.isBoss ? 3.0 : 5.0;
                 this.frozenTimer = freezeDuration;
                 this.freezeMeter = 0;
             }
@@ -312,7 +331,7 @@ export class Enemy {
         return { hit: false };
     }
 
-    update(dt, playerX, playerY, projectiles, asteroids = [], lootCrates = [], allEnemies = [], room = null) {
+    update(dt, playerX, playerY, projectiles, asteroids = [], lootCrates = [], allEnemies = [], room = null, targetState = null) {
         if (this.isDead) return;
 
         this.tickStatuses(dt);
@@ -334,11 +353,6 @@ export class Enemy {
             return;
         }
 
-        // Calculate Aim Angle (Global)
-        if (playerX !== undefined && playerY !== undefined) {
-            this.aimAngle = Math.atan2(playerY - this.y, playerX - this.x);
-        }
-
         // Frozen Logic
         if (this.frozenTimer > 0) {
             return;
@@ -347,248 +361,21 @@ export class Enemy {
 
         if (this.empTimer > 0) return;
 
-        // Calculate vector to player
-        const dx = playerX - this.x;
-        const dy = playerY - this.y;
-        const distSq = dx * dx + dy * dy;
-        const dist = Math.sqrt(distSq);
-
-        if (this.spotted || dist < this.detectionDist) {
-            this.spotted = true;
-
-            // --- MOVEMENT LOGIC ---
-            let moveX = 0;
-            let moveY = 0;
-            let applyMovement = false;
-
-            if (this.behavior === 'orbiter' || this.behavior === 'flanker') {
-                // CIRCLER LOGIC
-                const orbitRange = this.engagementDist * 1.5;
-                const isOrbiting = dist <= orbitRange;
-
-                if (isOrbiting) {
-                    // ORBIT
-                    const currentAngle = Math.atan2(this.y - playerY, this.x - playerX);
-                    const direction = this.circleDirection;
-                    const orbitSpeed = this.behavior === 'flanker' ? 0.95 : 0.64;
-                    const nextAngle = currentAngle + orbitSpeed * direction * dt;
-                    const desiredRadius = this.engagementDist * 1.2;
-                    const nextRadius = dist + (desiredRadius - dist) * 2.0 * dt;
-
-                    this.x = playerX + Math.cos(nextAngle) * nextRadius;
-                    this.y = playerY + Math.sin(nextAngle) * nextRadius;
-
-                    const targetRotation = nextAngle + (Math.PI / 2);
-                    let diff = targetRotation - this.rotation;
-                    while (diff < -Math.PI) diff += Math.PI * 2;
-                    while (diff > Math.PI) diff -= Math.PI * 2;
-
-                    const maxStep = this.turnRate * dt;
-                    if (Math.abs(diff) > maxStep) {
-                        this.rotation += Math.sign(diff) * maxStep;
-                    } else {
-                        this.rotation = targetRotation;
-                    }
-                    applyMovement = false;
-                } else {
-                    // APPROACH
-                    const targetRotation = Math.atan2(dy, dx);
-                    let diff = targetRotation - this.rotation;
-                    while (diff < -Math.PI) diff += Math.PI * 2;
-                    while (diff > Math.PI) diff -= Math.PI * 2;
-
-                    const maxStep = this.turnRate * dt;
-                    if (Math.abs(diff) > maxStep) {
-                        this.rotation += Math.sign(diff) * maxStep;
-                    } else {
-                        this.rotation = targetRotation;
-                    }
-                    moveX = Math.cos(this.rotation) * this.speed * dt;
-                    moveY = Math.sin(this.rotation) * this.speed * dt;
-                    applyMovement = true;
-                }
-
-            } else if (this.behavior === 'carrier' || this.behavior === 'support') {
-                // HIVE CARRIER LOGIC - FLEE/COWARD
-
-                // Leash Logic (Room Based)
-                let tooFar = false;
-                if (room) {
-                    // Start Room might be cleared, but we still respect its bounds if passed
-                    // room.x/y/width/height are in WORLD PIXELS
-                    const roomWorldCX = room.x + room.width / 2;
-                    const roomWorldCY = room.y + room.height / 2;
-                    const roomRadius = (Math.min(room.width, room.height) / 2) * 0.9;
-
-                    const rdx = this.x - roomWorldCX;
-                    const rdy = this.y - roomWorldCY;
-                    if (rdx * rdx + rdy * rdy > roomRadius * roomRadius) {
-                        tooFar = true;
-                        // Turn back to room center
-                        var targetRotation = Math.atan2(-rdy, -rdx);
-                    }
-                } else if (dist > 1500) {
-                    // Fallback Leash to player if no room info
-                    tooFar = true;
-                    var targetRotation = Math.atan2(dy, dx);
-                }
-
-                if (!tooFar) {
-                    if (dist < this.engagementDist) {
-                        // Too close! Run away
-                        const angleToPlayer = Math.atan2(dy, dx);
-                        targetRotation = angleToPlayer + Math.PI;
-                        applyMovement = true;
-                    } else {
-                        // Just right? Drift slowly
-                        targetRotation = this.rotation;
-                        // Add slight drift
-                        moveX = Math.cos(this.rotation) * this.speed * 0.2 * dt;
-                        moveY = Math.sin(this.rotation) * this.speed * 0.2 * dt;
-                        this.x += moveX;
-                        this.y += moveY;
-                        applyMovement = false; // We handled it manually
-                    }
-                } else {
-                    applyMovement = true; // Move back to center
-                }
-                // (Block merged)
-
-                // DEBUG TARGET ROTATION
-                if (typeof targetRotation === 'undefined' || isNaN(targetRotation)) {
-                    console.error('[Enemy] targetRotation is NaN/Undefined!', {
-                        type: this.type,
-                        room: !!room,
-                        tooFar,
-                        dist,
-                        x: this.x,
-                        y: this.y
-                    });
-                    // Rescue
-                    targetRotation = this.rotation;
-                }
-
-                // Rotation Smoothing
-                let diff = targetRotation - this.rotation;
-                while (diff > Math.PI) diff -= Math.PI * 2;
-                while (diff < -Math.PI) diff += Math.PI * 2;
-
-                const maxStep = this.turnRate * dt;
-                if (Math.abs(diff) > maxStep) {
-                    this.rotation += Math.sign(diff) * maxStep;
-                } else {
-                    this.rotation = targetRotation;
-                }
-
-                if (applyMovement) {
-                    moveX = Math.cos(this.rotation) * this.speed * dt;
-                    moveY = Math.sin(this.rotation) * this.speed * dt;
-                }
-
-                if (this.behavior === 'carrier' && this.weaponCooldowns.length > 0) {
-                    this.weaponCooldowns = [];
-                }
-            } else {
-                // STANDARD ENEMY LOGIC
-                const targetRotation = Math.atan2(dy, dx);
-                let diff = targetRotation - this.rotation;
-                while (diff > Math.PI) diff -= Math.PI * 2;
-                while (diff < -Math.PI) diff += Math.PI * 2;
-
-                const maxStep = this.turnRate * dt;
-                if (Math.abs(diff) > maxStep) {
-                    this.rotation += Math.sign(diff) * maxStep;
-                } else {
-                    this.rotation = targetRotation;
-                }
-
-                if (dist > this.engagementDist) {
-                    moveX = Math.cos(this.rotation) * this.speed * dt;
-                    moveY = Math.sin(this.rotation) * this.speed * dt;
-                    applyMovement = true;
-                }
-            }
-
-            if (this.behavior === 'support') {
-                this.supportCooldown -= dt;
-                if (this.supportCooldown <= 0) {
-                    const damaged = allEnemies
-                        .filter(other =>
-                            other !== this &&
-                            !other.isDead &&
-                            other.hp < other.maxHp &&
-                            Math.hypot(other.x - this.x, other.y - this.y) <= 600
-                        )
-                        .sort((a, b) =>
-                            (a.hp / a.maxHp) - (b.hp / b.maxHp)
-                        )[0];
-                    if (damaged) {
-                        damaged.hp = Math.min(
-                            damaged.maxHp,
-                            damaged.hp + Math.max(8, damaged.maxHp * 0.08)
-                        );
-                        this.supportPulseTimer = 0.45;
-                        this.supportTargetX = damaged.x;
-                        this.supportTargetY = damaged.y;
-                        this.supportCooldown = 3;
-                    } else {
-                        this.supportCooldown = 0.5;
-                    }
-                }
-            }
-
-            // --- OBSTACLE AVOIDANCE (Only if applying movement) ---
-            if (applyMovement) {
-                const avoidRadius = this.radius + 60;
-                let avoidX = 0;
-                let avoidY = 0;
-
-                // Asteroids
-                for (const asteroid of asteroids) {
-                    if (asteroid.isDead || asteroid.isBroken) continue;
-                    const adx = this.x - asteroid.x;
-                    const ady = this.y - asteroid.y;
-                    const aDist = Math.sqrt(adx * adx + ady * ady);
-                    const minDist = avoidRadius + asteroid.radius;
-                    if (aDist < minDist && aDist > 0) {
-                        const strength = (minDist - aDist) / minDist;
-                        avoidX += (adx / aDist) * strength * this.speed * dt * 2;
-                        avoidY += (ady / aDist) * strength * this.speed * dt * 2;
-                    }
-                }
-
-                // Loot Crates
-                for (const crate of lootCrates) {
-                    if (crate.isOpened) continue;
-                    const cdx = this.x - crate.x;
-                    const cdy = this.y - crate.y;
-                    const cDist = Math.sqrt(cdx * cdx + cdy * cdy);
-                    const minDist = avoidRadius + crate.radius;
-                    if (cDist < minDist && cDist > 0) {
-                        const strength = (minDist - cDist) / minDist;
-                        avoidX += (cdx / cDist) * strength * this.speed * dt * 2;
-                        avoidY += (cdy / cDist) * strength * this.speed * dt * 2;
-                    }
-                }
-
-                this.x += moveX + avoidX;
-                this.y += moveY + avoidY;
-            }
-        }
-
-        // --- ENEMY SEPARATION (prevent stacking) ---
-        for (const other of allEnemies) {
-            if (other === this || other.isDead) continue;
-            const ex = this.x - other.x;
-            const ey = this.y - other.y;
-            const eDist = Math.sqrt(ex * ex + ey * ey);
-            const minSep = 60; // Minimum separation distance
-            if (eDist < minSep && eDist > 0) {
-                const pushStrength = (minSep - eDist) / minSep;
-                this.x += (ex / eDist) * pushStrength * 50 * dt;
-                this.y += (ey / eDist) * pushStrength * 50 * dt;
-            }
-        }
+        const tactical = updateTacticalEnemy(this, dt, {
+            ...(targetState || {}),
+            x: playerX,
+            y: playerY
+        }, {
+            projectiles,
+            asteroids,
+            lootCrates,
+            allies: allEnemies,
+            room
+        });
+        this.aimAngle = tactical.aimAngle;
+        this.canFireTactical = tactical.canFire;
+        this.spotted = true;
+        this.updateSpecialAction(dt, allEnemies);
 
         // --- SHOOTING LOGIC ---
         if (this.weaponCooldowns && this.weaponCooldowns.length > 0) {
@@ -612,7 +399,9 @@ export class Enemy {
 
                     const dx = playerX - worldX;
                     const dy = playerY - worldY;
-                    const angleToPlayer = Math.atan2(dy, dx);
+                    const angleToPlayer = Number.isFinite(this.aimAngle)
+                        ? this.aimAngle
+                        : Math.atan2(dy, dx);
 
                     const spread = (this.random() - 0.5) * (burst.def.stats.spread || 0);
                     const pType = burst.def.stats.projectileType || 'bullet';
@@ -621,6 +410,7 @@ export class Enemy {
                     const finalDamage = baseDamage * (this.damageMultiplier || 1);
 
                     this.spawnProjectile(projectiles, worldX, worldY, angleToPlayer + spread, pType, pSpeed, finalDamage);
+                    noteTacticalShot(this);
 
                     burst.count--;
                     if (burst.count <= 0) {
@@ -642,6 +432,7 @@ export class Enemy {
                     wep.cooldown -= dt;
                     continue;
                 }
+                if (!this.canFireTactical) continue;
 
                 // Ready to fire (or start charging)
                 const chargeStats = wep.def.stats.chargeTime || 0;
@@ -674,7 +465,9 @@ export class Enemy {
 
                     const dx = playerX - worldX;
                     const dy = playerY - worldY;
-                    const currentAngleToPlayer = Math.atan2(dy, dx);
+                    const currentAngleToPlayer = Number.isFinite(this.aimAngle)
+                        ? this.aimAngle
+                        : Math.atan2(dy, dx);
 
                     if (wep.chargeTimer < lockThreshold) {
                         // Track Player
@@ -696,6 +489,7 @@ export class Enemy {
                         const fireAngle = (wep.lockedAngle !== null ? wep.lockedAngle : currentAngleToPlayer) + spread;
 
                         this.spawnProjectile(projectiles, worldX, worldY, fireAngle, pType, pSpeed, finalDamage);
+                        noteTacticalShot(this);
 
                         // Reset
                         wep.cooldown = wep.def.stats.cooldown || 2;
@@ -734,7 +528,9 @@ export class Enemy {
 
                         const dx = playerX - worldX;
                         const dy = playerY - worldY;
-                        const angleToPlayer = Math.atan2(dy, dx);
+                        const angleToPlayer = Number.isFinite(this.aimAngle)
+                            ? this.aimAngle
+                            : Math.atan2(dy, dx);
 
                         const spread = (this.random() - 0.5) * (wep.def.stats.spread || 0);
                         const pType = wep.def.stats.projectileType || 'bullet';
@@ -743,6 +539,7 @@ export class Enemy {
                         const finalDamage = baseDamage * (this.damageMultiplier || 1);
 
                         this.spawnProjectile(projectiles, worldX, worldY, angleToPlayer + spread, pType, pSpeed, finalDamage);
+                        noteTacticalShot(this);
                         wep.cooldown = wep.def.stats.cooldown || 2;
                     }
                 }
@@ -758,6 +555,25 @@ export class Enemy {
                 }
             }
         }
+    }
+
+    updateSpecialAction(dt, allEnemies) {
+        if (this.behaviorProfile?.specialAction !== 'support') return;
+        this.supportCooldown -= Math.max(0, Math.min(0.05, Number(dt) || 0));
+        if (this.supportCooldown > 0) return;
+        const damaged = (allEnemies || [])
+            .filter(other => other !== this && !other.isDead && other.hp < other.maxHp &&
+                Math.hypot(other.x - this.x, other.y - this.y) <= 600)
+            .sort((a, b) => (a.hp / a.maxHp) - (b.hp / b.maxHp))[0];
+        if (!damaged) {
+            this.supportCooldown = 0.5;
+            return;
+        }
+        damaged.hp = Math.min(damaged.maxHp, damaged.hp + Math.max(8, damaged.maxHp * 0.08));
+        this.supportPulseTimer = 0.45;
+        this.supportTargetX = damaged.x;
+        this.supportTargetY = damaged.y;
+        this.supportCooldown = 3;
     }
 
 }

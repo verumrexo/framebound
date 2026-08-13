@@ -49,7 +49,8 @@ export class EnemyLifecycleSystem {
                         game.asteroids,
                         game.lootCrates,
                         game.enemies,
-                        game.currentRoom
+                        game.currentRoom,
+                        target
                     );
                 } else if (enemy.interpolate) {
                     enemy.interpolate(
@@ -116,7 +117,12 @@ export class EnemyLifecycleSystem {
                 dt,
                 target?.x,
                 target?.y,
-                game.projectiles
+                game.projectiles,
+                game.asteroids,
+                game.lootCrates,
+                [...game.enemies, ...game.bosses],
+                game.currentRoom,
+                target
             );
             if (boss.isDead) anyDead = true;
         }
@@ -145,6 +151,20 @@ export class EnemyLifecycleSystem {
 
         let nearest = null;
         let nearestDistance = Infinity;
+        if (enemy.behaviorProfile?.targetPriority === 'weakest') {
+            return [...targets].sort((a, b) => {
+                const aRatio = (a.ship?.hp ?? a.hp ?? 1) / Math.max(1, a.ship?.maxHp ?? a.maxHp ?? 1);
+                const bRatio = (b.ship?.hp ?? b.hp ?? 1) / Math.max(1, b.ship?.maxHp ?? b.maxHp ?? 1);
+                return aRatio - bRatio;
+            })[0];
+        }
+        if (enemy.behaviorProfile?.targetPriority === 'strongest') {
+            return [...targets].sort((a, b) => {
+                const aHp = a.ship?.hp ?? a.hp ?? 0;
+                const bHp = b.ship?.hp ?? b.hp ?? 0;
+                return bHp - aHp;
+            })[0];
+        }
         for (const target of targets) {
             const dx = target.x - enemy.x;
             const dy = target.y - enemy.y;
@@ -252,15 +272,19 @@ export class EnemyLifecycleSystem {
                 );
             }
 
-            for (let j = 0; j < 10; j++) {
+            const dropCount = boss.rewards?.drops ?? 10;
+            const xpTotal = boss.rewards?.xp ?? 500;
+            for (let j = 0; j < dropCount; j++) {
                 game.xpOrbs.push(new this.XPOrbClass(
                     boss.x + (this.random() - 0.5) * 100,
                     boss.y + (this.random() - 0.5) * 100,
-                    50
+                    dropCount > 0 ? xpTotal / dropCount : 0
                 ));
             }
+            const gold = boss.rewards?.gold ?? 0;
+            if (gold > 0) game.goldOrbs.push(new this.GoldOrbClass(boss.x, boss.y, gold));
 
-            game.score *= 2;
+            game.score = game.score * 2 + (boss.rewards?.score ?? 0);
             game.showNotification(
                 `SCORE DOUBLED! ${game.score}`,
                 '#ffff00'
@@ -276,19 +300,17 @@ export class EnemyLifecycleSystem {
             const enemy = game.enemies[i];
             if (!enemy.isDead) continue;
 
-            const dropCount = enemy.type === 'striker' ? 3 : 2;
+            const dropCount = enemy.rewards?.drops ?? 2;
+            const xpTotal = enemy.rewards?.xp ?? 20;
             for (let j = 0; j < dropCount; j++) {
                 game.xpOrbs.push(new this.XPOrbClass(
                     enemy.x + (this.random() - 0.5) * 20,
                     enemy.y + (this.random() - 0.5) * 20,
-                    10
+                    dropCount > 0 ? xpTotal / dropCount : 0
                 ));
             }
-            game.goldOrbs.push(new this.GoldOrbClass(
-                enemy.x,
-                enemy.y,
-                1
-            ));
+            const gold = enemy.rewards?.gold ?? 1;
+            if (gold > 0) game.goldOrbs.push(new this.GoldOrbClass(enemy.x, enemy.y, gold));
 
             const deathSound = this.random() > 0.5
                 ? 'enemy_death1'
@@ -297,16 +319,15 @@ export class EnemyLifecycleSystem {
                 volume: 0.5,
                 randomizePitch: 0.2
             });
-            game.score += enemy.type === 'striker' ? 50 : 10;
+            game.score += enemy.rewards?.score ?? 10;
             game.enemies.splice(i, 1);
         }
     }
 }
 
 function isOrbitingEnemy(enemy) {
-    return enemy.type === 'circler' ||
-        enemy.behavior === 'orbiter' ||
-        enemy.behavior === 'flanker';
+    return enemy.behaviorProfile?.movementStyle === 'orbit' ||
+        enemy.behaviorProfile?.movementStyle === 'flank';
 }
 
 function isHackedEnemy(enemy) {

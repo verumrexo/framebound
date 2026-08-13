@@ -7,5 +7,5 @@ export function resolvePartLabDevelopmentFlag({
     runtimeFlag = globalThis.__FRAMEBOUND_DEV__,
     flavor = ''
 } = {}) {
-    return viteDev === true || runtimeFlag === true || flavor === 'dev' || flavor === 'part-lab';
+    return viteDev === true || runtimeFlag === true || flavor === 'dev' || flavor === 'part-lab' || flavor === 'enemy-lab';
 }

@@ -5,7 +5,7 @@ const flavor = process.argv.includes('--flavor')
     ? process.argv[process.argv.indexOf('--flavor') + 1]
     : 'release';
 
-if (!['release', 'dev', 'part-lab'].includes(flavor)) {
+if (!['release', 'dev', 'part-lab', 'enemy-lab'].includes(flavor)) {
     throw new Error(`unsupported frontend flavor: ${flavor}`);
 }
 

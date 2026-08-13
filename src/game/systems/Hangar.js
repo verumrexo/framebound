@@ -29,16 +29,20 @@ export class Hangar {
         this.ui.id = 'hangar-ui';
         this.ui.style.display = 'none';
         this.ui.innerHTML = `
+            <header class="hangar-commandbar">
+                <div><span class="hangar-live-dot"></span><b>frame configuration</b><small>changes stay local until you save and close</small></div>
+                <div class="hangar-command-hints"><span>place <b>lmb</b></span><span>remove <b>rmb</b></span><span>rotate <b>r</b></span><span>commit <b>tab</b></span></div>
+            </header>
             <div class="workshop-layout">
                 <section id="stats-panel" class="workshop-panel workshop-stats">
-                    <div class="ui-kicker">active frame // draft telemetry</div>
-                    <div class="workshop-title">vessel status</div>
+                    <div class="ui-kicker">live build telemetry</div>
+                    <div class="workshop-title">performance</div>
                     <div id="stat-content"></div>
                 </section>
 
                 <section class="workshop-panel workshop-inventory">
-                    <div class="ui-kicker">assembly inventory // available units</div>
-                    <div class="workshop-title">ship configuration</div>
+                    <div class="ui-kicker">available hardware</div>
+                    <div class="workshop-title">module rack</div>
                     <div id="part-list" class="workshop-list"></div>
                     <div id="utility-btns"></div>
                 </section>
@@ -68,15 +72,6 @@ export class Hangar {
             this.tooltip.style.left = (e.clientX + 15) + 'px';
             this.tooltip.style.top = (e.clientY + 15) + 'px';
         });
-
-        // Instructions
-        const instructionsDiv = document.createElement('div');
-        instructionsDiv.className = 'workshop-instructions';
-        instructionsDiv.innerHTML = `
-            lmb // place &nbsp;&nbsp; rmb // remove<br>
-            r // rotate &nbsp;&nbsp; tab // save and close
-        `;
-        this.ui.appendChild(instructionsDiv);
 
         this.updateUI();
     }

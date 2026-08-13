@@ -4,6 +4,7 @@ import { SaveManager } from './game/systems/SaveManager.js'
 import { PartsLibrary } from './shared/parts/Part.js'
 import { loadPromotedPartLabManifest, applyPartLabManifest } from './game/dev/PartLabManifest.js'
 import { resolvePartLabDevelopmentFlag } from './game/dev/PartLabEnvironment.js'
+import { loadPromotedEnemyLabManifest, applyPromotedEnemyLabManifest } from './game/dev/EnemyLabManifest.js'
 
 async function boot() {
   await SaveManager.hydrateDesktopBackup();
@@ -58,7 +59,8 @@ async function boot() {
     let authoring = {};
     const flavor = import.meta.env?.VITE_FRAMEBOUND_FLAVOR;
     const standalonePartLab = flavor === 'part-lab';
-    const authoringBuild = import.meta.env?.DEV === true || flavor === 'dev' || standalonePartLab;
+    const standaloneEnemyLab = flavor === 'enemy-lab';
+    const authoringBuild = import.meta.env?.DEV === true || flavor === 'dev' || standalonePartLab || standaloneEnemyLab;
     if (authoringBuild) {
       authoring = await import('./game/dev/AuthoringWindows.js');
     }
@@ -69,6 +71,12 @@ async function boot() {
     } catch (error) {
       console.warn('[Boot] promoted part lab manifest ignored:', error);
     }
+    try {
+      const enemyLabManifest = await loadPromotedEnemyLabManifest();
+      if (enemyLabManifest) applyPromotedEnemyLabManifest(enemyLabManifest);
+    } catch (error) {
+      console.warn('[Boot] promoted enemy lab manifest ignored:', error);
+    }
     const game = new Game(canvas, {
       partLabManifest,
       isDevelopment: resolvePartLabDevelopmentFlag({
@@ -77,12 +85,17 @@ async function boot() {
       }),
       partLabWindowClass: authoring.PartLabWindow,
       signalForgeWindowClass: authoring.SignalForgeWindow,
-      partLabStandalone: standalonePartLab
+      enemyLabWindowClass: authoring.EnemyLabWindow,
+      partLabStandalone: standalonePartLab,
+      enemyLabStandalone: standaloneEnemyLab
     });
     window.game = game;
     if (standalonePartLab) {
       document.documentElement.dataset.frameboundFlavor = 'part-lab';
       game.partLabWindow.open();
+    } else if (standaloneEnemyLab) {
+      document.documentElement.dataset.frameboundFlavor = 'enemy-lab';
+      game.enemyLabWindow.open();
     } else {
       game.start();
     }

@@ -1,8 +1,8 @@
 import { PartsLibrary } from '../../shared/parts/Part.js';
 import { Asteroid } from '../../shared/entities/Asteroid.js';
-import { Boss } from '../../shared/entities/Boss.js';
 import { Drone } from '../../shared/entities/Drone.js';
 import { Enemy } from '../../shared/entities/Enemy.js';
+import { getEnemyBlueprint } from '../../shared/enemies/EnemyBlueprints.js';
 import { GoldOrb } from '../../shared/entities/GoldOrb.js';
 import { HPOrb } from '../../shared/entities/HPOrb.js';
 import { ItemPickup } from '../../shared/entities/ItemPickup.js';
@@ -34,7 +34,8 @@ const ENEMY_STATE_KEYS = [
     'shootRate', 'shootCooldown', 'aimAngle', 'coopTargetId',
     'circleAngle', 'circleDirection', 'supportCooldown',
     'supportPulseTimer', 'supportTargetX', 'supportTargetY',
-    'empTimer', 'hackTimer', 'hackedByPlayerId'
+    'empTimer', 'hackTimer', 'hackedByPlayerId', 'vx', 'vy',
+    'blueprintId', 'encounterRole', 'isBoss'
 ];
 const PROJECTILE_STATE_KEYS = [
     'x', 'y', 'vx', 'vy', 'angle', 'type', 'owner', 'damage',
@@ -177,8 +178,8 @@ export function restoreActiveWorld(game, state) {
     if (!state) return;
 
     game.currentRoom?.activate?.(game);
-    game.enemies = state.enemies.map(data => restoreEnemy(data, game));
-    game.bosses = state.bosses.map(data => restoreEnemy(data, game));
+    game.enemies = state.enemies.map(data => restoreEnemy(data, game)).filter(Boolean);
+    game.bosses = state.bosses.map(data => restoreEnemy(data, game)).filter(Boolean);
     game.projectiles = state.projectiles.map(restoreProjectile);
     game.drones = state.drones.map(restoreDrone);
     game.decoys = (state.decoys || []).map(restoreDecoy);
@@ -193,6 +194,11 @@ export function restoreActiveWorld(game, state) {
     game.vaultChests = (state.vaultChests || []).map(restoreVaultChest);
     if (game.currentRoom) {
         game.currentRoom.enemies = game.enemies;
+        if (game.enemies.length === 0 && game.bosses.length === 0 &&
+            ((state.enemies?.length || 0) > 0 || (state.bosses?.length || 0) > 0)) {
+            game.currentRoom.locked = false;
+            game.currentRoom.cleared = true;
+        }
         game.currentRoom.vaultState = restoreVaultState(
             state.vaultState,
             game.vaultChests
@@ -240,7 +246,7 @@ function snapshotEnemy(enemy) {
     const partIndex = part => enemy.shipParts?.indexOf(part) ?? -1;
 
     return {
-        kind: enemy instanceof Boss || enemy.type === 'boss' ? 'boss' : 'enemy',
+        kind: enemy.isBoss || enemy.encounterRole === 'boss' ? 'boss' : 'enemy',
         id: String(enemy.id || '').slice(0, 100),
         type: String(enemy.type || 'basic').slice(0, 40),
         floorLevel: finiteOr(enemy.floorLevel, 1),
@@ -263,21 +269,18 @@ function snapshotEnemy(enemy) {
 }
 
 function restoreEnemy(data, game) {
-    const enemy = data.kind === 'boss'
-        ? new Boss(data.state.x, data.state.y, data.level, deterministicRandom)
-        : new Enemy(
-            data.state.x,
-            data.state.y,
-            data.type,
-            data.floorLevel,
-            deterministicRandom,
-            data.id
-        );
+    const blueprint = getEnemyBlueprint(data.type);
+    if (!blueprint) return null;
+    const enemy = new Enemy(
+        data.state.x,
+        data.state.y,
+        data.type,
+        data.floorLevel,
+        deterministicRandom,
+        data.id
+    );
 
     enemy.shipParts = data.shipParts.map(part => ({ ...part }));
-    if (data.kind === 'boss') {
-        enemy.recalculateStats();
-    }
     applyState(enemy, data.state, ENEMY_STATE_KEYS);
     enemy.weaponCooldowns = data.weaponCooldowns.flatMap(weapon => {
         const part = enemy.shipParts[weapon.partIndex];

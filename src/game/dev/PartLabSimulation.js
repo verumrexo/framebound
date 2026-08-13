@@ -320,17 +320,20 @@ function makePartLabEnemy(
     const enemy = new EnemyClass(
         x,
         y,
-        'repair_tender',
+        'patcher',
         1,
         random,
-        'part_lab_test_enemy'
+        'part_lab_test_enemy',
+        { allowDraft: true }
     );
 
     // Keep the real Enemy movement and hit logic, but remove every normal
     // weapon route. The adapter below owns the single deterministic dart.
     enemy.isWarpingIn = false;
     enemy.warpTimer = 0;
-    enemy.behavior = 'orbiter';
+    enemy.behaviorProfile.movementStyle = 'orbit';
+    enemy.behaviorProfile.preferredMinRange = 500;
+    enemy.behaviorProfile.preferredMaxRange = 650;
     enemy.engagementDist = 600;
     enemy.detectionDist = Number.POSITIVE_INFINITY;
     enemy.speed = 40;

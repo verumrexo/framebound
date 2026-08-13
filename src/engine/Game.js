@@ -62,8 +62,10 @@ export class Game {
         partLabManifest = null,
         isDevelopment = false,
         partLabWindowClass = null,
+        enemyLabWindowClass = null,
         signalForgeWindowClass = null,
-        partLabStandalone = false
+        partLabStandalone = false,
+        enemyLabStandalone = false
     } = {}) {
         // Graphics Settings
         this.graphics = {
@@ -200,6 +202,9 @@ export class Game {
         this.devTools = new DevTools(this, { signalForgeWindowClass });
         this.partLabWindow = this.isDevelopment && partLabWindowClass
             ? new partLabWindowClass(this, { standalone: partLabStandalone })
+            : null;
+        this.enemyLabWindow = this.isDevelopment && enemyLabWindowClass
+            ? new enemyLabWindowClass(this, { standalone: enemyLabStandalone })
             : null;
         this.gameSettings = new GameSettings(this);
         this.pauseOverlay = null;

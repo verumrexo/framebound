@@ -3,11 +3,25 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 const { Enemy, getEnemyFloorScaling } = await import('./Enemy.js');
+const { BASE_ENEMY_BLUEPRINTS } = await import('../enemies/EnemyBlueprints.js');
 
-test('enemy weapon spread uses gameplay rng instead of global rng', () => {
-    const enemy = new Enemy(0, 0, 'basic', 1, () => 0.5, 'enemy_test');
+function makeEnemy(id = 'nail', specialAction = 'none') {
+    const blueprint = structuredClone(BASE_ENEMY_BLUEPRINTS[id]);
+    blueprint.parts = [
+        { x: 0, y: 0, partId: 'core', rotation: 0 },
+        { x: 1, y: 0, partId: 'gun_basic', rotation: 0 }
+    ];
+    blueprint.behavior.specialAction = specialAction;
+    blueprint.behavior.aimAccuracy = 1;
+    const enemy = new Enemy(0, 0, id, 1, () => 0.5, `${id}_test`, { blueprint, allowDraft: true });
     enemy.warpTimer = 0;
     enemy.isWarpingIn = false;
+    enemy.tacticalState.burstPauseTimer = 0;
+    return enemy;
+}
+
+test('enemy weapon spread uses gameplay rng instead of global rng', () => {
+    const enemy = makeEnemy();
     enemy.spotted = true;
     enemy.engagementDist = 1000;
     enemy.random = () => 1;
@@ -43,14 +57,7 @@ test('floor scaling grows without the old exponential stat explosion', () => {
 });
 
 test('repair tenders heal the most damaged nearby ally on a cooldown', () => {
-    const tender = new Enemy(
-        0,
-        0,
-        'repair_tender',
-        1,
-        () => 0.5,
-        'tender'
-    );
+    const tender = makeEnemy('patcher', 'support');
     const ally = {
         x: 100,
         y: 0,
@@ -70,9 +77,7 @@ test('repair tenders heal the most damaged nearby ally on a cooldown', () => {
 });
 
 test('emp freezes movement and firing while its timer still ticks', () => {
-    const enemy = new Enemy(0, 0, 'basic', 1, () => 0.5, 'emp_test');
-    enemy.warpTimer = 0;
-    enemy.isWarpingIn = false;
+    const enemy = makeEnemy();
     enemy.spotted = true;
     enemy.empTimer = 1;
     enemy.weaponCooldowns = [{
@@ -100,9 +105,7 @@ test('emp freezes movement and firing while its timer still ticks', () => {
 });
 
 test('hacked enemies fire allied projectiles and ownership expires cleanly', () => {
-    const enemy = new Enemy(0, 0, 'basic', 1, () => 0.5, 'hacked_test');
-    enemy.warpTimer = 0;
-    enemy.isWarpingIn = false;
+    const enemy = makeEnemy();
     enemy.spotted = true;
     enemy.hackTimer = 1;
     enemy.hackedByPlayerId = 'guest_1';

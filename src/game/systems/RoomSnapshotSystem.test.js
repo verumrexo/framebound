@@ -8,6 +8,7 @@ const { Boss } = await import('../../shared/entities/Boss.js');
 const { Drone } = await import('../../shared/entities/Drone.js');
 const { Decoy } = await import('../../shared/entities/Decoy.js');
 const { Enemy } = await import('../../shared/entities/Enemy.js');
+const { applyEnemyBlueprintManifest, BASE_ENEMY_BLUEPRINTS } = await import('../../shared/enemies/EnemyBlueprints.js');
 const { GoldOrb } = await import('../../shared/entities/GoldOrb.js');
 const { HPOrb } = await import('../../shared/entities/HPOrb.js');
 const { ItemPickup } = await import('../../shared/entities/ItemPickup.js');
@@ -27,6 +28,15 @@ const {
 } = await import('./RoomSnapshotSystem.js');
 
 const random = () => 0.5;
+const ready = id => ({
+    ...structuredClone(BASE_ENEMY_BLUEPRINTS[id]),
+    combatReady: true,
+    parts: [
+        { x: 0, y: 0, partId: 'core', rotation: 0 },
+        { x: 1, y: 0, partId: 'gun_basic', rotation: 0 }
+    ]
+});
+applyEnemyBlueprintManifest({ enemies: [ready('nail'), ready('black_sun')] });
 
 test('room snapshots preserve flags, debris, wreck parts, shops, and chests', () => {
     const source = new Room(1, 0, 1, 1, random);
@@ -118,10 +128,10 @@ test('unvisited shops and chest rooms remain ungenerated after continue', () => 
 });
 
 test('active snapshots restore a live fight, bullets, drones, and loose rewards', () => {
-    const enemy = new Enemy(100, 200, 'striker', 3, random, 'enemy-a');
+    const enemy = new Enemy(100, 200, 'nail', 3, random, 'enemy-a');
     enemy.hp = 23;
     enemy.weaponCooldowns[0].cooldown = 1.25;
-    const boss = new Boss(300, 400, 1, random);
+    const boss = new Boss(300, 400, 1, random, 'black_sun');
     boss.hp = 77;
     const projectile = new Projectile(
         10, 20, 0.4, 'rocket_le', 600, 'enemy', 12, 2, random
@@ -173,7 +183,8 @@ test('active snapshots restore a live fight, bullets, drones, and loose rewards'
     assert.equal(game.enemies[0].id, 'enemy-a');
     assert.equal(game.enemies[0].hp, 23);
     assert.equal(game.enemies[0].weaponCooldowns[0].cooldown, 1.25);
-    assert.equal(game.bosses[0] instanceof Boss, true);
+    assert.equal(game.bosses[0] instanceof Enemy, true);
+    assert.equal(game.bosses[0].isBoss, true);
     assert.equal(game.bosses[0].hp, 77);
     assert.equal(game.projectiles[0] instanceof Projectile, true);
     assert.equal(game.projectiles[0].life, 0.8);
@@ -194,7 +205,7 @@ test('active snapshots restore a live fight, bullets, drones, and loose rewards'
 });
 
 test('combat statuses and runtime projectile fields round-trip safely', () => {
-    const enemy = new Enemy(100, 200, 'striker', 3, random, 'enemy-status');
+    const enemy = new Enemy(100, 200, 'nail', 3, random, 'enemy-status');
     enemy.empTimer = 2.25;
     enemy.hackTimer = 6.5;
     enemy.hackedByPlayerId = 'guest_1';

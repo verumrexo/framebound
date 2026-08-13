@@ -3,11 +3,11 @@ import { LootCrate } from '../../shared/entities/LootCrate.js';
 import { XPOrb } from '../../shared/entities/XPOrb.js';
 import { GoldOrb } from '../../shared/entities/GoldOrb.js';
 import { TrainingDummy } from '../../shared/entities/TrainingDummy.js';
-import { Boss } from '../../shared/entities/Boss.js';
 import { Enemy } from '../../shared/entities/Enemy.js';
 import { TreasureChest } from '../../shared/entities/TreasureChest.js';
 import { PartsLibrary } from '../../shared/parts/Part.js';
 import { Shipwreck } from '../../shared/entities/Shipwreck.js';
+import { EnemyBlueprints } from '../../shared/enemies/EnemyBlueprints.js';
 
 export function shouldShowPartLabButton(game) {
     return game?.isDevelopment === true;
@@ -249,18 +249,9 @@ export class DevTools {
         createBtn('🎁 spawn chest', (x, y) => this.spawnChest(x, y), '#ffaa44');
         createBtn('🎯 spawn dummy', (x, y) => this.spawnDummy(x, y), '#ffaa00');
 
-        // Enemy Types
-        createBtn('👾 enemy: basic', (x, y) => this.spawnEnemy(x, y, 'basic'), '#ff4444');
-        createBtn('⚡ enemy: striker', (x, y) => this.spawnEnemy(x, y, 'striker'), '#ff6666');
-        createBtn('🚀 enemy: rocketeer', (x, y) => this.spawnEnemy(x, y, 'rocketeer'), '#ff8844');
-        createBtn('🎯 enemy: sniper', (x, y) => this.spawnEnemy(x, y, 'sniper'), '#ffaa44');
-        createBtn('🌀 enemy: circler', (x, y) => this.spawnEnemy(x, y, 'circler'), '#ff44ff');
-        createBtn('🛩️ enemy: interceptor', (x, y) => this.spawnEnemy(x, y, 'interceptor'), '#44aaff');
-        createBtn('🛠️ enemy: repair tender', (x, y) => this.spawnEnemy(x, y, 'repair_tender'), '#74ff6a');
-        createBtn('🛡️ enemy: bulwark', (x, y) => this.spawnEnemy(x, y, 'bulwark'), '#ff6644');
-        createBtn('🐝 enemy: hive carrier', (x, y) => this.spawnEnemy(x, y, 'hive_carrier'), '#ff00ff');
-
-        createBtn('👹 spawn boss', (x, y) => this.spawnBoss(x, y), '#ff00ff');
+        for (const enemy of Object.values(EnemyBlueprints).filter(entry => entry.combatReady)) {
+            createBtn(`👾 ${enemy.name}`, (x, y) => this.spawnEnemy(x, y, enemy.id), enemy.encounterRole === 'boss' ? '#ff00ff' : '#ff6666');
+        }
         createBtn('⚓ spawn shipwreck', (x, y) => this.spawnShipwreck(x, y), '#884400');
 
         // --- UTILITY ---
@@ -299,6 +290,13 @@ export class DevTools {
                 this.ui.style.display = 'none';
                 this.game.partLabWindow?.open();
             }, '#55ffc2', false);
+        }
+        if (this.game.enemyLabWindow) {
+            createBtn('🧠 enemy lab', () => {
+                this.active = false;
+                this.ui.style.display = 'none';
+                this.game.enemyLabWindow.open();
+            }, '#ff7f88', false);
         }
         createBtn('🛠️ ship editor', () => this.openShipEditor(), '#00ffff', false);
         createBtn('📐 designer', () => this.openDesigner(), '#ff00ff', false);
@@ -590,13 +588,6 @@ export class DevTools {
     spawnEnemy(x, y, type = 'basic') {
         this.game.enemies.push(new Enemy(x, y, type));
         this.game.showNotification(`spawned ${type} enemy`, "#ff4444");
-    }
-
-    spawnBoss(x, y) {
-        const boss = new Boss(x, y, this.game.floor || 1);
-        boss.game = this.game;
-        this.game.bosses.push(boss);
-        this.game.showNotification("spawned boss", "#ff00ff");
     }
 
     spawnShipwreck(x, y) {

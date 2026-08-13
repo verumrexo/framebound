@@ -1,6 +1,5 @@
 import { Enemy } from '../../shared/entities/Enemy.js';
 import { selectEnemyType } from '../../shared/enemies/EnemyRoster.js';
-import { Boss } from '../../shared/entities/Boss.js';
 import { Asteroid } from '../../shared/entities/Asteroid.js';
 import { LootCrate } from '../../shared/entities/LootCrate.js';
 import { Shipwreck } from '../../shared/entities/Shipwreck.js';
@@ -96,9 +95,9 @@ export class Room {
                 const asteroidCount = this.spawnAsteroids(game);
                 this.spawnLootCrates(game, asteroidCount);
                 this.spawnShipwrecks(game);
-                this.spawnEnemies(game);
-                this.locked = true;
-                this.cleared = false;
+                const spawned = this.spawnEnemies(game);
+                this.locked = spawned > 0;
+                this.cleared = spawned === 0;
             } else {
                 this.cleared = true;
                 this.locked = false; // Start room is never locked
@@ -299,15 +298,15 @@ export class Room {
 
     spawnEnemies(game) {
         if (this.type === RoomType.BOSS) {
-            console.log("Spawning BOSS!");
-            // Center of room
+            const type = selectEnemyType(game.floor || 1, this.random(), { role: 'boss' });
+            if (!type) return 0;
             const bx = this.x + this.width / 2;
             const by = this.y + this.height / 2;
-            const boss = new Boss(bx, by, game.floor || 1, this.random);
+            const boss = new Enemy(bx, by, type, game.floor || 1, this.random, `boss_${this.gridX}_${this.gridY}`);
             boss.game = game;
             game.bosses.push(boss);
-            game.showNotification("WARNING: BOSS DETECTED", '#ff0000');
-            return;
+            game.showNotification(`warning: ${boss.name} detected`, '#ff0000');
+            return 1;
         }
 
         const floor = game.floor || 1;
@@ -316,6 +315,7 @@ export class Room {
         const count = 3 + Math.floor(this.random() * 4) * (this.widthUnits * this.heightUnits);
         const is2x2Room = this.widthUnits === 2 && this.heightUnits === 2;
 
+        let spawned = 0;
         for (let i = 0; i < count; i++) {
             // Random position within room, padded from walls
             const pad = 200;
@@ -325,13 +325,16 @@ export class Room {
             const type = selectEnemyType(floor, this.random(), {
                 large: is2x2Room
             });
+            if (!type) continue;
 
             // Deterministic ID: rX_rY_I
             const enemyId = `e_${this.gridX}_${this.gridY}_${i}`;
             const enemy = new Enemy(ex, ey, type, floor, this.random, enemyId);
             game.enemies.push(enemy);
             this.enemies.push(enemy);
+            spawned++;
         }
+        return spawned;
     }
 
     update(game) {

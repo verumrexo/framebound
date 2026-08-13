@@ -39,12 +39,9 @@ test('room-clear checkpoint includes the clear score instead of losing it', () =
     ]);
 });
 
-test('floor rosters introduce new roles gradually', () => {
-    assert.equal(selectEnemyType(1, 0.1), 'striker');
-    assert.equal(selectEnemyType(2, 0.1), 'interceptor');
-    assert.equal(selectEnemyType(3, 0.05), 'bulwark');
-    assert.equal(selectEnemyType(4, 0.05), 'repair_tender');
-    assert.equal(selectEnemyType(5, 0.05, { vault: true }), 'hive_carrier');
+test('blank unpublished roster safely produces no enemies', () => {
+    assert.equal(selectEnemyType(1, 0.1), null);
+    assert.equal(selectEnemyType(5, 0.5, { vault: true }), null);
 });
 
 test('shop entry keeps four original offers plus a permanent doctrine terminal', () => {
@@ -122,12 +119,12 @@ test('vault containment advances through simulation time without callbacks', () 
 
     assert.equal(room.startAmbush(game, 'gilded', 'host'), true);
     assert.equal(room.vaultState.nextSurge, 1);
-    assert.equal(room.enemies.length, 3);
+    assert.equal(room.enemies.length, 0);
 
     room.checkAmbushStatus(game, 6);
     assert.equal(room.vaultState.elapsed, 6);
     assert.equal(room.vaultState.nextSurge, 2);
-    assert.equal(room.enemies.length, 7);
+    assert.equal(room.enemies.length, 0);
 
     room.enemies.forEach(enemy => { enemy.isDead = true; });
     room.checkAmbushStatus(game, 12);
@@ -164,7 +161,7 @@ test('choosing a vault contract seals its rival and stores one reward roll', () 
     assert.equal(gilded.locked, true);
     assert.equal(room.vaultState.payerId, 'guest_2');
     assert.equal(room.vaultState.playerCount, 3);
-    assert.equal(room.enemies.length, 5);
+    assert.equal(room.enemies.length, 0);
     assert.equal(room.vaultState.rewardPartIds.length, 3);
     assert.equal(new Set(room.vaultState.rewardPartIds).size, 3);
     assert.equal(room.startAmbush(game, 'gilded', 'host'), false);

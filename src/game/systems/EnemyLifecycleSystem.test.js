@@ -95,7 +95,8 @@ test('offline enemy updates keep the full active argument contract', () => {
         game.asteroids,
         game.lootCrates,
         game.enemies,
-        game.currentRoom
+        game.currentRoom,
+        { id: 'host', ship: game.playerShip, x: 10, y: 20 }
     ]]);
 });
 
@@ -245,11 +246,12 @@ test('boss death restores dead multiplayer ships immediately', () => {
     );
 });
 
-test('striker death preserves three xp drops, gold, sound, and score', () => {
+test('enemy death uses its authored reward profile', () => {
     const striker = {
         x: 50,
         y: 60,
         type: 'striker',
+        rewards: { drops: 3, xp: 30, gold: 1, score: 50 },
         isDead: true,
         update() {}
     };
@@ -327,11 +329,11 @@ test('host enemies target the nearest living player', () => {
     assert.equal(updates[0][2], 110);
 });
 
-test('circlers lock their target inside orbit range until it dies', () => {
+test('orbiting profiles lock their target inside orbit range until it dies', () => {
     const circler = {
         x: 0,
         y: 0,
-        type: 'circler',
+        behaviorProfile: { movementStyle: 'orbit' },
         engagementDist: 300
     };
     const { game, system } = createHarness();
