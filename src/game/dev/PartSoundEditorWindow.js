@@ -355,7 +355,11 @@ export class PartSoundEditorWindow {
         this.assignmentBody.replaceChildren();
         const copy = this.document.createElement('div');
         copy.className = `part-sound-assignment-state is-${state.status}`;
-        copy.innerHTML = `<strong>1. choose this slot</strong><span>${slot.label}: ${state.label} // ${state.detail}</span>`;
+        const step = this.document.createElement('strong');
+        step.textContent = '1. choose this slot';
+        const detail = this.document.createElement('span');
+        detail.textContent = `${slot.label}: ${state.label} // ${state.detail}`.toLowerCase();
+        copy.append(step, detail);
         const actions = this.document.createElement('div');
         actions.className = 'part-sound-assignment-actions';
         actions.append(

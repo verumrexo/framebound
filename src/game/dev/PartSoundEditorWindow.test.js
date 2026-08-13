@@ -16,6 +16,32 @@ function bareEditor() {
     return editor;
 }
 
+class FakeElement {
+    constructor(tagName) {
+        this.tagName = tagName.toUpperCase();
+        this.children = [];
+        this.textContent = '';
+    }
+
+    append(...nodes) {
+        this.children.push(...nodes);
+    }
+
+    appendChild(node) {
+        this.children.push(node);
+    }
+
+    replaceChildren(...nodes) {
+        this.children = nodes;
+    }
+
+    setAttribute() {}
+}
+
+function fakeDocument() {
+    return { createElement: tagName => new FakeElement(tagName) };
+}
+
 test('duplicating from the part editor loads an owned composer copy, never a shared record', async () => {
     const editor = bareEditor();
     const shared = { id: 'shared', name: 'shared', recipe: { frequency: 220 } };
@@ -46,6 +72,39 @@ test('assignment stays unchanged until the explicit use-for-slot action runs', (
 
     assert.deepEqual(editor.draft.slots[0].assignment, { source: 'signal-forge', soundId: 'shared' });
     assert.equal(changes, 1);
+});
+
+test('markup-like saved sound names render as text in the assignment state', () => {
+    const editor = bareEditor();
+    const assignmentBody = new FakeElement('div');
+    const maliciousName = '<img src=x onerror=alert(1)>';
+    editor.document = fakeDocument();
+    editor.assignmentBody = assignmentBody;
+    editor.part = { id: 'drone_a', type: 'weapon', stats: {} };
+    editor.draft = {
+        slots: [{
+            id: 'fire',
+            label: 'fire',
+            assignment: { source: 'signal-forge', soundId: 'shared' }
+        }]
+    };
+    editor.signalForge = {
+        audioName: soundId => `forge:${soundId}`,
+        sounds: new Map([['shared', { id: 'shared', name: maliciousName }]])
+    };
+    editor.audio = {
+        hasSound: soundName => soundName === 'forge:shared'
+    };
+    editor.currentSound = null;
+
+    editor.renderAssignment();
+
+    const state = assignmentBody.children[0].children[1];
+    const detail = state.children[1];
+    assert.equal(detail.tagName, 'SPAN');
+    assert.equal(state.children.length, 2);
+    assert.equal(detail.children.length, 0);
+    assert.match(detail.textContent, /<img src=x onerror=alert\(1\)>/);
 });
 
 test('new preset and mutate workflows request fresh persistent library records', async () => {
