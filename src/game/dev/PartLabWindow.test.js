@@ -182,3 +182,65 @@ test('browser fallback downloads without marking the draft promoted', async () =
     assert.equal(store.state.parts.dart.savedAt, null);
     assert.match(lab.statusMessage, /downloaded only/);
 });
+
+test('save all serializes and migrates a bastion foundry draft before native promotion', async () => {
+    const design = createBlankPartDesign({
+        name: 'bastion foundry',
+        type: 'drone',
+        width: 2,
+        height: 2,
+        turretWidth: 2,
+        turretHeight: 2
+    });
+    design.partId = 'drone_bastion_foundry';
+    design.grid = { width: 30, height: 30 };
+    design.layers.base = new Array(30 * 30).fill(0);
+    design.turretGrid = { width: 30, height: 30 };
+    design.drone = {
+        blueprintId: 'bastion',
+        resolution: 16,
+        grid: { width: 16, height: 16 },
+        palette: ['#00ffff', '#177777'],
+        layers: { base: new Array(256).fill(0) },
+        projectileLook: 'default',
+        projectileTrail: 'default'
+    };
+    const promoted = [];
+    const store = {
+        state: {
+            version: 1,
+            parts: {
+                drone_bastion_foundry: {
+                    visual: design,
+                    sound: null,
+                    review: { status: 'untested', notes: '' },
+                    savedAt: null
+                }
+            }
+        },
+        markPromoted() {}
+    };
+    const lab = bareWindow({
+        store,
+        audio: { eventBindings: new Map() },
+        forge: { promote: async () => {} }
+    });
+    lab.bridge = {
+        available: true,
+        promote: async raw => promoted.push(raw)
+    };
+    lab.syncForgeBindings = async () => {};
+    lab.setStatus = message => { lab.statusMessage = message; };
+
+    await lab.saveAll();
+
+    assert.equal(promoted.length, 1);
+    const saved = JSON.parse(promoted[0]).visuals[0].design;
+    assert.deepEqual(saved.grid, { width: 31, height: 31 });
+    assert.equal(saved.layers.base.length, 31 * 31);
+    assert.deepEqual(saved.turretGrid, { width: 31, height: 31 });
+    assert.equal(saved.layers.turret, null);
+    assert.deepEqual(saved.drone.grid, { width: 16, height: 16 });
+    assert.equal(saved.drone.layers.base.length, 256);
+    assert.match(lab.statusMessage, /saved/);
+});

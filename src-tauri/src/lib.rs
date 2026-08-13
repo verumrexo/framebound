@@ -18,7 +18,9 @@ const MAX_PART_LAB_MANIFEST_BYTES: usize = 8 * 1024 * 1024;
 #[cfg(any(debug_assertions, feature = "part-lab"))]
 const MAX_PART_LAB_ENTRIES: usize = 256;
 #[cfg(any(debug_assertions, feature = "part-lab"))]
-const MAX_PART_LAB_PIXELS: usize = 512;
+// the largest supported authored raster is a 2x4 base or 4x2 turret:
+// 31x61 = 1891 pixels after the one-pixel tile overlap.
+const MAX_PART_LAB_PIXELS: usize = 2048;
 #[cfg(any(debug_assertions, feature = "part-lab"))]
 const MAX_ENEMY_LAB_MANIFEST_BYTES: usize = 1024 * 1024;
 const MAX_SMOKE_REPORT_BYTES: usize = 64 * 1024;
@@ -583,8 +585,18 @@ fn validate_part_lab_design(part_id: &str, design: &PartLabDesign) -> Result<(),
     if design.version == 2 && design.resolution != Some(16) {
         return Err(format!("visual design for {part_id} has an invalid resolution"));
     }
-    if design.grid.width != expected.0 || design.grid.height != expected.1 || expected.0 * expected.1 > MAX_PART_LAB_PIXELS {
-        return Err(format!("visual design for {part_id} has an invalid grid"));
+    if design.grid.width != expected.0 || design.grid.height != expected.1 {
+        return Err(format!(
+            "visual design for {part_id} has an invalid grid: expected {}x{}, got {}x{}",
+            expected.0, expected.1, design.grid.width, design.grid.height
+        ));
+    }
+    let expected_pixels = expected.0 * expected.1;
+    if expected_pixels > MAX_PART_LAB_PIXELS {
+        return Err(format!(
+            "visual design for {part_id} exceeds the raster pixel limit: {} pixels (limit {})",
+            expected_pixels, MAX_PART_LAB_PIXELS
+        ));
     }
     let palette_len = if design.version == 2 {
         validate_palette(&design.palette, part_id)?
@@ -596,7 +608,10 @@ fn validate_part_lab_design(part_id: &str, design: &PartLabDesign) -> Result<(),
             .ok_or_else(|| format!("visual design for {part_id} has an invalid turret footprint"))?;
         let grid = design.turret_grid.as_ref().ok_or_else(|| format!("visual design for {part_id} has no turret grid"))?;
         if (grid.width, grid.height) != size {
-            return Err(format!("visual design for {part_id} has an invalid turret grid"));
+            return Err(format!(
+                "visual design for {part_id} has an invalid turret grid: expected {}x{}, got {}x{}",
+                size.0, size.1, grid.width, grid.height
+            ));
         }
         size
     } else { expected };
@@ -1290,19 +1305,87 @@ mod tests {
     }
 
     #[test]
+    fn part_lab_promotion_accepts_bastion_foundry_v2_drone_raster() {
+        let root = test_path("generated-parts-v2-bastion-foundry");
+        let mut manifest = serde_json::from_str::<serde_json::Value>(&valid_v2_part_lab_manifest())
+            .expect("v2 fixture should parse");
+        let design = &mut manifest["visuals"][0]["design"];
+        design["partId"] = serde_json::json!("drone_bastion_foundry");
+        design["name"] = serde_json::json!("bastion foundry");
+        design["type"] = serde_json::json!("drone");
+        design["footprint"] = serde_json::json!({ "width": 2, "height": 2 });
+        design["grid"] = serde_json::json!({ "width": 31, "height": 31 });
+        design["layers"]["base"] = serde_json::json!(vec![0; 31 * 31]);
+        design["layers"]["turret"] = serde_json::Value::Null;
+        design["turretFootprint"] = serde_json::json!({ "width": 2, "height": 2 });
+        design["turretGrid"] = serde_json::json!({ "width": 31, "height": 31 });
+        design["drone"] = serde_json::json!({
+            "blueprintId": "bastion",
+            "resolution": 16,
+            "grid": { "width": 16, "height": 16 },
+            "palette": ["#00ffff", "#177777"],
+            "layers": { "base": vec![0; 256] },
+            "projectileLook": "default",
+            "projectileTrail": "default"
+        });
+
+        promote_part_lab_manifest_to(&root, &manifest.to_string())
+            .expect("valid 31x31 bastion foundry base should promote");
+        let saved = fs::read_to_string(root.join("part-lab-overrides.json"))
+            .expect("promoted bastion manifest should be readable");
+        let saved: serde_json::Value = serde_json::from_str(&saved)
+            .expect("promoted bastion manifest should remain valid json");
+        assert_eq!(
+            saved["visuals"][0]["design"]["grid"],
+            serde_json::json!({ "width": 31, "height": 31 })
+        );
+        assert_eq!(
+            saved["visuals"][0]["design"]["layers"]["base"].as_array().unwrap().len(),
+            31 * 31
+        );
+        fs::remove_dir_all(root.parent().unwrap())
+            .expect("test directory should be removable");
+    }
+
+    #[test]
+    fn part_lab_promotion_accepts_v2_four_by_two_turret_only_geometry() {
+        let root = test_path("generated-parts-v2-four-by-two-turret");
+        let mut manifest = serde_json::from_str::<serde_json::Value>(&valid_v2_part_lab_manifest())
+            .expect("v2 fixture should parse");
+        let design = &mut manifest["visuals"][0]["design"];
+        design["turretFootprint"] = serde_json::json!({ "width": 4, "height": 2 });
+        design["turretGrid"] = serde_json::json!({ "width": 61, "height": 31 });
+        design["layers"]["turret"] = serde_json::json!(vec![0; 61 * 31]);
+        design["anchors"]["turret"] = serde_json::json!({ "x": 30.5, "y": 15.5 });
+        design["muzzles"] = serde_json::json!([
+            { "x": 60.5, "y": 10 },
+            { "x": 60.5, "y": 21 }
+        ]);
+
+        promote_part_lab_manifest_to(&root, &manifest.to_string())
+            .expect("valid 4x2 turret-only geometry should promote");
+        fs::remove_dir_all(root.parent().unwrap())
+            .expect("test directory should be removable");
+    }
+
+    #[test]
     fn part_lab_promotion_rejects_mismatched_v2_base_and_turret_grids() {
         let root = test_path("generated-parts-v2-mismatch");
         let mut mismatched_base = serde_json::from_str::<serde_json::Value>(&valid_v2_part_lab_manifest())
             .expect("fixture should parse");
         mismatched_base["visuals"][0]["design"]["grid"] =
             serde_json::json!({ "width": 16, "height": 30 });
-        assert!(promote_part_lab_manifest_to(&root, &mismatched_base.to_string()).is_err());
+        let base_error = promote_part_lab_manifest_to(&root, &mismatched_base.to_string())
+            .expect_err("mismatched base grid should be rejected");
+        assert!(base_error.contains("invalid grid: expected 16x31, got 16x30"));
 
         let mut mismatched_turret = serde_json::from_str::<serde_json::Value>(&valid_v2_part_lab_manifest())
             .expect("fixture should parse");
         mismatched_turret["visuals"][0]["design"]["turretGrid"] =
             serde_json::json!({ "width": 30, "height": 16 });
-        assert!(promote_part_lab_manifest_to(&root, &mismatched_turret.to_string()).is_err());
+        let turret_error = promote_part_lab_manifest_to(&root, &mismatched_turret.to_string())
+            .expect_err("mismatched turret grid should be rejected");
+        assert!(turret_error.contains("invalid turret grid: expected 31x16, got 30x16"));
 
         assert!(!root.join("part-lab-overrides.json").exists());
         if root.parent().unwrap().exists() {
